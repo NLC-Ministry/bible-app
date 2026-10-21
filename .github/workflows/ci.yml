@@ -181,7 +181,10 @@ jobs:
           test ! -e dist/admin.html || { echo "member app dist must not ship the admin console"; exit 1; }
         env:
           ADMIN_LOGTO_CLIENT_ID: ci-placeholder-client
-          ADMIN_API_URL: https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api
+          # 假的 project ref（#609）：只用來讓建置檢查的 CSP 對得起來，不是真的專案
+          SUPABASE_PRODUCTION_REF: bbbbbbbbbbbbbbbbbbbb
+          SUPABASE_STAGING_REF: aaaaaaaaaaaaaaaaaaaa
+          ADMIN_API_URL: https://aaaaaaaaaaaaaaaaaaaa.supabase.co/functions/v1/admin-api
           SUPABASE_ANON_KEY: ci-placeholder-anon-key
 
       # 真的跑 esbuild 的測試（bundle、後台建置、後台照搬區塊開機）——本機 npm test 不跑，這裡跑（#592）
@@ -277,14 +280,24 @@ jobs:
         if: github.event_name == 'push'
         env:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
+          # Supabase project ref 不寫進 repo（公開，#609）：放在 repository variables（Settings → Secrets and variables → Actions → Variables）
+          SUPABASE_PRODUCTION_REF: ${{ vars.SUPABASE_PRODUCTION_REF }}
+          SUPABASE_STAGING_REF: ${{ vars.SUPABASE_STAGING_REF }}
+          ADMIN_ENVIRONMENT: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
         run: |
           if [ -z "$VERCEL_PROJECT_ID" ]; then
             echo "## 後台部署：跳過（還沒設定 secret VERCEL_ADMIN_PROJECT_ID）" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          if [ -z "$SUPABASE_PRODUCTION_REF" ] || [ -z "$SUPABASE_STAGING_REF" ]; then
+            echo "## 後台部署：跳過（還沒設定 repository variables SUPABASE_PRODUCTION_REF／SUPABASE_STAGING_REF）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::後台沒有部署：缺少 repository variables SUPABASE_PRODUCTION_REF／SUPABASE_STAGING_REF（見 docs/admin-console.md）"
+            exit 0
+          fi
           # 換成後台的 Vercel 設定（建置指令、輸出目錄、強制 CSP）；會友 App 已經部署完，改這份工作目錄沒關係。
           # 清掉會友 App 的 .vercel（專案設定與 build 輸出），避免混用。
-          cp vercel.admin.json vercel.json
+          # vercel.admin.json 裡的 Supabase 網址是占位符，由 render 腳本換成真值（缺 ref 會直接失敗）。
+          node scripts/render-admin-vercel-config.mjs
           rm -rf .vercel
           if [ "$IS_PRODUCTION" = "true" ]; then
             vercel pull --yes --environment=production

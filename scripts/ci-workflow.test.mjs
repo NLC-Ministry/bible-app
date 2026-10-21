@@ -217,8 +217,11 @@ describe("CI/CD workflow", () => {
       expect(at("- name: Deploy admin console")).toBeGreaterThan(at("- name: Deploy member app"));
       expect(deploy).toContain("if: github.event_name == 'push'");
       expect(deploy).toContain("VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}");
-      expect(deploy).toContain("cp vercel.admin.json vercel.json");
-      expect(deploy.indexOf("cp vercel.admin.json vercel.json")).toBeLessThan(deploy.indexOf("vercel pull"));
+      // 占位符換成真的 Supabase 網址後才變成 vercel.json（#609）
+      expect(deploy).toContain("node scripts/render-admin-vercel-config.mjs");
+      expect(deploy.indexOf("node scripts/render-admin-vercel-config.mjs")).toBeLessThan(deploy.indexOf("vercel pull"));
+      expect(deploy).toContain("SUPABASE_PRODUCTION_REF: ${{ vars.SUPABASE_PRODUCTION_REF }}");
+      expect(deploy).toContain("SUPABASE_STAGING_REF: ${{ vars.SUPABASE_STAGING_REF }}");
       // 會友 App 的 .vercel（專案設定、build 輸出）不能混進後台部署
       expect(deploy.indexOf("rm -rf .vercel")).toBeLessThan(deploy.indexOf("vercel pull"));
     });

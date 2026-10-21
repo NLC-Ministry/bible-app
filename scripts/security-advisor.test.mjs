@@ -36,7 +36,7 @@ describe("classifyFindings", () => {
 describe("renderFindings", () => {
   it("lists findings to handle and summarizes accepted ones per lint", () => {
     const text = renderFindings({
-      envLabel: "staging", ref: "dbtjsljrytzonjvclgrd",
+      envLabel: "staging", ref: "aaaaaaaaaaaaaaaaaaaa",
       unexpected: [finding("rls_disabled_in_public", "t2")],
       accepted: [{ ...finding("rls_enabled_no_policy", "t1"), reason: "只給 service_role" }]
     });

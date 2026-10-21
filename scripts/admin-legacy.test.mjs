@@ -32,7 +32,7 @@ import { handleAdminRequest } from "../supabase/functions/admin-api/handler.ts";
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const root = new URL("..", import.meta.url);
 const rootPath = decodeURIComponent(root.pathname).replace(/^\/([A-Za-z]:)/, "$1");
-const STAGING_API = "https://dbtjsljrytzonjvclgrd.supabase.co/functions/v1/admin-api";
+const STAGING_API = "https://aaaaaaaaaaaaaaaaaaaa.supabase.co/functions/v1/admin-api";
 const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 // iframe 實際拿到的畫面：App 的 index.html，管理分頁那段換成照搬的舊管理分頁（#551）
 const legacyMarkup = () => composeLegacyMarkup(read("index.html"), read("admin-legacy/admin-view.html"));
@@ -163,14 +163,14 @@ describe("legacy page build helpers", () => {
   it("derives the Supabase URL from ADMIN_API_URL and requires the anon key outside local builds", () => {
     const config = resolveAdminConfig({ ADMIN_LOGTO_CLIENT_ID: "c", ADMIN_API_URL: STAGING_API });
     expect(resolveLegacyConfig({ SUPABASE_ANON_KEY: "anon" }, config)).toEqual({
-      supabaseUrl: "https://dbtjsljrytzonjvclgrd.supabase.co",
+      supabaseUrl: "https://aaaaaaaaaaaaaaaaaaaa.supabase.co",
       anonKey: "anon",
       memberHubUrl: "https://member.newlife.org.tw",
       issuer: config.issuer,
       resource: config.resource
     });
     expect(() => resolveLegacyConfig({}, config)).toThrow(/SUPABASE_ANON_KEY/);
-    expect(() => resolveLegacyConfig({ SUPABASE_ANON_KEY: "a", SUPABASE_URL: "https://ztozevcqkfrohgjmngcj.supabase.co" }, config))
+    expect(() => resolveLegacyConfig({ SUPABASE_ANON_KEY: "a", SUPABASE_URL: "https://bbbbbbbbbbbbbbbbbbbb.supabase.co" }, config))
       .toThrow(/different Supabase projects/);
     expect(() => resolveLegacyConfig({ SUPABASE_ANON_KEY: "a", NLC_MEMBER_HUB_URL: "http://member.test" }, config)).toThrow(/https/);
     const local = resolveAdminConfig({ ADMIN_LOGTO_CLIENT_ID: "c", ADMIN_API_URL: "http://127.0.0.1:54321/functions/v1/admin-api" });
@@ -182,7 +182,7 @@ describe("legacy page build helpers", () => {
     const config = resolveAdminConfig({ ADMIN_LOGTO_CLIENT_ID: "c", ADMIN_API_URL: STAGING_API });
     expect(() => assertLegacyCspAllows(csp, resolveLegacyConfig({ SUPABASE_ANON_KEY: "a" }, config))).not.toThrow();
     expect(() => assertLegacyCspAllows(csp, { supabaseUrl: "https://other.supabase.co" })).toThrow(/connect-src https:\/\/other\.supabase\.co/);
-    expect(() => assertLegacyCspAllows("script-src 'self'; connect-src https://dbtjsljrytzonjvclgrd.supabase.co", { supabaseUrl: "https://dbtjsljrytzonjvclgrd.supabase.co" }))
+    expect(() => assertLegacyCspAllows("script-src 'self'; connect-src https://aaaaaaaaaaaaaaaaaaaa.supabase.co", { supabaseUrl: "https://aaaaaaaaaaaaaaaaaaaa.supabase.co" }))
       .toThrow(/chart\.js/);
   });
 

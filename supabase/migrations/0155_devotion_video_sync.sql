@@ -80,7 +80,7 @@ BEGIN
   END IF;
 
   PERFORM net.http_post(
-    url := 'https://ztozevcqkfrohgjmngcj.supabase.co/functions/v1/sync-devotion-video',
+    url := 'https://YOUR-PROJECT-REF.supabase.co/functions/v1/sync-devotion-video',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-cron-secret', cron_secret
