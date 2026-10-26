@@ -45,6 +45,7 @@ export const AUDITED_ADMIN_RPCS = new Set([
   "admin_publish_lightning_quiz_week_ranking",
   "admin_revoke_lightning_quiz_week_ranking",
   "admin_set_lightning_quiz_voucher_redeemed",
+  "admin_set_lightning_quiz_vouchers_expiry",
   // 回報、注釋審核
   "issue_admin_set_status",
   "set_commentary_reviewers",

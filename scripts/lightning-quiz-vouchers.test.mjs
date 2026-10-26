@@ -1,7 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
-import { buildVoucherCsv, summarizeVouchers } from "../js/modules/lightning-quiz-analytics.mjs";
+import {
+  buildVoucherCsv,
+  buildVoucherWeekCsv,
+  buildVoucherZoneCsv,
+  buildWinnersCsv,
+  canChangeVoucherExpiry,
+  filterVouchers,
+  isVoucherExpiringSoon,
+  summarizeVoucherOverview,
+  summarizeVouchers,
+  summarizeVouchersByWeek,
+  summarizeVouchersByZone,
+  summarizeWinners
+} from "../js/modules/lightning-quiz-analytics.mjs";
 
 // #445：雲柱測驗英雄榜得獎者的克勞斯 100 元抵用券——發券、本人確認兌換、個人頁得獎證明、後台清單
 
@@ -129,6 +142,109 @@ describe("後台兌換清單", () => {
   });
 });
 
+describe("得獎與兌換總覽（#614）", () => {
+  const TODAY = "2026-10-26";
+  // 兩週、三個人：甲（u1）得獎 3 次、第一名 2 次；乙（u2）2 次；丙（u3）1 次；另有一張作廢的（丁，u4）
+  const all = [
+    { id: "a1", userId: "u1", weekStart: "2026-10-12", riseDate: "2026-10-12", rank: 1, name: "甲（舊名）", pastoralZone: "中永和", expiresOn: "2026-11-10", status: "redeemed" },
+    { id: "a2", userId: "u2", weekStart: "2026-10-12", riseDate: "2026-10-12", rank: 2, name: "乙", pastoralZone: "文山", expiresOn: "2026-10-30", status: "available" },
+    { id: "a3", userId: "u4", weekStart: "2026-10-12", riseDate: "2026-10-12", rank: 3, name: "丁", pastoralZone: "文山", expiresOn: "2026-11-10", status: "void" },
+    { id: "a4", userId: "u1", weekStart: "2026-10-19", riseDate: "2026-10-21", rank: 1, name: "甲", pastoralZone: "中永和", expiresOn: "2026-11-20", status: "available" },
+    { id: "a5", userId: "u1", weekStart: "2026-10-19", riseDate: "2026-10-19", rank: 3, name: "甲", pastoralZone: "中永和", expiresOn: "2026-10-20", status: "expired" },
+    { id: "a6", userId: "u2", weekStart: "2026-10-19", riseDate: "2026-10-19", rank: 1, name: "乙", pastoralZone: "文山", expiresOn: "2026-11-01", status: "available" },
+    { id: "a7", userId: "u3", weekStart: "2026-10-19", riseDate: "2026-10-19", rank: 2, name: "丙", pastoralZone: "", expiresOn: "2026-11-20", status: "redeemed" }
+  ];
+
+  it("summarizes all weeks: void is not issued; 7 天內到期 counts usable vouchers expiring within 7 days of the server's today", () => {
+    expect(summarizeVoucherOverview(all, TODAY)).toEqual({
+      issued: 6, available: 3, redeemed: 2, expired: 1, void: 1, redeemRate: 2 / 6, expiringSoon: 2
+    });
+    expect(isVoucherExpiringSoon(all[1], TODAY)).toBe(true); // 10/30
+    expect(isVoucherExpiringSoon({ ...all[1], expiresOn: "2026-11-02" }, TODAY)).toBe(false);
+    expect(isVoucherExpiringSoon({ ...all[1], expiresOn: "2026-11-01" }, TODAY)).toBe(true);
+    expect(isVoucherExpiringSoon(all[4], TODAY)).toBe(false); // 已過期的不算
+  });
+
+  it("summarizes by week, newest first", () => {
+    const rows = summarizeVouchersByWeek(all);
+    expect(rows.map(row => [row.weekStart, row.issued, row.redeemed, row.available, row.expired, row.void])).toEqual([
+      ["2026-10-19", 4, 1, 2, 1, 0],
+      ["2026-10-12", 2, 1, 1, 0, 1]
+    ]);
+    expect(rows[0].redeemRate).toBe(0.25);
+  });
+
+  it("summarizes by zone with distinct winners; unassigned last; void excluded", () => {
+    const { rows, total } = summarizeVouchersByZone(all);
+    expect(rows.map(row => [row.pastoralZone, row.winners, row.issued, row.redeemed])).toEqual([
+      ["中永和", 1, 3, 1],
+      ["文山", 1, 2, 0],
+      ["", 1, 1, 1]
+    ]);
+    expect(total).toMatchObject({ winners: 3, issued: 6, redeemed: 2 });
+  });
+
+  it("counts wins per person by user id: latest name, rank breakdown, sorted by wins then first places", () => {
+    const winners = summarizeWinners(all);
+    expect(winners.winners).toBe(3);
+    expect(winners.totalWins).toBe(6);
+    expect(winners.people.map(p => [p.name, p.wins, p.rank1, p.rank2, p.rank3, p.redeemed, p.dates.join(",")])).toEqual([
+      ["甲", 3, 2, 0, 1, 1, "2026-10-12,2026-10-19,2026-10-21"],
+      ["乙", 2, 1, 1, 0, 0, "2026-10-12,2026-10-19"],
+      ["丙", 1, 0, 1, 0, 1, "2026-10-19"]
+    ]);
+    expect(winners.distribution.map(b => [b.label, b.people])).toEqual([["得獎 1 次", 1], ["得獎 2 次", 1], ["得獎 3 次以上", 1]]);
+  });
+
+  it("two people with the same name stay separate; without user ids (old backend) it falls back to name + zone", () => {
+    const sameName = [
+      { userId: "x1", name: "小明", pastoralZone: "文山", riseDate: "2026-10-19", rank: 1, status: "available" },
+      { userId: "x2", name: "小明", pastoralZone: "文山", riseDate: "2026-10-21", rank: 1, status: "available" }
+    ];
+    expect(summarizeWinners(sameName).winners).toBe(2);
+    expect(summarizeWinners(sameName.map(({ userId, ...rest }) => rest)).winners).toBe(1);
+  });
+
+  it("filters by week, zone (''＝未分配) and status; void only shows when asked and status is 全部", () => {
+    const ids = options => filterVouchers(all, options).map(v => v.id);
+    expect(ids({})).toEqual(["a1", "a2", "a4", "a5", "a6", "a7"]);
+    expect(ids({ showVoid: true })).toContain("a3");
+    expect(ids({ showVoid: true, status: "available" })).toEqual(["a2", "a4", "a6"]);
+    expect(ids({ weekStart: "2026-10-12" })).toEqual(["a1", "a2"]);
+    expect(ids({ zone: "文山" })).toEqual(["a2", "a6"]);
+    expect(ids({ zone: "" })).toEqual(["a7"]);
+    expect(ids({ status: "expired" })).toEqual(["a5"]);
+  });
+
+  it("only usable or expired vouchers can get a new expiry", () => {
+    expect(all.filter(canChangeVoucherExpiry).map(v => v.id)).toEqual(["a2", "a4", "a5", "a6"]);
+  });
+
+  it("exports the detail (with week), by-week, by-zone and per-person tables", () => {
+    const at = new Date("2026-10-26T08:00:00Z");
+    expect(buildVoucherCsv([{ ...all[1], code: "K7M2QX", amount: 100 }], at, { includeWeek: true }))
+      .toContain('"週（週一）","日期","名次"');
+    expect(buildVoucherCsv([{ ...all[1], code: "K7M2QX", amount: 100 }], at, { includeWeek: true }))
+      .toContain('"2026-10-12","2026-10-12","第二名","乙","文山","K7M2QX","100","可使用"');
+    // 每週統計的匯出不變
+    expect(buildVoucherCsv([all[1]], at)).toContain('"日期","名次","姓名"');
+
+    const week = buildVoucherWeekCsv(summarizeVouchersByWeek(all), at);
+    expect(week).toContain('"週（週一）","發出","已兌換","可使用","已過期","兌換率","已作廢"');
+    expect(week).toContain('"2026-10-19","4","1","2","1","25.0%","0"');
+
+    const zone = buildVoucherZoneCsv(summarizeVouchersByZone(all), at);
+    expect(zone).toContain('"牧區","得獎人數","發出張數（得獎人次）","已兌換","兌換率"');
+    expect(zone).toContain('"未分配牧區","1","1","1","100.0%"');
+    expect(zone).toContain('"合計","3","6","2","33.3%"');
+
+    const people = buildWinnersCsv(summarizeWinners(all).people, at);
+    expect(people).toContain('"姓名","牧區","得獎次數","第一名","第二名","第三名","已兌換","得獎日期"');
+    expect(people).toContain('"甲","中永和","3","2","0","1","1","2026-10-12、2026-10-19、2026-10-21"');
+    expect(people).toContain('"丙","未分配牧區","1","0","1","0","1","2026-10-19"');
+  });
+});
+
 // ── 後端與串接 ──────────────────────────────────────────────────────────────
 
 describe("wiring", () => {
@@ -204,5 +320,21 @@ describe("wiring", () => {
     expect(ranking).toContain('<h3 class="card-title">英雄榜</h3>');
     expect(ranking).toContain('href="#/profile/vouchers"');
     expect(manifest.ticket).toBe("Ticket");
+  });
+
+  it("#614 改期限：只給 service_role（經 nlc-data 注入 p_actor_id）、記稽核；重寫的兩支保留原本的授權", () => {
+    const overview = readFileSync("supabase/migrations/20261026142242_lightning_quiz_vouchers_overview.sql", "utf8");
+    expect(overview).toContain("REVOKE ALL ON FUNCTION public.admin_set_lightning_quiz_vouchers_expiry(uuid[], date, uuid) FROM PUBLIC, anon, authenticated;");
+    expect(overview).toContain("GRANT EXECUTE ON FUNCTION public.admin_set_lightning_quiz_vouchers_expiry(uuid[], date, uuid) TO service_role;");
+    for (const sig of ["admin_list_lightning_quiz_vouchers(date, uuid)", "admin_get_lightning_quiz_week_ranking(date, uuid)"]) {
+      expect(overview).toContain(`REVOKE ALL ON FUNCTION public.${sig} FROM PUBLIC, anon, authenticated;`);
+      expect(overview).toContain(`GRANT EXECUTE ON FUNCTION public.${sig} TO authenticated, service_role;`);
+    }
+    // 會友端共用的券格式不加 user id
+    expect(overview).not.toContain("FUNCTION public._lightning_quiz_voucher_json(");
+    const audit = readFileSync("supabase/functions/nlc-data/admin-audit.ts", "utf8");
+    expect(nlcData).toContain('"admin_set_lightning_quiz_vouchers_expiry"');
+    expect(audit).toContain('"admin_set_lightning_quiz_vouchers_expiry"');
+    expect(db).toContain('_callLightningQuizRpc("admin_set_lightning_quiz_vouchers_expiry"');
   });
 });

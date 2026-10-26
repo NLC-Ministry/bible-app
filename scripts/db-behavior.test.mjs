@@ -253,3 +253,132 @@ describe("雲柱選單題（menu，#612）", () => {
     )).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("雲柱得獎與兌換總覽（#614）", () => {
+  // 公布名單（寫 lightning_quiz_week_rankings）時 trigger 自動發券：9/21 那週 member 得 2 次、other 1 次，
+  // 9/28 那週 member 1 次。
+  const publish = (tx, weekStart, days) => tx.query(
+    `INSERT INTO public.lightning_quiz_week_rankings (week_start, entries, display_days, display_until)
+     VALUES ($1::date, $2::jsonb, 1, $1::date + 7)
+     ON CONFLICT (week_start) DO UPDATE SET entries = EXCLUDED.entries`,
+    [weekStart, JSON.stringify(days.map(([riseDate, winners]) => ({
+      riseDate,
+      winners: winners.map((userId, index) => ({ rank: index + 1, userId, name: "得獎者", pastoralZone: "牧區 A-1", elapsedMs: 4000 + index }))
+    })))]
+  );
+  const seedVouchers = async tx => {
+    await publish(tx, "2026-09-21", [["2026-09-21", [ids.member, ids.other]], ["2026-09-23", [ids.member]]]);
+    await publish(tx, "2026-09-28", [["2026-09-28", [ids.member]]]);
+    const { rows } = await tx.query(
+      `SELECT id, user_id, rise_date::text AS rise_date, expires_on::text AS expires_on FROM public.lightning_quiz_vouchers ORDER BY rise_date, rank`
+    );
+    return rows;
+  };
+  const plusDays = async (tx, days) => (await tx.query(
+    `SELECT ((NOW() AT TIME ZONE 'Asia/Taipei')::date + $1::int)::text AS d`, [days]
+  )).rows[0].d;
+  const setExpiry = (tx, voucherIds, expiresOn, actorId) => tx.query(
+    `SELECT public.admin_set_lightning_quiz_vouchers_expiry($1::uuid[], $2::date, $3) AS result`,
+    [voucherIds, expiresOn, actorId]
+  );
+
+  it("改期限只有管理員能做；client 不能直接呼叫（只給 service_role）", async () => {
+    await expect(asService(async tx => {
+      const [voucher] = await seedVouchers(tx);
+      await setExpiry(tx, [voucher.id], await plusDays(tx, 10), ids.member);
+    })).rejects.toThrow(/lightning_quiz_admin_required/);
+    await expect(as("authenticated", { sub: ids.adminAuth }, tx =>
+      tx.query(`SELECT public.admin_set_lightning_quiz_vouchers_expiry(ARRAY[]::uuid[], CURRENT_DATE, NULL)`)
+    )).rejects.toThrow(/permission denied/);
+  });
+
+  it("只改未兌換、未作廢的；過期的延長後變回可使用，跳過的張數照實回傳", async () => {
+    const outcome = await asService(async tx => {
+      const [expired, redeemed, voided, available] = await seedVouchers(tx);
+      await tx.query(`UPDATE public.lightning_quiz_vouchers SET expires_on = (NOW() AT TIME ZONE 'Asia/Taipei')::date - 1 WHERE id = $1`, [expired.id]);
+      await tx.query(`UPDATE public.lightning_quiz_vouchers SET redeemed_at = now(), redeemed_via = 'self' WHERE id = $1`, [redeemed.id]);
+      await tx.query(`UPDATE public.lightning_quiz_vouchers SET voided_at = now() WHERE id = $1`, [voided.id]);
+      const newDate = await plusDays(tx, 40);
+      const { rows: [{ result }] } = await setExpiry(tx, [expired.id, redeemed.id, voided.id, available.id, expired.id], newDate, ids.admin);
+      const { rows } = await tx.query(`SELECT id, expires_on::text AS expires_on FROM public.lightning_quiz_vouchers`);
+      const { rows: [{ list }] } = await tx.query(`SELECT public.admin_list_lightning_quiz_vouchers(NULL, $1) AS list`, [ids.admin]);
+      return { result, newDate, before: { expired, redeemed, voided, available }, after: Object.fromEntries(rows.map(r => [r.id, r.expires_on])), list };
+    });
+    // 重複的 id 只算一次
+    expect(outcome.result).toEqual({ expiresOn: outcome.newDate, updated: 2, skipped: 2 });
+    expect(outcome.after[outcome.before.expired.id]).toBe(outcome.newDate);
+    expect(outcome.after[outcome.before.available.id]).toBe(outcome.newDate);
+    expect(outcome.after[outcome.before.redeemed.id]).toBe(outcome.before.redeemed.expires_on);
+    expect(outcome.after[outcome.before.voided.id]).toBe(outcome.before.voided.expires_on);
+    const listed = Object.fromEntries(outcome.list.vouchers.map(v => [v.id, v]));
+    expect(listed[outcome.before.expired.id]).toMatchObject({ status: "available", userId: ids.member });
+  });
+
+  it("新日期要在今天到一年內；沒選券也擋", async () => {
+    await expect(asService(async tx => {
+      const [voucher] = await seedVouchers(tx);
+      await setExpiry(tx, [voucher.id], await plusDays(tx, -1), ids.admin);
+    })).rejects.toThrow(/lightning_quiz_voucher_invalid_expiry/);
+    await expect(asService(async tx => {
+      const [voucher] = await seedVouchers(tx);
+      await setExpiry(tx, [voucher.id], await plusDays(tx, 366), ids.admin);
+    })).rejects.toThrow(/lightning_quiz_voucher_invalid_expiry/);
+    await expect(asService(tx => setExpiry(tx, [], "2026-12-31", ids.admin))).rejects.toThrow(/lightning_quiz_voucher_invalid/);
+    const ok = await asService(async tx => {
+      const [first, second] = await seedVouchers(tx);
+      const today = await plusDays(tx, 0);
+      const lastDay = await plusDays(tx, 365);
+      return [(await setExpiry(tx, [first.id], today, ids.admin)).rows[0].result.updated,
+        (await setExpiry(tx, [second.id], lastDay, ids.admin)).rows[0].result.updated];
+    });
+    expect(ok).toEqual([1, 1]);
+  });
+
+  it("重新公布名單不會蓋掉改過的期限", async () => {
+    const outcome = await asService(async tx => {
+      const [voucher] = await seedVouchers(tx);
+      const newDate = await plusDays(tx, 100);
+      await setExpiry(tx, [voucher.id], newDate, ids.admin);
+      await publish(tx, "2026-09-21", [["2026-09-21", [ids.member, ids.other]], ["2026-09-23", [ids.member]]]);
+      const { rows: [row] } = await tx.query(`SELECT expires_on::text AS expires_on, voided_at FROM public.lightning_quiz_vouchers WHERE id = $1`, [voucher.id]);
+      return { newDate, row };
+    });
+    expect(outcome.row).toEqual({ expires_on: outcome.newDate, voided_at: null });
+  });
+
+  it("候選名單的 priorWins 只算這週以前、沒有作廢的券", async () => {
+    const candidatesOf = async (tx, weekStart) => {
+      const { rows: [{ result }] } = await tx.query(
+        `SELECT public.admin_get_lightning_quiz_week_ranking($1::date, $2) AS result`, [weekStart, ids.admin]
+      );
+      return Object.fromEntries(result.days.flatMap(day => day.candidates).map(c => [c.userId, c.priorWins]));
+    };
+    const outcome = await asService(async tx => {
+      const vouchers = await seedVouchers(tx);
+      const question = async riseDate => (await tx.query(
+        `INSERT INTO public.lightning_quiz_questions (rise_date, rise_time_start, rise_time_end, question_type, payload, answer_key, status)
+         VALUES ($1, '07:00', '10:00', 'single', $2::jsonb, '0'::jsonb, 'published') RETURNING id`,
+        [riseDate, JSON.stringify({ prompt: "題目", options: ["甲", "乙"] })]
+      )).rows[0].id;
+      const correct = (questionId, userId, ms) => tx.query(
+        `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+         VALUES ($1, $2, now(), $3, '0'::jsonb, TRUE)`, [questionId, userId, ms]
+      );
+      const q28 = await question("2026-09-28");
+      await correct(q28, ids.member, 3000);
+      await correct(q28, ids.other, 3500);
+      const q21 = await question("2026-09-21");
+      await correct(q21, ids.member, 3000);
+      const later = await candidatesOf(tx, "2026-09-28");
+      const earlier = await candidatesOf(tx, "2026-09-21");
+      // member 9/21 的券作廢後少算一次
+      await tx.query(`UPDATE public.lightning_quiz_vouchers SET voided_at = now() WHERE id = $1`, [vouchers[0].id]);
+      const afterVoid = await candidatesOf(tx, "2026-09-28");
+      return { later, earlier, afterVoid };
+    });
+    expect(outcome.later).toEqual({ [ids.member]: 2, [ids.other]: 1 });
+    // 之後的週（9/28）不算進 9/21 那週的「之前」
+    expect(outcome.earlier).toEqual({ [ids.member]: 0 });
+    expect(outcome.afterVoid[ids.member]).toBe(1);
+  });
+});
