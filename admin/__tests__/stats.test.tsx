@@ -253,17 +253,17 @@ describe("導覽", () => {
     expect([...el.querySelectorAll(".adm-nav__link")].map((link) => link.textContent)).not.toContain("報表");
   });
 
-  it("測驗作答 is the third tab and shares the chosen plan with 報名註冊 (#581)", async () => {
+  it("報表 keeps two tabs; the quiz overview (#619) still shares the chosen plan with 報名註冊 (#581)", async () => {
     const { requests, el } = await mount("#/stats/registrations");
     const tabs = [...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent);
-    expect(tabs).toEqual(["讀經使用率", "報名註冊", "測驗作答"]);
+    expect(tabs).toEqual(["讀經使用率", "報名註冊"]);
     const pick = el.querySelector<HTMLSelectElement>("#adm-stats-plan")!;
     await act(async () => {
       pick.value = OTHER_PLAN;
       pick.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await flush();
-    await go("#/stats/quiz");
+    await go("#/quiz");
     expect(actions(requests).slice(3)).toEqual(["plan_options", "plan_quiz"]);
     expect(requests.at(-1)!.params).toEqual({ global_plan_id: OTHER_PLAN });
     expect(el.querySelector<HTMLSelectElement>("#adm-quiz-plan")!.value).toBe(OTHER_PLAN);
@@ -274,9 +274,10 @@ describe("導覽", () => {
     expect(actions(requests).slice(5)).toEqual([]);
   });
 
-  it("hides 測驗作答 without plans.read (its numbers come from plan_quiz)", async () => {
-    const { el } = await mount("#/stats", { caps: CAPS.filter((cap) => cap !== "plans.read") });
-    expect([...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent)).toEqual(["讀經使用率", "報名註冊"]);
+  it("an old 測驗作答 bookmark opens the quiz area (#619)", async () => {
+    const { el } = await mount("#/stats/quiz");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("測驗");
+    expect(el.querySelector("#adm-quiz-plan")).not.toBeNull();
   });
 
   it("the old 營運 pages land on the report tabs", async () => {

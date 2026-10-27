@@ -139,7 +139,7 @@ describe("boot deep link", () => {
     const h = makeHarness({ href: "https://bible.newlife.org.tw/#/admin/lightning-quiz", role: "admin" });
     h.routing.captureBootRoute();
     await h.routing.finishBoot();
-    expect(h.win.location.assign).toHaveBeenCalledWith("https://bible-speed-reading-admin.vercel.app/#/content/lightning-quiz");
+    expect(h.win.location.assign).toHaveBeenCalledWith("https://bible-speed-reading-admin.vercel.app/#/quiz/lightning-quiz"); // #619
     expect(h.switched).toEqual([]);
   });
 

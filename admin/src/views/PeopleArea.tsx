@@ -3,10 +3,11 @@
 // 名單、管理範圍的資料放在 App 那一層（ui），打開某人、切到別區再回來都不重抓。
 // 能力：名單與管理範圍要 accounts.read，個人頁要 support.read（伺服器端 admin-api 仍會再擋）。
 import { useMemo, type Dispatch, type SetStateAction } from "react";
-import { KeyRound, Users } from "lucide-react";
 import type { AdminApi } from "../api.ts";
 import { formatRoute, type AdminRoute } from "../route.ts";
+import { currentTabId } from "../tabs.ts";
 import type { OrgTreeNode } from "../types.ts";
+import { AreaTabs } from "./AreaTabs.tsx";
 import { INITIAL_SCOPES, ScopeManager, type ScopesState } from "./ScopeManager.tsx";
 import { UserDetail } from "./UserDetail.tsx";
 import { INITIAL_DIRECTORY, UserDirectory, type DirectoryState } from "./UserDirectory.tsx";
@@ -54,24 +55,8 @@ export function PeopleArea({ api, route, capabilities, org, ui, setUi, doc }: Pr
 
   return (
     <div className="adm-support-area">
-      {canList && (
-        <nav className="adm-tabs adm-support-tabs" aria-label="人">
-          <a
-            className={`adm-tab${scopesView ? "" : " adm-tab--active"}`}
-            href={formatRoute({ view: "people", tab: "directory", profileId: null })}
-            aria-current={!scopesView && route.view === "people" ? "page" : undefined}
-          >
-            <Users className="adm-icon" aria-hidden="true" />名單與查詢
-          </a>
-          <a
-            className={`adm-tab${scopesView ? " adm-tab--active" : ""}`}
-            href={formatRoute({ view: "people", tab: "scopes", profileId: null })}
-            aria-current={scopesView ? "page" : undefined}
-          >
-            <KeyRound className="adm-icon" aria-hidden="true" />管理範圍
-          </a>
-        </nav>
-      )}
+      {/* 分頁和左側選單同一份（tabs.ts，#619）；沒有 accounts.read 就沒有分頁 */}
+      <AreaTabs area="people" current={currentTabId(route) ?? ""} capabilities={capabilities} className="adm-support-tabs" />
       {content}
     </div>
   );

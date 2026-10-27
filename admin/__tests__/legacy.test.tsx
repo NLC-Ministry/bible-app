@@ -301,8 +301,8 @@ describe("legacy tabs in the plan area", () => {
     expect(el.textContent).toContain("沒有權限");
   });
 
-  it("shares one iframe with the content area", async () => {
-    const { el } = await mount("#/content/exam", [...OPERATIONS_CAPS, "plans.read", "content.manage"]);
+  it("shares one iframe with the quiz area", async () => {
+    const { el } = await mount("#/quiz/exam", [...OPERATIONS_CAPS, "plans.read", "content.manage"]);
     const frame = el.querySelector("iframe.adm-legacy__frame");
     await go("#/plans/team-status");
     expect(el.querySelectorAll("iframe.adm-legacy__frame")).toHaveLength(1);
@@ -316,12 +316,13 @@ describe("legacy tabs in the plan area", () => {
     expect(el.querySelector("iframe")).toBeNull();
     expect(el.textContent).toContain("沒有權限");
     const links = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
-    expect(links).toEqual(["首頁", "人", "回報收件匣", "內容"]); // 有 support.read 就看得到人區（個人頁，#567）
+    // 有 support.read 就看得到人區（個人頁，#567）；有 content.manage 就看得到測驗區（#619）
+    expect(links).toEqual(["首頁", "測驗", "人", "回報收件匣", "內容"]);
     expect(el.textContent).not.toContain("搬移中");
   });
 
   it("lights only the tab that is open: 團隊 and 組隊狀況 no longer share an id (#583)", async () => {
-    for (const area of ["plans", "stats", "content", "system"] as const) {
+    for (const area of ["plans", "quiz", "stats", "people", "content", "system"] as const) {
       const ids = areaTabs(area).map((tab) => tab.id);
       expect(new Set(ids).size).toBe(ids.length);
     }
@@ -342,17 +343,19 @@ describe("legacy tabs in the plan area", () => {
   });
 });
 
-describe("content area", () => {
-  it("shows the legacy page in an iframe with one tab per section", async () => {
-    const { el, fetchImpl } = await mount("#/content/exam", CONTENT_CAPS);
+describe("content and quiz areas", () => {
+  it("shows the legacy page in an iframe with one tab per section; the quizzes have their own area (#619)", async () => {
+    const { el, fetchImpl } = await mount("#/quiz/exam", CONTENT_CAPS);
     const frame = el.querySelector("iframe.adm-legacy__frame") as HTMLIFrameElement;
     expect(frame).not.toBeNull();
     expect(frame.getAttribute("src")).toBe("/legacy");
     expect(frame.title).toBe("大測驗管理");
+    // 沒有 plans.read：看不到測驗區的總覽，只有三種測驗
     const tabs = [...el.querySelectorAll(".adm-legacy__tabs a")];
-    expect(tabs.map((a) => a.textContent)).toEqual(["公告", "經文注釋", "小測驗", "大測驗", "雲柱測驗"]);
-    expect(tabs.map((a) => a.getAttribute("href"))).toEqual(["#/content/announcements", "#/content/commentary", "#/content/quizzes", "#/content/exam", "#/content/lightning-quiz"]);
-    expect(tabs[3].getAttribute("aria-current")).toBe("page");
+    expect(tabs.map((a) => a.textContent)).toEqual(["小測驗", "大測驗", "雲柱測驗"]);
+    expect(tabs.map((a) => a.getAttribute("href"))).toEqual(["#/quiz/quizzes", "#/quiz/exam", "#/quiz/lightning-quiz"]);
+    expect(tabs[1].getAttribute("aria-current")).toBe("page");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("測驗");
     expect(el.querySelector(".adm-app")?.classList.contains("adm-app--legacy")).toBe(true);
     // 「內容」區不打 admin-api（資料由 iframe 照舊走 nlc-data），只有開後台的 bootstrap
     expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);
@@ -365,17 +368,43 @@ describe("content area", () => {
     await go("#/support");
     expect(el.querySelector(".adm-legacy")?.hasAttribute("hidden")).toBe(true);
     expect(el.querySelector(".adm-app")?.classList.contains("adm-app--legacy")).toBe(false);
-    await go("#/content/quizzes");
+    await go("#/quiz/quizzes");
     expect(el.querySelector("iframe.adm-legacy__frame")).toBe(frame);
     expect(el.querySelector(".adm-legacy")?.hasAttribute("hidden")).toBe(false);
     expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("小測驗");
   });
 
+  it("content keeps only 公告 and 經文注釋; old content quiz addresses open the quiz area (#619)", async () => {
+    const { el } = await mount("#/content/commentary", CONTENT_CAPS);
+    expect([...el.querySelectorAll(".adm-legacy__tabs a")].map((a) => a.textContent)).toEqual(["公告", "經文注釋"]);
+    await go("#/content/lightning-quiz");
+    expect(el.querySelector(".adm-legacy__tabs a[aria-current='page']")?.textContent).toBe("雲柱測驗");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("測驗");
+  });
+
+  it("the menu lists the open area's tabs underneath it, and only that area's (#619)", async () => {
+    const { el } = await mount("#/quiz/exam", [...CONTENT_CAPS, "plans.read"]);
+    const sub = () => [...el.querySelectorAll(".adm-nav__sub a")];
+    const owner = () => el.querySelector(".adm-nav__sub")?.closest("li")?.querySelector(".adm-nav__link")?.textContent;
+    expect(sub().map((a) => a.textContent)).toEqual(["總覽", "小測驗", "大測驗", "雲柱測驗"]);
+    expect(sub().map((a) => a.getAttribute("href"))).toEqual(["#/quiz", "#/quiz/quizzes", "#/quiz/exam", "#/quiz/lightning-quiz"]);
+    expect(sub().filter((a) => a.getAttribute("aria-current") === "page").map((a) => a.textContent)).toEqual(["大測驗"]);
+    expect(owner()).toBe("測驗");
+    await go("#/content/commentary");
+    expect(sub().map((a) => a.textContent)).toEqual(["公告", "經文注釋"]);
+    expect(owner()).toBe("內容");
+    // 沒有分頁的區不展開
+    await go("#/support");
+    expect(sub()).toEqual([]);
+  });
+
   it("is hidden from the menu and blocked without content.manage", async () => {
-    const { el } = await mount("#/content/exam", ["console.access", "support.read"]);
+    const { el } = await mount("#/content/commentary", ["console.access", "support.read"]);
     expect(el.querySelector("iframe")).toBeNull();
     expect(el.textContent).toContain("沒有權限");
-    expect([...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent)).not.toContain("內容");
+    const links = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
+    expect(links).not.toContain("內容");
+    expect(links).not.toContain("測驗");
   });
 
   it("forwards iframe activity to the idle timer as a window event", async () => {

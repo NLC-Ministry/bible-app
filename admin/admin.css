@@ -169,6 +169,14 @@ button, input, select { font: inherit; color: inherit; }
 }
 .adm-nav__link:hover { background: var(--color-brand-subtle); color: var(--text-primary); }
 .adm-nav__link--active { background: var(--color-brand-subtle); color: var(--text-primary); font-weight: var(--type-weight-strong); }
+/* 目前這一區的分頁（#619）：列在那一項底下、對齊文字，選到的那頁左邊一條品牌色 */
+.adm-nav ul.adm-nav__sub { gap: 0; margin: 2px 0 6px 30px; border-left: 1px solid var(--border-default); }
+.adm-nav__sublink {
+  display: block; margin-left: -1px; padding: 5px 12px; border-left: 2px solid transparent;
+  color: var(--text-secondary); text-decoration: none; font-size: 0.875rem;
+}
+.adm-nav__sublink:hover { color: var(--text-primary); border-left-color: var(--border-default); }
+.adm-nav__sublink--active, .adm-nav__sublink--active:hover { color: var(--text-primary); border-left-color: var(--color-brand); font-weight: var(--type-weight-strong); }
 .adm-main { flex: 1; min-width: 0; padding: 20px 24px; }
 
 /* ── 登入前／訊息 ─────────────────────────────────────────────────────── */
@@ -633,7 +641,10 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-home__changes > li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
 
 /* 報表區（#568）：Chart.js 的圖要一個固定高度的容器（maintainAspectRatio: false），canvas 的尺寸由 Chart.js 用 CSSOM 設定 */
-.adm-stats-area, .adm-stats { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.adm-stats-area, .adm-stats, .adm-quiz-area { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* 測驗區總覽上面的地圖（#619）：每種測驗一列，名稱＋裡面有哪些頁 */
+.adm-quiz-map__item { align-items: baseline; }
+.adm-quiz-map__name { min-width: 5.5em; font-weight: var(--type-weight-strong); }
 .adm-stats__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .adm-stats__date { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary); }
 .adm-stats__date .adm-input { width: auto; }

@@ -1,7 +1,7 @@
 // 後台外殼（#555）：登入 → bootstrap（開後台只打這 1 個 admin-api 請求）→ 依能力清單顯示左側導覽。
 // 相依（登入、admin-api、window）全部從參數注入，測試用假的跑真的元件。
 import React, { useEffect, useMemo, useState } from "react";
-import { BarChart3, BookOpen, BookOpenCheck, Headset, House, LogOut, Menu, Settings, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpen, BookOpenCheck, ClipboardList, Headset, House, LogOut, Menu, Settings, Users, type LucideIcon } from "lucide-react";
 import { AdminApiError, type AdminApi } from "./api.ts";
 import type { AdminAuth, SignOutReason } from "./auth.ts";
 import { ENVIRONMENT_LABEL, type AdminEnvironment } from "./config.ts";
@@ -10,6 +10,7 @@ import { findLegacySection } from "./legacy.ts";
 import { canUse, visibleNavItems, type NavItem } from "./nav.ts";
 import { ROSTER_PAGE_SIZE, drillFilters } from "./plans.ts";
 import { areaOf, parseRoute, type AdminRoute } from "./route.ts";
+import { currentTabId, isTabArea, visibleAreaTabs } from "./tabs.ts";
 import {
   THEMES,
   THEME_LABEL,
@@ -27,6 +28,7 @@ import { HomeArea, type HomeDrill } from "./views/HomeArea.tsx";
 import { LegacyHost } from "./views/LegacyHost.tsx";
 import { INITIAL_PEOPLE_UI, PeopleArea, type PeopleUiState } from "./views/PeopleArea.tsx";
 import { INITIAL_PLAN_UI, PlanArea, type PlanUiState } from "./views/PlanArea.tsx";
+import { QuizArea } from "./views/QuizArea.tsx";
 import { INITIAL_INBOX, type InboxState } from "./views/ReportInbox.tsx";
 import { INITIAL_STATS_UI, StatsArea, type StatsUiState } from "./views/StatsArea.tsx";
 import { SupportArea } from "./views/SupportArea.tsx";
@@ -53,6 +55,7 @@ const NAV_ICON: Record<NavItem["icon"], LucideIcon> = {
   headset: Headset,
   users: Users,
   plan: BookOpenCheck,
+  quiz: ClipboardList,
   chart: BarChart3,
   book: BookOpen,
   settings: Settings
@@ -81,7 +84,7 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   const [inbox, setInbox] = useState<InboxState>(INITIAL_INBOX);
   // 「人」區的名單、管理範圍（#567）：打開某人、切到別區再回來都還在，不重抓
   const [peopleUi, setPeopleUi] = useState<PeopleUiState>(INITIAL_PEOPLE_UI);
-  // 報表區的日期區間、時段切換、選的計畫（#568）：切到別區再回來還在
+  // 報表區的日期區間、時段切換、選的計畫（#568）：切到別區再回來還在。選的計畫也給測驗區的總覽用（#619）
   const [statsUi, setStatsUi] = useState<StatsUiState>(INITIAL_STATS_UI);
 
   // 登入 → bootstrap
@@ -187,6 +190,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
     content = <PlanArea api={api} route={route} capabilities={capabilities} ui={planUi} setUi={setPlanUi} doc={win.document} />;
   } else if (route.view === "stats") {
     content = <StatsArea api={api} route={route} capabilities={capabilities} ui={statsUi} setUi={setStatsUi} doc={win.document} theme={resolvedTheme} />;
+  } else if (route.view === "quiz") {
+    content = <QuizArea api={api} route={route} capabilities={capabilities} ui={statsUi} setUi={setStatsUi} doc={win.document} />;
   } else if (route.view === "audit") {
     content = <AuditLog api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else {
@@ -227,12 +232,26 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
             {navItems.map((item) => {
               const Icon = NAV_ICON[item.icon];
               const current = item.area === area;
+              // 目前這一區的分頁列在底下（#619），看得到這一區有什麼；分頁和上方分頁列同一份（tabs.ts）
+              const subTabs = current && isTabArea(item.area) ? visibleAreaTabs(item.area, capabilities) : [];
+              const tabId = currentTabId(route);
               return (
                 <li key={item.area}>
                   <a className={`adm-nav__link${current ? " adm-nav__link--active" : ""}`} href={`#/${item.area}`} aria-current={current ? "page" : undefined}>
                     <Icon className="adm-icon" aria-hidden="true" />
                     <span>{item.label}</span>
                   </a>
+                  {subTabs.length > 0 && (
+                    <ul className="adm-nav__sub" aria-label={`${item.label}的分頁`}>
+                      {subTabs.map((tab) => (
+                        <li key={tab.id}>
+                          <a className={`adm-nav__sublink${tab.id === tabId ? " adm-nav__sublink--active" : ""}`} href={tab.href} aria-current={tab.id === tabId ? "page" : undefined}>
+                            {tab.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               );
             })}

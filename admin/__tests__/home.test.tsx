@@ -126,7 +126,7 @@ describe("home page", () => {
     expect(actions(requests)).toEqual(["bootstrap", "home_summary"]);
     expect(requests[1].params).toEqual({});
     const nav = [...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent);
-    expect(nav).toEqual(["首頁", "計畫", "人", "回報收件匣", "內容", "系統"]);
+    expect(nav).toEqual(["首頁", "計畫", "測驗", "人", "回報收件匣", "內容", "系統"]); // #619：測驗跟在計畫後面
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("首頁");
   });
 
