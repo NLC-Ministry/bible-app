@@ -343,8 +343,8 @@ describe("roster", () => {
   });
 });
 
-// 測驗作答 #581 起在報表區（#/stats/quiz），和報名註冊共用選的計畫
-const QUIZ_CAPS = [...CAPS, "stats.read"];
+// 測驗作答 #619 起是「測驗」區的總覽（#/quiz），不用 stats.read
+const QUIZ_CAPS = CAPS;
 
 describe("teams and quiz tabs", () => {
   it("teams: numbers from the summary, drilling into the roster with the same count", async () => {
@@ -355,10 +355,11 @@ describe("teams and quiz tabs", () => {
   });
 
   it("quiz: shows what this plan has; a switched-off feature is one small line; nothing configured says so", async () => {
-    const { requests, el } = await mount("#/stats/quiz", { caps: QUIZ_CAPS });
+    const { requests, el } = await mount("#/quiz", { caps: QUIZ_CAPS });
     expect(actions(requests)).toEqual(["bootstrap", "plan_options", "plan_quiz"]);
     expect(requests[2].params).toEqual({ global_plan_id: PLAN });
-    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("報表");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("測驗");
+    expect([...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent)).toEqual(["總覽", "小測驗", "大測驗", "雲柱測驗"]);
     expect(el.textContent).toContain("每日小測驗作答率");
     expect(el.textContent).toContain("11/11：4／5 人交卷（80%）");
     expect(el.textContent).not.toContain("大測驗・期末考");
@@ -366,18 +367,37 @@ describe("teams and quiz tabs", () => {
     expect(el.textContent).not.toContain("雲柱測驗（本期期間）");
   });
 
-  it("quiz: lightning counts this period's enrolled people and links to the content area", async () => {
+  it("quiz: lightning counts this period's enrolled people and links to its page in the quiz area", async () => {
     const quiz = { ...QUIZ, daily: { enabled: true, configured: false, participants: 0, days: [] }, exam: { enabled: true, papers: [] },
       lightning: { from: "2026-11-01", to: "2026-11-11", questions: 9, participants: 3, weeks: [{ week_start: "2026-11-02", questions: 7, participants: 3 }] } };
-    const { el } = await mount("#/stats/quiz", { quiz, caps: QUIZ_CAPS });
+    const { el } = await mount("#/quiz", { quiz, caps: QUIZ_CAPS });
     expect(el.textContent).not.toContain("每日小測驗作答率");
     expect(el.textContent).toContain("雲柱測驗（本期期間）");
     expect(el.textContent).toContain("報名者 6 人的 50%");
-    expect(el.querySelector<HTMLAnchorElement>("a[href='#/content/lightning-quiz']")).not.toBeNull();
+    expect(el.querySelector(".adm-plan-quiz a[href='#/quiz/lightning-quiz']")).not.toBeNull();
+  });
+
+  it("quiz: the overview is a map of what each quiz has, whatever this plan configured (#619)", async () => {
+    const quiz = { ...QUIZ, daily: { enabled: true, configured: false, participants: 0, days: [] }, exam: { enabled: true, papers: [] }, lightning: null };
+    const { el } = await mount("#/quiz", { quiz, caps: QUIZ_CAPS });
+    const map = el.querySelector(".adm-quiz-map")!;
+    const links = [...map.querySelectorAll("a")];
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["#/quiz/quizzes", "#/quiz/exam", "#/quiz/lightning-quiz"]);
+    expect(links.map((a) => a.textContent)).toEqual(["小測驗", "大測驗", "雲柱測驗"]);
+    expect(map.textContent).toContain("規則設定");
+    expect(map.textContent).toContain("得獎與兌換");
+    expect(map.textContent).toContain("作答與成績");
+  });
+
+  it("quiz: without content.manage there is no map, only the numbers", async () => {
+    const { el } = await mount("#/quiz", { caps: QUIZ_CAPS.filter((cap) => cap !== "content.manage") });
+    expect(el.querySelector(".adm-quiz-map")).toBeNull();
+    expect(el.textContent).toContain("每日小測驗作答率");
+    expect([...el.querySelectorAll(".adm-nav__sub a")].map((a) => a.textContent)).toEqual(["總覽"]);
   });
 
   it("quiz: a failed load shows an error, never an empty page", async () => {
-    const { el } = await mount("#/stats/quiz", { failures: { plan_quiz: 500 }, caps: QUIZ_CAPS });
+    const { el } = await mount("#/quiz", { failures: { plan_quiz: 500 }, caps: QUIZ_CAPS });
     expect(el.querySelector(".adm-notice--danger")?.textContent).toContain("後台服務發生錯誤");
     expect(buttons(el, "重試")).toHaveLength(1);
   });

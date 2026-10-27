@@ -73,7 +73,7 @@ describe("old #/admin/<section> links after the 管理 tab split (#551)", () => 
     for (const [id, hash] of Object.entries(ADMIN_CONSOLE_SECTION_ROUTES)) {
       expect(parseRoute(hash).view, id).not.toBe("not_found");
     }
-    expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES["lightning-quiz"])).toEqual({ view: "legacy", area: "content", section: "lightning-quiz" });
+    expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES["lightning-quiz"])).toEqual({ view: "legacy", area: "quiz", section: "lightning-quiz" }); // #619：測驗區
     expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES.settings)).toEqual({ view: "legacy", area: "system", section: "settings" });
     expect(parseRoute(ADMIN_CONSOLE_SECTION_ROUTES.permissions)).toMatchObject({ view: "people", tab: "scopes" });
   });

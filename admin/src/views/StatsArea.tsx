@@ -1,9 +1,10 @@
-// 後台「報表」區（#568）：分三頁——讀經使用率（含每日趨勢，跨計畫）、報名註冊（依大區／牧區）、測驗作答（#581，QuizTab.tsx）。
+// 後台「報表」區（#568）：分兩頁——讀經使用率（含每日趨勢，跨計畫）、報名註冊（依大區／牧區）。
+// 測驗作答（#581）#619 起是「測驗」區的總覽（QuizArea.tsx），仍和報名註冊共用選的計畫（ui.planId）。
 //
 // 請求預算：讀經使用率打開＝1 個 reading_usage（DAU／WAU／MAU、每天章數、一週讀幾天、讀經時段一次拿齊，伺服器彙總成
 // 每天一列，原始打卡不進瀏覽器），換日期區間 1 個；時段的「全部／平日／週末」「人數／章數」切換不再發請求。
 // 報名註冊打開＝1 個 registration_stats（順便帶計畫選單、沒選就用預設計畫），換計畫 1 個；匯出、同步試算表各 1 個
-// （伺服器產生、記稽核）。測驗作答見 QuizTab.tsx；報名註冊和測驗作答共用選的計畫（ui.planId）。
+// （伺服器產生、記稽核）。
 // 都走 api.ts 的 60 秒快取；條件放在 App 那一層（ui），切到別區再回來還在。
 // Chart.js 只有這一區會載入（chart.ts），載不到時仍有表格。
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
@@ -36,7 +37,6 @@ import type { CsvExport } from "../types.ts";
 import { ErrorNotice, Segmented, Spinner } from "../ui.tsx";
 import { useAdminData } from "../use-admin-data.ts";
 import { AreaTabs } from "./AreaTabs.tsx";
-import { QuizTab } from "./QuizTab.tsx";
 
 export type StatsUiState = {
   /** null：還沒動過，用「到今天為止的 30 天」 */
@@ -44,7 +44,7 @@ export type StatsUiState = {
   to: string | null;
   hourDays: HourDays;
   hourMetric: HourMetric;
-  /** 報名註冊、測驗作答選的計畫（兩頁共用，#581）；null＝伺服器挑的預設計畫 */
+  /** 報名註冊、測驗區總覽選的計畫（兩頁共用，#581、#619）；null＝伺服器挑的預設計畫 */
   planId: string | null;
 };
 
@@ -70,9 +70,6 @@ export function StatsArea({ api, route, capabilities, ui, setUi, doc, theme, loa
       <AreaTabs area="stats" current={route.tab} capabilities={capabilities} />
       {route.tab === "usage" && <UsageTab api={api} ui={ui} setUi={setUi} doc={doc} loadChart={loadChart} today={taipeiToday(now())} />}
       {route.tab === "registrations" && <RegistrationTab api={api} route={route} capabilities={capabilities} ui={ui} setUi={setUi} doc={doc} />}
-      {route.tab === "quiz" && (capabilities.includes("plans.read")
-        ? <QuizTab api={api} route={route} capabilities={capabilities} ui={ui} setUi={setUi} doc={doc} />
-        : <p className="adm-muted adm-empty">你的帳號沒有看測驗作答的權限。</p>)}
     </div>
   );
 }
