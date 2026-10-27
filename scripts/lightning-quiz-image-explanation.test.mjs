@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #449：雲柱測驗詳解欄位＋題目附圖
 const read = path => readFileSync(path, "utf8");
-const migration = read("supabase/migrations/20261005124326_lightning_quiz_image_explanation.sql");
+// 函式換成目前的定義（get_my_lightning_quiz_history／admin_list 之後在 #616 又改寫過）
+const migration = currentMigrationSql("20261005124326_lightning_quiz_image_explanation.sql");
 const fnBlock = name => {
   const start = migration.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
   expect(start, name).toBeGreaterThanOrEqual(0);

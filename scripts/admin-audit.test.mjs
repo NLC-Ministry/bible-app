@@ -11,6 +11,7 @@ import {
   diffFields,
   isAuditedTableWrite,
   resolveRequestId,
+  rpcResultChanges,
   rpcTarget,
   singleRowKey
 } from "../supabase/functions/nlc-data/admin-audit.ts";
@@ -190,5 +191,19 @@ describe("nlc-data wiring", () => {
     expect(nlcData).toContain("const auditWrite = canAdminWrite && !canOwnWrite && isAuditedTableWrite(table, action);");
     expect(nlcData).toMatch(/const \{ data, error \} = await query;\n\s+if \(auditWrite\) \{/);
     expect(nlcData).toContain('supabaseAdmin.rpc("record_admin_audit_event", event)');
+  });
+});
+
+describe("從回傳值補記修改前後（#616）", () => {
+  it("雲柱更正正解：記舊正解 → 新正解與重判筆數；只改詳解或別的 RPC 不記", () => {
+    const data = { answerChanged: true, previousAnswer: 0, answerKey: 2, attemptsRescored: 5, becameCorrect: 1, becameWrong: 3 };
+    expect(rpcResultChanges("admin_set_lightning_quiz_answer_key", data)).toEqual({
+      answer_key: { before: 0, after: 2 },
+      rescored: { after: { attempts: 5, becameCorrect: 1, becameWrong: 3 } }
+    });
+    expect(rpcResultChanges("admin_set_lightning_quiz_answer_key", { ...data, answerChanged: false })).toBeNull();
+    expect(rpcResultChanges("admin_set_lightning_quiz_answer_key", null)).toBeNull();
+    expect(rpcResultChanges("set_daily_quiz_answer_key", data)).toBeNull();
+    expect(AUDITED_ADMIN_RPCS.has("admin_set_lightning_quiz_answer_key")).toBe(true);
   });
 });
