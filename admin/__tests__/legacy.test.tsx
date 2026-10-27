@@ -50,7 +50,7 @@ function setup(overrides: Partial<LegacyHostOptions> = {}) {
   const options: LegacyHostOptions = {
     win: win as unknown as Window,
     frameWindow: () => frame as unknown as Window,
-    initial: () => ({ section: "exam", theme: "dark" }),
+    initial: () => ({ section: "exam", theme: "dark", plan: "plan-1" }),
     getToken: () => token,
     getIdToken: () => "id-token",
     auditExport: vi.fn(async (file) => { audits.push(file); return 1; }),
@@ -92,7 +92,7 @@ describe("startLegacyHost (iframe channel)", () => {
     expect(t.framePosts).toEqual([]);
     t.hello();
     expect(t.framePosts).toEqual([{
-      message: { type: LEGACY_INIT, section: "exam", theme: "dark" },
+      message: { type: LEGACY_INIT, section: "exam", theme: "dark", plan: "plan-1" },
       origin: ORIGIN,
       transfer: [t.channels[0].port2]
     }]);
@@ -186,7 +186,15 @@ describe("startLegacyHost (iframe channel)", () => {
     expect(t.events).toEqual({ ready: 1, sections: [["quizzes", false], ["exam", true]], errors: ["boot_failed", "boot_failed"], login: 1, activity: 1 });
     t.host.open("commentary");
     t.host.setTheme("warm");
-    expect(port.sent.slice(-2)).toEqual([{ type: "open", section: "commentary" }, { type: "theme", theme: "warm" }]);
+    // 計畫（#620）：外框的計畫選單換了就告訴 iframe；null＝外框沒有計畫可給，iframe 用自己的計畫篩選
+    t.host.setPlan("plan-2");
+    t.host.setPlan(null);
+    expect(port.sent.slice(-4)).toEqual([
+      { type: "open", section: "commentary" },
+      { type: "theme", theme: "warm" },
+      { type: "plan", plan: "plan-2" },
+      { type: "plan", plan: null }
+    ]);
   });
 
   it("re-handshakes when the iframe reloads and ignores the old channel", () => {
@@ -269,8 +277,8 @@ describe("legacy tabs in the plan area", () => {
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("計畫");
     // 選單沒有「營運」了
     expect([...el.querySelectorAll(".adm-nav__link")].map((a) => a.textContent)).not.toContain("營運");
-    // 照搬區只打開後台的 bootstrap，資料由 iframe 走 nlc-data
-    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap"]);
+    // 照搬區的資料由 iframe 走 nlc-data；外框只拿計畫選單的清單（#620，組隊狀況用外框的計畫選單）
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(String(init.body)).action)).toEqual(["bootstrap", "plan_options"]);
     // 舊書籤到報表區（沒有 stats.read 就是沒有權限，不會打開 iframe 的舊頁）
     await go("#/operations/registrations");
     expect(el.textContent).toContain("沒有權限");

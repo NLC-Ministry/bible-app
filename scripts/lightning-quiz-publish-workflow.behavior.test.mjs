@@ -122,6 +122,9 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
       adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days: [] } })),
       adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: { questions: [] } })),
       adminGetLightningQuizSettings: vi.fn(async () => ({ success: true, data: { weekdays: [1, 3, 5], timeStart: "07:00", timeEnd: "10:00" } })),
+      adminSaveLightningQuizSettings: vi.fn(async settings => ({ success: true, data: settings })),
+      adminGetLightningQuizWeekRanking: vi.fn(async weekStart => ({ success: true, data: { weekStart, days: [], publication: null } })),
+      adminListLightningQuizVouchers: vi.fn(async () => ({ success: true, data: { vouchers: [] } })),
       adminImportLightningQuizQuestions: vi.fn(async items => ({ success: true, data: { imported: items.length } }))
     };
     vi.resetModules();
@@ -139,12 +142,13 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     await renderAdminLightningQuizQuestions();
   };
 
-  it("opens on the 排程 tab; the list and stats are in their own tabs, and the choice is remembered", async () => {
+  it("opens on the 排程 tab; 題目、統計、得獎與兌換、規則設定 are their own tabs, and the choice is remembered (#620)", async () => {
     await render();
     const panel = name => document.querySelector(`[data-lq-tab-panel="${name}"]`);
+    expect([...document.querySelectorAll("[data-lq-tab]")].map(tab => `${tab.dataset.lqTab}:${tab.textContent}`))
+      .toEqual(["schedule:排程", "list:題目", "stats:統計", "awards:得獎與兌換", "rules:規則設定"]);
     expect(panel("schedule").classList.contains("hidden")).toBe(false);
-    expect(panel("list").classList.contains("hidden")).toBe(true);
-    expect(panel("stats").classList.contains("hidden")).toBe(true);
+    for (const name of ["list", "stats", "awards", "rules"]) expect(panel(name).classList.contains("hidden")).toBe(true);
     document.querySelector('[data-lq-tab="list"]').click();
     expect(panel("list").classList.contains("hidden")).toBe(false);
     expect(panel("schedule").classList.contains("hidden")).toBe(true);
@@ -201,15 +205,13 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
 
   it("the sheets sit directly under body in index.html and opening them never moves them (#420)", async () => {
     const page = new JSDOM(indexHtml).window.document;
-    for (const id of ["admin-lightning-quiz-question-sheet", "admin-lightning-quiz-preview", "admin-lightning-quiz-rule"]) {
+    for (const id of ["admin-lightning-quiz-question-sheet", "admin-lightning-quiz-preview"]) {
       expect(page.getElementById(id).parentElement).toBe(page.body);
       expect(sectionHtml).not.toContain(`id="${id}"`);
     }
     await render();
     const order = () => [...document.body.children].map(element => element.id).filter(Boolean);
     const before = order();
-    document.getElementById("admin-lightning-quiz-rule-open").click();
-    expect(isOpen("admin-lightning-quiz-rule")).toBe(true);
     openDetail("draft-1").querySelector('[data-lq-detail-action="try"]').click();
     expect(isOpen("admin-lightning-quiz-preview")).toBe(true);
     expect(order()).toEqual(before);
@@ -301,7 +303,7 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(true);
   });
 
-  it("那週前三名已公布過：面板提醒名單不會自動改，前往重新公布會開到那一週的統計 (#616)", async () => {
+  it("那週前三名已公布過：面板提醒名單不會自動改，前往重新公布會開到那一週的得獎與兌換 (#616, #620)", async () => {
     db.adminSetLightningQuizAnswerKey.mockResolvedValueOnce({
       success: true,
       data: { changed: true, answerChanged: true, attemptsRescored: 4, becameCorrect: 3, becameWrong: 1, weekStart: "2026-09-28", weekRankingPublished: true }
@@ -316,8 +318,8 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     await flush();
     await flush();
     expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
-    expect(document.querySelector('[data-lq-tab-panel="stats"]').classList.contains("hidden")).toBe(false);
-    expect(db.adminGetLightningQuizWeek).toHaveBeenLastCalledWith("2026-09-28");
+    expect(document.querySelector('[data-lq-tab-panel="awards"]').classList.contains("hidden")).toBe(false);
+    expect(db.adminGetLightningQuizWeekRanking).toHaveBeenLastCalledWith("2026-09-28");
   });
 
   it("sheets close with the close button or Escape, but not with a click outside (#317)", async () => {
@@ -382,9 +384,9 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     await flush();
     expect(isOpen("admin-lightning-quiz-import")).toBe(false);
 
-    document.getElementById("admin-lightning-quiz-rule-open").click();
+    openDetail("draft-1");
     expect(closeLayer()).toBe(true);
-    expect(isOpen("admin-lightning-quiz-rule")).toBe(false);
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
     expect(closeLayer()).toBe(false);
   });
 
@@ -433,13 +435,24 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     expect(preview.querySelector("[data-lq-import-save]")).toBeNull();
   });
 
-  it("⚙ 排程規則 opens a sheet with the current rule", async () => {
+  it("規則設定 is a tab now, not a ⚙ popup: it shows the current rule and saves it (#620)", async () => {
     await render();
-    document.getElementById("admin-lightning-quiz-rule-open").click();
-    expect(isOpen("admin-lightning-quiz-rule")).toBe(true);
-    const checked = [...document.querySelectorAll("#admin-lightning-quiz-rule [data-lq-rule-day]:checked")].map(input => input.value);
+    expect(document.getElementById("admin-lightning-quiz-rule-open")).toBeNull();
+    expect(document.getElementById("admin-lightning-quiz-rule")).toBeNull();
+    document.querySelector('[data-lq-tab="rules"]').click();
+    const panel = document.querySelector('[data-lq-tab-panel="rules"]');
+    expect(panel.classList.contains("hidden")).toBe(false);
+    const checked = [...panel.querySelectorAll("[data-lq-rule-day]:checked")].map(input => input.value);
     expect(checked).toEqual(["1", "3", "5"]);
-    expect(document.querySelector("#admin-lightning-quiz-rule [data-lq-rule-start]").value).toBe("07:00");
+    expect(panel.querySelector("[data-lq-rule-start]").value).toBe("07:00");
+
+    panel.querySelector('[data-lq-rule-day][value="2"]').checked = true;
+    panel.querySelector("[data-lq-rule-save]").click();
+    await flush();
+    expect(dbStub.adminSaveLightningQuizSettings).toHaveBeenCalledWith({ weekdays: [1, 2, 3, 5], timeStart: "07:00", timeEnd: "10:00" });
+    expect(document.getElementById("admin-lightning-quiz-planner").textContent).toContain("每週一、二、三、五　07:00–10:00");
+    // 存完還停在規則設定
+    expect(panel.classList.contains("hidden")).toBe(false);
   });
 
   it("with the list and the stats both rendered, no id appears twice (the question sheet once collided with the stats detail)", async () => {

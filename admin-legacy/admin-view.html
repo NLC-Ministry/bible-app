@@ -342,8 +342,8 @@
                js/modules/admin.js 的 renderAdminLightningQuizQuestions() /
                renderAdminLightningQuizStats() 掛載，資料走 migration 0202 的 RPC。 -->
           <div id="admin-section-lightning-quiz" class="card-col span-12 admin-section-panel hidden">
-            <!-- 雲柱測驗後台（#313）：三個分頁（排程／題目清單／統計）。新增／編輯、匯入、作答明細
-                 是下面的完整頁面；題目、試作、排程規則是彈出面板，放在 body 底下（#420）。 -->
+            <!-- 雲柱測驗後台（#313、#620）：五個分頁（排程／題目／統計／得獎與兌換／規則設定）。新增／編輯、匯入、
+                 作答明細是下面的完整頁面；題目、試作是彈出面板，放在 body 底下（#420）。 -->
             <section class="glass-card admin-announcements admin-lq" aria-labelledby="admin-lightning-quiz-title">
               <div class="admin-announcements__header admin-lq__header">
                 <div>
@@ -353,13 +353,14 @@
                 <div class="admin-lq__header-actions">
                   <button type="button" class="primary-btn" id="admin-lightning-quiz-create">＋ 新增題目</button>
                   <button type="button" class="secondary-btn" id="admin-lightning-quiz-import-open">匯入題目</button>
-                  <button type="button" class="secondary-btn" id="admin-lightning-quiz-rule-open">⚙ 排程規則</button>
                 </div>
               </div>
               <div class="capsule-segmented-control segment-track admin-lq__tabs" role="tablist" aria-label="雲柱測驗">
                 <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-tab="schedule">排程</button>
-                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="list">題目清單</button>
+                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="list">題目</button>
                 <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="stats">統計</button>
+                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="awards">得獎與兌換</button>
+                <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-tab="rules">規則設定</button>
               </div>
               <div data-lq-tab-panel="schedule">
                 <div id="admin-lightning-quiz-planner" class="admin-lightning-quiz-planner"></div>
@@ -373,6 +374,14 @@
                 <div id="admin-lightning-quiz-stats-body">
                   <div class="admin-user-directory__empty">正在載入統計…</div>
                 </div>
+              </div>
+              <div data-lq-tab-panel="awards" class="hidden">
+                <div id="admin-lightning-quiz-awards-body">
+                  <div class="admin-user-directory__empty">正在載入得獎與兌換…</div>
+                </div>
+              </div>
+              <div data-lq-tab-panel="rules" class="hidden">
+                <div id="admin-lightning-quiz-rule-body"></div>
               </div>
             </section>
 

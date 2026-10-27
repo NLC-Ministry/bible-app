@@ -1,9 +1,9 @@
 // 後台「測驗」區（#619）的總覽：原本報表區的「測驗作答」分頁（#581，更早在計畫區，#565）。
 // 上面是這一區的地圖——三種測驗（照搬的區塊，要 content.manage）各有哪些頁，免得忘記有什麼；下面是這一期的作答數字
 // （每日小測驗、大測驗、雲柱），只有數字、不記稽核。數字照計畫算（這一期設定的測驗、這一期報名者的作答），所以要選計畫——
-// 和報表區的「報名註冊」共用同一個選的計畫（App 那一層的 StatsUiState.planId），切分頁時不變。計畫選單用 plan_options（和計畫區同一個預設）。
+// 和計畫區、報表區的「報名註冊」、照搬的小測驗共用同一個選的計畫（App 那一層，#620），切分頁時不變。計畫選單用 plan_options（和計畫區同一個預設）。
 // 請求預算：打開＝plan_options＋plan_quiz，換計畫 1 個 plan_quiz；都走 60 秒快取，重新整理鈕先 invalidate。地圖不發請求。
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { AdminApi } from "../api.ts";
 import { formatDate, formatDateTime, text } from "../format.ts";
@@ -14,14 +14,14 @@ import { shortDate } from "../stats.ts";
 import { Bar, ErrorNotice, Spinner } from "../ui.tsx";
 import { useAdminData, type Loaded } from "../use-admin-data.ts";
 import { AreaTabs } from "./AreaTabs.tsx";
-import type { StatsUiState } from "./StatsArea.tsx";
 
 type Props = {
   api: AdminApi;
   route: Extract<AdminRoute, { view: "quiz" }>;
   capabilities: readonly string[];
-  ui: StatsUiState;
-  setUi: Dispatch<SetStateAction<StatsUiState>>;
+  /** 計畫、測驗、報表三區共用的「目前選的計畫」（#620）；null＝用預設計畫 */
+  planId: string | null;
+  onPlanChange: (planId: string) => void;
   doc: Document;
 };
 
@@ -61,23 +61,23 @@ function QuizMap({ capabilities }: { capabilities: readonly string[] }) {
   );
 }
 
-function QuizOverview({ api, route, capabilities, ui, setUi, doc }: Props) {
+function QuizOverview({ api, route, capabilities, planId: chosenPlanId, onPlanChange, doc }: Props) {
   const [refresh, setRefresh] = useState(0);
   const options = useAdminData<PlanOptions>(api, "plan_options", {}, refresh);
-  const planId = options.data ? pickPlanId(options.data, [route.planId, ui.planId]) : null;
+  const planId = options.data ? pickPlanId(options.data, [route.planId, chosenPlanId]) : null;
   const quiz = useAdminData<PlanQuiz>(api, "plan_quiz", planId ? { global_plan_id: planId } : null, refresh);
   const plans = options.data?.plans || [];
 
   useEffect(() => {
-    if (planId && planId !== ui.planId) setUi((prev) => ({ ...prev, planId }));
-  }, [planId, ui.planId, setUi]);
+    if (planId && planId !== chosenPlanId) onPlanChange(planId);
+  }, [planId, chosenPlanId, onPlanChange]);
 
   const reload = () => {
     api.invalidate(["plan_options", "plan_quiz"]);
     setRefresh((value) => value + 1);
   };
   const pick = (id: string) => {
-    setUi((prev) => ({ ...prev, planId: id }));
+    onPlanChange(id);
     const view = doc.defaultView;
     if (view) view.location.hash = formatRoute({ view: "quiz", planId: id });
   };

@@ -298,13 +298,13 @@ describe("iframe runtime", () => {
     win.dispatchEvent(new win.MessageEvent("message", { data: { type: "adm-legacy-init" }, origin: "https://evil.example", source: fakeParent, ports: [channel.port2] }));
     win.dispatchEvent(new win.MessageEvent("message", { data: { type: "adm-legacy-init" }, origin: "https://bible-speed-reading-admin.vercel.app", source: null, ports: [channel.port2] }));
     win.dispatchEvent(new win.MessageEvent("message", {
-      data: { type: "adm-legacy-init", section: "exam", theme: "dark" },
+      data: { type: "adm-legacy-init", section: "exam", theme: "dark", plan: "plan-1" },
       origin: "https://bible-speed-reading-admin.vercel.app",
       source: fakeParent,
       ports: [channel.port2]
     }));
     const bridge = await promise;
-    expect(bridge.init).toEqual({ section: "exam", theme: "dark" });
+    expect(bridge.init).toEqual({ section: "exam", theme: "dark", plan: "plan-1" });
     channel.port1.close();
     channel.port2.close();
   });
@@ -314,6 +314,8 @@ describe("iframe runtime", () => {
     const sent = [];
     const port = { postMessage: (message) => sent.push(message), onmessage: null };
     const bridge = createBridge(win, port, { section: "quizzes" });
+    // 外框沒給計畫（沒有 plans.read 等，#620）＝null，iframe 照舊顯示自己的計畫篩選
+    expect(bridge.init).toEqual({ section: "quizzes", theme: "light", plan: null });
     const heard = [];
     bridge.onMessage((message) => heard.push(message));
     const reply = bridge.request("token");

@@ -79,7 +79,7 @@ describe("management plan hub", () => {
     expect(admin).toContain("plan.managementStatus === 'upcoming' ? '（提前報名）' : ''");
     expect(managementPlans).toContain("const statusPriority = { ongoing: 0, upcoming: 1, completed: 2 }");
     expect(managementPlans).toContain("sourcePlan.planKind === 'church_campaign'");
-    expect(admin).toContain('import { listManagementPlans } from "./management-plans.mjs";');
+    expect(admin).toMatch(/import \{ listManagementPlans[^}]*\} from "\.\/management-plans\.mjs";/);
   });
 
   it("keeps the plan filter in the document flow", () => {

@@ -100,7 +100,7 @@ import {
   planLightningImport
 } from "./lightning-quiz-schedule.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
-import { listManagementPlans } from "./management-plans.mjs";
+import { listManagementPlans, managementPlanKey } from "./management-plans.mjs";
 import { renderExamPanel } from "./exam.js";
 
 function updatePastoralWallControl(enabled, options = {}) {
@@ -2083,7 +2083,7 @@ function openAdminLightningQuizCorrection(question) {
     }
     wrap.innerHTML = `
       <p class="admin-lq-detail__confirm-title">這週的前三名已經公布過</p>
-      <p class="admin-lq-detail__confirm-message">${escapeHTML(lightningCorrectionResultMessage(data))}首頁的前三名和兌換券是依舊答案產生的，不會自動改；要照新答案更新，請到這週的每週統計按「重新公布」（沿用原本的排除名單，掉出名單且還沒兌換的券會作廢）。</p>
+      <p class="admin-lq-detail__confirm-message">${escapeHTML(lightningCorrectionResultMessage(data))}首頁的前三名和兌換券是依舊答案產生的，不會自動改；要照新答案更新，請到「得獎與兌換」的這一週按「重新公布」（沿用原本的排除名單，掉出名單且還沒兌換的券會作廢）。</p>
       <div class="admin-lq-detail__confirm-actions">
         <button type="button" class="secondary-btn" data-lq-correct-later>之後再說</button>
         <button type="button" class="primary-btn" data-lq-correct-republish>前往重新公布</button>
@@ -2091,8 +2091,7 @@ function openAdminLightningQuizCorrection(question) {
     wrap.querySelector('[data-lq-correct-later]').addEventListener('click', () => closeAdminLightningQuizSheet('admin-lightning-quiz-question-sheet'));
     wrap.querySelector('[data-lq-correct-republish]').addEventListener('click', () => {
       closeAdminLightningQuizSheet('admin-lightning-quiz-question-sheet');
-      document.querySelector('[data-lq-tab="stats"]')?.click();
-      void renderAdminLightningQuizStats({ weekStart: data.weekStart });
+      showAdminLightningQuizTab('awards', { weekStart: data.weekStart });
     });
     wrap.querySelector('[data-lq-correct-republish]').focus?.();
   });
@@ -2176,7 +2175,8 @@ function describeAdminLightningQuizRule(settings) {
   return `每週${days}　${settings.timeStart}–${settings.timeEnd}`;
 }
 
-function openAdminLightningQuizRule() {
+// 規則設定分頁（#620；以前是「⚙ 排程規則」彈出面板，內容不變）
+function renderAdminLightningQuizRule() {
   const body = document.getElementById('admin-lightning-quiz-rule-body');
   if (!body) return;
   const settings = adminLightningQuizSettings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
@@ -2188,28 +2188,27 @@ function openAdminLightningQuizRule() {
       <label>預設開始<input type="time" class="form-control" data-lq-rule-start value="${escapeHTML(settings.timeStart)}"></label>
       <label>預設結束<input type="time" class="form-control" data-lq-rule-end value="${escapeHTML(settings.timeEnd)}"></label>
     </div>
-    <p class="admin-daily-quiz-note">日曆依這個規則標出「缺題」的日子；新增題目與文字匯入會帶入預設時段。</p>
-    <div class="admin-lq-sheet__footer">
-      <button type="button" class="pill-btn" data-lq-sheet-close>取消</button>
+    <p class="admin-daily-quiz-note">排程依這個規則標出「缺題」的日子；新增題目與文字匯入會帶入預設時段。</p>
+    <div class="admin-lq-subpage__footer">
       <button type="button" class="primary-btn" data-lq-rule-save>儲存規則</button>
     </div>`;
   body.querySelector('[data-lq-rule-save]').addEventListener('click', async event => {
+    // await 之後 event.currentTarget 已經是 null，先記住按鈕
+    const button = event.currentTarget;
     const weekdays = [...body.querySelectorAll('[data-lq-rule-day]:checked')].map(input => Number(input.value));
     const timeStart = body.querySelector('[data-lq-rule-start]').value;
     const timeEnd = body.querySelector('[data-lq-rule-end]').value;
     if (!weekdays.length) { showToast('請至少選一天。'); return; }
     if (!timeStart || !timeEnd || timeStart >= timeEnd) { showToast('結束時間必須晚於開始時間。'); return; }
-    event.currentTarget.disabled = true;
+    button.disabled = true;
     const result = await db.adminSaveLightningQuizSettings({ weekdays, timeStart, timeEnd });
-    event.currentTarget.disabled = false;
+    button.disabled = false;
     if (!result.success) { showToast(result.message || '儲存失敗，請稍後再試。'); return; }
     adminLightningQuizSettings = result.data;
     showToast('排程規則已儲存。');
-    closeAdminLightningQuizSheet('admin-lightning-quiz-rule');
     const planner = document.getElementById('admin-lightning-quiz-planner');
     renderAdminLightningQuizPlanner(planner?._questions || []);
   });
-  openAdminLightningQuizSheet('admin-lightning-quiz-rule');
 }
 
 // ── 文字匯入（#310）─────────────────────────────────────────────────────────
@@ -2401,9 +2400,12 @@ function renderAdminLightningQuizList(host, questions) {
 }
 
 // ── 分頁與上方按鈕（#313）：只綁一次，記住上次看的分頁 ─────────────────────────
+// #620：排程｜題目｜統計（只看數字）｜得獎與兌換（公布前三名、兌換券）｜規則設定
 const ADMIN_LIGHTNING_QUIZ_TAB_KEY = 'adminLightningQuizTab';
+const ADMIN_LIGHTNING_QUIZ_TABS = ['schedule', 'list', 'stats', 'awards', 'rules'];
 
-function showAdminLightningQuizTab(tab) {
+// options.weekStart：得獎與兌換直接開到那一週（更正正解後「前往重新公布」，#616）
+function showAdminLightningQuizTab(tab, options = {}) {
   document.querySelectorAll('[data-lq-tab]').forEach(button => {
     const active = button.dataset.lqTab === tab;
     button.classList.toggle('active', active);
@@ -2413,6 +2415,11 @@ function showAdminLightningQuizTab(tab) {
     panel.classList.toggle('hidden', panel.dataset.lqTabPanel !== tab);
   });
   try { localStorage.setItem(ADMIN_LIGHTNING_QUIZ_TAB_KEY, tab); } catch (_) { /* 無痕模式等存不了就算了 */ }
+  if (tab === 'awards') void openAdminLightningQuizAwardsTab(options.weekStart || null);
+  if (tab === 'rules') {
+    if (adminLightningQuizSettings) renderAdminLightningQuizRule();
+    else void loadAdminLightningQuizSettings().then(renderAdminLightningQuizRule);
+  }
 }
 
 function bindAdminLightningQuizChrome() {
@@ -2424,14 +2431,12 @@ function bindAdminLightningQuizChrome() {
     });
     let saved = null;
     try { saved = localStorage.getItem(ADMIN_LIGHTNING_QUIZ_TAB_KEY); } catch (_) { saved = null; }
-    showAdminLightningQuizTab(['schedule', 'list', 'stats'].includes(saved) ? saved : 'schedule');
+    showAdminLightningQuizTab(ADMIN_LIGHTNING_QUIZ_TABS.includes(saved) ? saved : 'schedule');
   }
   const createButton = document.getElementById('admin-lightning-quiz-create');
   if (createButton) createButton.onclick = () => openAdminLightningQuizEditor();
   const importButton = document.getElementById('admin-lightning-quiz-import-open');
   if (importButton) importButton.onclick = openAdminLightningQuizImport;
-  const ruleButton = document.getElementById('admin-lightning-quiz-rule-open');
-  if (ruleButton) ruleButton.onclick = openAdminLightningQuizRule;
 }
 
 export async function renderAdminLightningQuizQuestions() {
@@ -2788,7 +2793,7 @@ function adminLightningQuizWeekOrgCells(row) {
 }
 
 // ── 首頁公布前三名（#429）───────────────────────────────────────────────────
-// 週統計裡的一個區塊：依天列出答對的人（秒數由快到慢），管理員以天為單位排除，
+// 得獎與兌換分頁上半部（#620 以前在每週統計）：依天列出答對的人（秒數由快到慢），管理員以天為單位排除，
 // 下面的人遞補；按「公布」後伺服器依排除名單重算前三名、存成固定紀錄，首頁顯示
 // 1～7 天。這裡算的前三名只是預覽，實際公布的名單以伺服器回傳為準。
 const ADMIN_LQ_RANKING_ROWS_SHOWN = 10;
@@ -2833,7 +2838,7 @@ function adminLightningQuizRankingDayHtml(day, dayExcluded, expanded) {
   </div>`;
 }
 
-// onPublished：公布／重新公布後通知週統計頁重畫兌換清單（#445）。
+// onPublished：公布／重新公布後通知得獎與兌換重畫這週的券與跨週總覽（#445、#620）。
 async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, onPublished) {
   if (!host) return;
   host.onclick = null;
@@ -2982,7 +2987,8 @@ function adminVoucherRowHtml(voucher, { leading = '', today = '' } = {}) {
   </li>`;
 }
 
-async function renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent) {
+// onChanged：標記／撤銷兌換後通知得獎與兌換重拿跨週總覽（#620）
+async function renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent, onChanged = null) {
   if (!host) return;
   if (!host.childElementCount) host.innerHTML = '<div class="admin-user-directory__empty">正在載入兌換券…</div>';
   const result = await db.adminListLightningQuizVouchers(weekStart);
@@ -3015,7 +3021,8 @@ async function renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent) 
 
   const setRedeemed = async (button, voucherId, redeemed) => {
     if (await confirmAdminVoucherRedeemed(button, vouchers, voucherId, redeemed)) {
-      void renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent);
+      void renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent, onChanged);
+      if (typeof onChanged === 'function') onChanged();
     }
   };
 
@@ -3028,7 +3035,7 @@ async function renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent) 
   };
 }
 
-// 標記已兌換／撤銷兌換：先確認再送出。每週統計的兌換券區塊與得獎與兌換總覽（#614）共用；
+// 標記已兌換／撤銷兌換：先確認再送出。得獎與兌換的這週兌換券與跨週總覽（#614）共用；
 // 成功回傳 true，呼叫的人自己重畫。
 async function confirmAdminVoucherRedeemed(button, vouchers, voucherId, redeemed) {
   const voucher = vouchers.find(v => String(v.id) === voucherId);
@@ -3048,10 +3055,11 @@ async function confirmAdminVoucherRedeemed(button, vouchers, voucherId, redeemed
   return true;
 }
 
-// ── 得獎與兌換（#614）──────────────────────────────────────────────────────────
-// 統計的第四個分頁：跨週追蹤英雄榜兌換券、分析得獎次數，各表可匯出，也能改已發出的券的
-// 期限。每次切進來才向伺服器拿全部週的券（admin_list_lightning_quiz_vouchers 不帶週），
-// 篩選、彙總都在前端做。點依週表的一週，下面的區塊只看那週；牧區篩選套用在得獎次數與明細。
+// ── 得獎與兌換（#614；#620 從統計底下提成雲柱的分頁）────────────────────────────
+// 上面選一週：這週的公布前三名與兌換券（renderAdminLightningQuizAwards）。下面是跨週總覽
+// （renderAdminLightningQuizAwardsPanel）：跨週追蹤英雄榜兌換券、分析得獎次數，各表可匯出，也能改已發出的券的
+// 期限。每次切進來都向伺服器拿全部週的券（admin_list_lightning_quiz_vouchers 不帶週），
+// 篩選、彙總都在前端做。點依週表的一週，下面的區塊只看那週、上面也切到那週；牧區篩選套用在得獎次數與明細。
 const ADMIN_LQ_AWARDS_PEOPLE_SHOWN = 20;
 const ADMIN_LQ_AWARDS_ALL_ZONES = '__all__';
 const ADMIN_LQ_AWARDS_NO_ZONE = '__none__';
@@ -3065,7 +3073,8 @@ function adminLightningQuizAwardsZoneOptions(vouchers, zone) {
     + names.map(name => option(name || ADMIN_LQ_AWARDS_NO_ZONE, name || UNASSIGNED_ZONE_LABEL)).join('');
 }
 
-function renderAdminLightningQuizAwardsPanel(panel) {
+// onPickWeek：點了依週表的一週；onChanged：標記兌換、改期限之後（上面這週的券要重拿）
+function renderAdminLightningQuizAwardsPanel(panel, { onPickWeek = null, onChanged = null } = {}) {
   let vouchers = [];
   let today = '';
   const filters = { weekStart: '', zone: null, status: 'all', showVoid: false };
@@ -3183,7 +3192,7 @@ function renderAdminLightningQuizAwardsPanel(panel) {
 
   const draw = () => {
     if (!vouchers.length) {
-      panel.innerHTML = '<div class="admin-user-directory__empty">還沒有發出任何兌換券；在「每週統計」公布前三名後會自動發給得獎者。</div>';
+      panel.innerHTML = '<div class="admin-user-directory__empty">還沒有發出任何兌換券；在上面公布這週的前三名後會自動發給得獎者。</div>';
       return;
     }
     const zoneValue = filters.zone;
@@ -3295,6 +3304,7 @@ function renderAdminLightningQuizAwardsPanel(panel) {
     showToast(`已把 ${updated} 張改成 ${formatWeekday(expiresOn)}到期${skipped ? `；${skipped} 張已兌換或作廢，沒有更改` : ''}。`);
     selected.clear();
     await load();
+    if (typeof onChanged === 'function') onChanged();
   };
 
   const exportCsv = kind => {
@@ -3315,7 +3325,13 @@ function renderAdminLightningQuizAwardsPanel(panel) {
   panel.onclick = event => {
     const target = event.target;
     const week = target.closest('[data-lq-awards-week]');
-    if (week) { filters.weekStart = week.dataset.lqAwardsWeek; showAllPeople = false; drawScoped(); return; }
+    if (week) {
+      filters.weekStart = week.dataset.lqAwardsWeek;
+      showAllPeople = false;
+      drawScoped();
+      if (typeof onPickWeek === 'function') onPickWeek(filters.weekStart);
+      return;
+    }
     if (target.closest('[data-lq-awards-all-weeks]')) { filters.weekStart = ''; showAllPeople = false; drawScoped(); return; }
     if (target.closest('[data-lq-awards-people-more]')) {
       showAllPeople = true;
@@ -3344,7 +3360,11 @@ function renderAdminLightningQuizAwardsPanel(panel) {
     if (redeem || undo) {
       const button = redeem || undo;
       const id = redeem ? redeem.dataset.lqVoucherRedeem : undo.dataset.lqVoucherUndo;
-      void confirmAdminVoucherRedeemed(button, vouchers, id, Boolean(redeem)).then(saved => { if (saved) void load(); });
+      void confirmAdminVoucherRedeemed(button, vouchers, id, Boolean(redeem)).then(saved => {
+        if (!saved) return;
+        void load();
+        if (typeof onChanged === 'function') onChanged();
+      });
     }
   };
   panel.onchange = event => {
@@ -3370,11 +3390,99 @@ function renderAdminLightningQuizAwardsPanel(panel) {
   return load;
 }
 
+let adminLightningQuizAwards = null;
+
+export async function renderAdminLightningQuizAwards({ weekStart = null } = {}) {
+  const host = document.getElementById('admin-lightning-quiz-awards-body');
+  if (!host) return;
+  host.innerHTML = `
+    <div class="admin-lq-awards__week">
+      <div class="admin-lightning-quiz-trend__toolbar admin-lightning-quiz-week__toolbar">
+        <button type="button" class="secondary-btn" data-lq-awards-week-prev>‹ 上一週</button>
+        <strong data-lq-awards-week-label></strong>
+        <button type="button" class="secondary-btn" data-lq-awards-week-next>下一週 ›</button>
+        <button type="button" class="pill-btn" data-lq-awards-week-today>本週</button>
+      </div>
+      <section class="admin-lightning-quiz-detail__section admin-lq-ranking" aria-label="首頁公布前三名">
+        <div class="admin-lightning-quiz-detail__section-head"><h5>首頁公布前三名</h5></div>
+        <div data-lq-week-ranking></div>
+      </section>
+      <section class="admin-lightning-quiz-detail__section admin-lq-vouchers" aria-label="這週的英雄榜兌換券">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>這週的英雄榜兌換券</h5>
+          <button type="button" class="pill-btn" data-lq-vouchers-export>匯出 CSV</button>
+        </div>
+        <div data-lq-week-vouchers></div>
+      </section>
+    </div>
+    <h4 class="admin-lq-awards__overview-title">跨週總覽</h4>
+    <div data-lq-awards-overview class="admin-lq-awards"></div>
+  `;
+  const thisWeek = weekStartOf(formatTaiwanDate());
+  const clamp = week => (week && week < thisWeek ? weekStartOf(week) : thisWeek);
+  let current = clamp(weekStart);
+  let requestSeq = 0;
+  const label = host.querySelector('[data-lq-awards-week-label]');
+  const nextButton = host.querySelector('[data-lq-awards-week-next]');
+  const rankingHost = host.querySelector('[data-lq-week-ranking]');
+  const vouchersHost = host.querySelector('[data-lq-week-vouchers]');
+  let loadOverview = null;
+  let refreshVouchers = null;
+
+  const loadWeek = () => {
+    const seq = ++requestSeq;
+    const week = current;
+    const isCurrentWeek = () => seq === requestSeq;
+    label.textContent = `${formatWeekRange(week)}${week === thisWeek ? '（本週）' : ''}`;
+    nextButton.disabled = week >= thisWeek;
+    vouchersHost.innerHTML = '';
+    const reloadOverview = () => { if (loadOverview) void loadOverview(); };
+    refreshVouchers = () => renderAdminLightningQuizWeekVouchers(vouchersHost, week, isCurrentWeek, reloadOverview);
+    return Promise.all([
+      renderAdminLightningQuizWeekRanking(rankingHost, week, isCurrentWeek, () => { void refreshVouchers(); reloadOverview(); }),
+      refreshVouchers()
+    ]);
+  };
+  const setWeek = week => {
+    current = clamp(week);
+    return loadWeek();
+  };
+
+  host.querySelector('[data-lq-awards-week-prev]').addEventListener('click', () => { void setWeek(addDays(current, -7)); });
+  nextButton.addEventListener('click', () => { if (current < thisWeek) void setWeek(addDays(current, 7)); });
+  host.querySelector('[data-lq-awards-week-today]').addEventListener('click', () => { void setWeek(thisWeek); });
+  host.querySelector('[data-lq-vouchers-export]').addEventListener('click', () => {
+    const list = vouchersHost.lqVouchers || [];
+    downloadAdminLightningQuizCsv(list.length ? buildVoucherCsv(list) : '', `雲柱測驗_英雄榜兌換券_${current}.csv`);
+  });
+
+  loadOverview = renderAdminLightningQuizAwardsPanel(host.querySelector('[data-lq-awards-overview]'), {
+    onPickWeek: week => {
+      void setWeek(week);
+      host.querySelector('.admin-lq-awards__week')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    },
+    onChanged: () => { if (refreshVouchers) void refreshVouchers(); }
+  });
+  adminLightningQuizAwards = { setWeek, reloadOverview: () => loadOverview() };
+  await Promise.all([loadWeek(), loadOverview()]);
+}
+
+// 切進得獎與兌換：第一次才整頁畫；之後保留這週的排除名單，只重拿跨週總覽（可能剛公布或改了兌換）
+async function openAdminLightningQuizAwardsTab(weekStart = null) {
+  if (!adminLightningQuizAwards || !document.querySelector('#admin-lightning-quiz-awards-body [data-lq-awards-overview]')) {
+    await renderAdminLightningQuizAwards({ weekStart });
+    return;
+  }
+  if (weekStart) void adminLightningQuizAwards.setWeek(weekStart);
+  await adminLightningQuizAwards.reloadOverview();
+}
+
 // 每週統計（#311）：一週（週一到週日）的參與、全部答完、答對率、大區／牧區、
-// 週排行榜。預設本週，可以前後切換；每一題再點進去看當天的作答明細。
+// 週排行榜。預設本週，可以前後切換；每一題再點進去看當天的作答明細。只看數字（#620）：
+// 公布前三名、兌換券在「得獎與兌換」分頁。
 const ADMIN_LIGHTNING_QUIZ_TOP_SHOWN = 5;
 
-// initialWeekStart：更正正解後「前往重新公布」直接停在那一週（#616）
+// initialWeekStart：開到那一週（不能晚於本週）
 function renderAdminLightningQuizWeekPanel(panel, initialWeekStart = null) {
   const thisWeek = weekStartOf(formatTaiwanDate());
   let weekStart = initialWeekStart && initialWeekStart < thisWeek ? weekStartOf(initialWeekStart) : thisWeek;
@@ -3423,19 +3531,6 @@ function renderAdminLightningQuizWeekPanel(panel, initialWeekStart = null) {
         <span>答對率 <strong>${escapeHTML(formatRate(summary.correctRate))}</strong></span>
         <span>答對平均用時 <strong>${summary.avgCorrectElapsedMs == null ? '—' : `${escapeHTML(formatElapsedSeconds(summary.avgCorrectElapsedMs))} 秒`}</strong></span>
       </div>
-
-      <section class="admin-lightning-quiz-detail__section admin-lq-ranking" aria-label="首頁公布前三名">
-        <div class="admin-lightning-quiz-detail__section-head"><h5>首頁公布前三名</h5></div>
-        <div data-lq-week-ranking></div>
-      </section>
-
-      <section class="admin-lightning-quiz-detail__section admin-lq-vouchers" aria-label="英雄榜兌換券">
-        <div class="admin-lightning-quiz-detail__section-head">
-          <h5>英雄榜兌換券</h5>
-          <button type="button" class="pill-btn" data-lq-vouchers-export>匯出 CSV</button>
-        </div>
-        <div data-lq-week-vouchers></div>
-      </section>
 
       <section class="admin-lightning-quiz-detail__section" aria-label="週排行榜">
         <div class="admin-lightning-quiz-detail__section-head">
@@ -3492,15 +3587,6 @@ function renderAdminLightningQuizWeekPanel(panel, initialWeekStart = null) {
       </details>
     `;
     if (typeof hydrateIcons === 'function') hydrateIcons(body);
-    const vouchersHost = body.querySelector('[data-lq-week-vouchers]');
-    const isCurrentWeek = () => seq === requestSeq;
-    const refreshVouchers = () => renderAdminLightningQuizWeekVouchers(vouchersHost, week.weekStart, isCurrentWeek);
-    void renderAdminLightningQuizWeekRanking(body.querySelector('[data-lq-week-ranking]'), week.weekStart, isCurrentWeek, refreshVouchers);
-    void refreshVouchers();
-    body.querySelector('[data-lq-vouchers-export]')?.addEventListener('click', () => {
-      const list = vouchersHost?.lqVouchers || [];
-      downloadAdminLightningQuizCsv(list.length ? buildVoucherCsv(list) : '', `雲柱測驗_英雄榜兌換券_${week.weekStart}.csv`);
-    });
 
     body.querySelector('[data-lq-leaderboard-toggle]')?.addEventListener('click', event => {
       body.querySelectorAll('[data-lq-leaderboard-more]').forEach(item => item.classList.remove('hidden'));
@@ -3569,11 +3655,9 @@ export async function renderAdminLightningQuizStats({ weekStart = null } = {}) {
       <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-stats-tab="week">每週統計</button>
       <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="trend">週趨勢</button>
       <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="daily">逐日明細</button>
-      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="awards">得獎與兌換</button>
     </div>
     <div data-lq-stats-panel="week" class="admin-lightning-quiz-week"></div>
     <div data-lq-stats-panel="trend" class="admin-lightning-quiz-trend hidden"></div>
-    <div data-lq-stats-panel="awards" class="admin-lq-awards hidden"></div>
     <div data-lq-stats-panel="daily" class="hidden">
       ${days.length ? `<div class="admin-lightning-quiz-stats-table-wrap">
         <table class="admin-lightning-quiz-stats-table">
@@ -3588,8 +3672,6 @@ export async function renderAdminLightningQuizStats({ weekStart = null } = {}) {
   void renderAdminLightningQuizWeekPanel(host.querySelector('[data-lq-stats-panel="week"]'), weekStart);
   const trendPanel = host.querySelector('[data-lq-stats-panel="trend"]');
   let drawTrend = null;
-  const awardsPanel = host.querySelector('[data-lq-stats-panel="awards"]');
-  let loadAwards = null;
   host.querySelectorAll('[data-lq-stats-tab]').forEach(tab => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.lqStatsTab;
@@ -3604,11 +3686,6 @@ export async function renderAdminLightningQuizStats({ weekStart = null } = {}) {
       // 週趨勢第一次切進來才載資料、建圖表（Chart.js 也是這時候才載入）
       if (target === 'trend' && !drawTrend) {
         drawTrend = renderAdminLightningQuizTrendPanel(trendPanel).then(draw => draw && draw());
-      }
-      // 得獎與兌換（#614）：每次切進來都重新拿一次（每週統計那邊可能剛公布或改了兌換）
-      if (target === 'awards') {
-        if (!loadAwards) loadAwards = renderAdminLightningQuizAwardsPanel(awardsPanel);
-        void loadAwards();
       }
     });
   });
@@ -3873,12 +3950,7 @@ function setAdminSection(id, options = {}) {
       sharedOrgFilter.classList.toggle('hidden', hideSharedOrgFilter);
       sharedOrgFilter.style.display = hideSharedOrgFilter ? 'none' : 'flex';
     }
-    const sharedPlanFilter = document.querySelector('.admin-plan-filter-card:not(.admin-plan-filter-card--org)');
-    if (sharedPlanFilter) {
-      const hidePlanFilter = section.sub === 'exam';
-      sharedPlanFilter.classList.toggle('hidden', hidePlanFilter);
-      sharedPlanFilter.style.display = hidePlanFilter ? 'none' : 'flex';
-    }
+    applyAdminPlanFilterVisibility(section.sub);
     // 依子分頁重新過濾「計畫篩選」下拉，並載入該子分頁資料（涵蓋原本的 loadActiveAdminPlanSubtab）
     if (options.loadData !== false) void syncManagementPlanSelectForSubtab();
   }
@@ -3952,6 +4024,38 @@ export function openAdminSectionRoute(id) {
   if (!getAvailableAdminSections().some(section => section.id === id)) return false;
   setAdminSection(id, { userInitiated: true, focusContent: true });
   return true;
+}
+
+// 後台外框給的計畫（#620）：照搬的小測驗、組隊狀況用外框的計畫選單（經 bridge，admin-legacy/legacy-entry.js），
+// 這裡就不顯示自己的「計畫篩選」。null＝外框沒給（沒有 plans.read），或給的計畫這裡的清單沒有：照舊顯示計畫篩選。
+let hostManagementPlanKey = null;
+
+function hostManagementPlan() {
+  if (!hostManagementPlanKey) return null;
+  return getManagementPlans().find(plan => managementPlanKey(plan) === hostManagementPlanKey) || null;
+}
+
+function applyAdminPlanFilterVisibility(sub) {
+  const sharedPlanFilter = document.querySelector('.admin-plan-filter-card:not(.admin-plan-filter-card--org)');
+  if (!sharedPlanFilter) return;
+  const hidePlanFilter = sub === 'exam' || hostManagementPlan() !== null;
+  sharedPlanFilter.classList.toggle('hidden', hidePlanFilter);
+  sharedPlanFilter.style.display = hidePlanFilter ? 'none' : 'flex';
+}
+
+// 外框換了計畫：記下來；開著計畫類的區塊就跟著換
+export function setHostManagementPlan(planKey) {
+  hostManagementPlanKey = planKey ? String(planKey) : null;
+  const section = getAvailableAdminSections().find(item => item.id === activeAdminSection);
+  if (!section || section.panel !== 'plans') return;
+  applyAdminPlanFilterVisibility(section.sub);
+  const hosted = hostManagementPlan();
+  if (!hosted) return;
+  const key = managementPlanKey(hosted);
+  if (state.adminManagementPlan && managementPlanKey(state.adminManagementPlan) === key) return;
+  const select = document.getElementById('admin-management-plan-select');
+  if (select) select.value = key;
+  void selectManagementPlan(key);
 }
 
 // 計畫篩選清單的規則在 management-plans.mjs，App 管理分頁（pastoral.js，#551）共用同一份。
@@ -4354,7 +4458,7 @@ function bindAdminQuizStatsPanel(root, plan) {
 // 試作、這天不發。畫面上不再有「版本 A／B」「審核」「發佈範圍」——發佈一律由
 // 每天 00:00 的自動發佈負責（#306）。小組長、牧區長只看統計。
 const ADMIN_QUIZ_TABS = [
-  { key: 'calendar', label: '日曆' },
+  { key: 'calendar', label: '排程' },
   { key: 'rules', label: '規則設定' },
   { key: 'stats', label: '統計' }
 ];
@@ -4876,6 +4980,8 @@ async function syncManagementPlanSelectForSubtab() {
     ? keyOf(defaultPlan)
     : (matchingOption ? matchingOption.value : keyOf(defaultPlan));
   managementPlanSelectionInitialized = true;
+  const hosted = hostManagementPlan();
+  if (hosted) select.value = keyOf(hosted);
   select.onchange = () => selectManagementPlan(select.value);
   await selectManagementPlan(select.value);
 }

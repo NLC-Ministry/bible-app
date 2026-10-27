@@ -101,6 +101,12 @@ export const INITIAL_PLAN_UI: PlanUiState = {
   teamQuery: ""
 };
 
+/** 換計畫（#620：計畫、測驗、報表三區共用這一個）：名單的展開、顯示筆數重來，條件保留 */
+export function withPlan(prev: PlanUiState, planId: string): PlanUiState {
+  if (prev.planId === planId) return prev;
+  return { ...prev, planId, shown: ROSTER_PAGE_SIZE, openRows: [], expandedUnits: [] };
+}
+
 type Props = {
   api: AdminApi;
   route: Extract<AdminRoute, { view: "plans" }>;
@@ -121,11 +127,8 @@ export function PlanArea({ api, route, capabilities, ui, setUi, doc }: Props) {
   const roster = useAdminData<PlanRoster>(api, "plan_roster", route.tab === "roster" ? planParams : null, refresh);
   const teams = useAdminData<TeamListData>(api, "team_list", route.tab === "teams" ? planParams : null, refresh);
 
-  // 換了計畫：名單的展開、顯示筆數重來（條件保留）
   useEffect(() => {
-    if (planId && planId !== ui.planId) {
-      setUi((prev) => ({ ...prev, planId, shown: ROSTER_PAGE_SIZE, openRows: [], expandedUnits: [] }));
-    }
+    if (planId && planId !== ui.planId) setUi((prev) => withPlan(prev, planId));
   }, [planId, ui.planId, setUi]);
 
   // SQL 另外數的人數和名單對不上：不要留在快取裡，下次打開重抓

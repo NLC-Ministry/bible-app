@@ -1,6 +1,6 @@
 // 後台外殼（#555）：登入 → bootstrap（開後台只打這 1 個 admin-api 請求）→ 依能力清單顯示左側導覽。
 // 相依（登入、admin-api、window）全部從參數注入，測試用假的跑真的元件。
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { BarChart3, BookOpen, BookOpenCheck, ClipboardList, Headset, House, LogOut, Menu, Settings, Users, type LucideIcon } from "lucide-react";
 import { AdminApiError, type AdminApi } from "./api.ts";
 import type { AdminAuth, SignOutReason } from "./auth.ts";
@@ -27,7 +27,7 @@ import { AuditLog } from "./views/AuditLog.tsx";
 import { HomeArea, type HomeDrill } from "./views/HomeArea.tsx";
 import { LegacyHost } from "./views/LegacyHost.tsx";
 import { INITIAL_PEOPLE_UI, PeopleArea, type PeopleUiState } from "./views/PeopleArea.tsx";
-import { INITIAL_PLAN_UI, PlanArea, type PlanUiState } from "./views/PlanArea.tsx";
+import { INITIAL_PLAN_UI, PlanArea, withPlan, type PlanUiState } from "./views/PlanArea.tsx";
 import { QuizArea } from "./views/QuizArea.tsx";
 import { INITIAL_INBOX, type InboxState } from "./views/ReportInbox.tsx";
 import { INITIAL_STATS_UI, StatsArea, type StatsUiState } from "./views/StatsArea.tsx";
@@ -84,8 +84,10 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   const [inbox, setInbox] = useState<InboxState>(INITIAL_INBOX);
   // 「人」區的名單、管理範圍（#567）：打開某人、切到別區再回來都還在，不重抓
   const [peopleUi, setPeopleUi] = useState<PeopleUiState>(INITIAL_PEOPLE_UI);
-  // 報表區的日期區間、時段切換、選的計畫（#568）：切到別區再回來還在。選的計畫也給測驗區的總覽用（#619）
+  // 報表區的日期區間、時段切換（#568）：切到別區再回來還在
   const [statsUi, setStatsUi] = useState<StatsUiState>(INITIAL_STATS_UI);
+  // 「目前選的計畫」只有一個（#620）：計畫區、測驗區（總覽與照搬的小測驗）、報表的報名註冊、組隊狀況共用，存在 planUi
+  const choosePlan = useCallback((planId: string) => setPlanUi((prev) => withPlan(prev, planId)), []);
 
   // 登入 → bootstrap
   useEffect(() => {
@@ -189,9 +191,9 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   } else if (route.view === "plans") {
     content = <PlanArea api={api} route={route} capabilities={capabilities} ui={planUi} setUi={setPlanUi} doc={win.document} />;
   } else if (route.view === "stats") {
-    content = <StatsArea api={api} route={route} capabilities={capabilities} ui={statsUi} setUi={setStatsUi} doc={win.document} theme={resolvedTheme} />;
+    content = <StatsArea api={api} route={route} capabilities={capabilities} ui={statsUi} setUi={setStatsUi} planId={planUi.planId} onPlanChange={choosePlan} doc={win.document} theme={resolvedTheme} />;
   } else if (route.view === "quiz") {
-    content = <QuizArea api={api} route={route} capabilities={capabilities} ui={statsUi} setUi={setStatsUi} doc={win.document} />;
+    content = <QuizArea api={api} route={route} capabilities={capabilities} planId={planUi.planId} onPlanChange={choosePlan} doc={win.document} />;
   } else if (route.view === "audit") {
     content = <AuditLog api={api} route={route} capabilities={capabilities} doc={win.document} />;
   } else {
@@ -268,6 +270,8 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
               section={legacyRoute.section}
               capabilities={capabilities}
               theme={resolvedTheme}
+              planId={planUi.planId}
+              onPlanChange={choosePlan}
               getToken={() => auth.getToken()}
               getIdToken={() => auth.getIdToken()}
               onLoginRequired={() => { auth.login(win.location.hash).catch(() => {}); }}

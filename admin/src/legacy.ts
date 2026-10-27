@@ -33,11 +33,11 @@ export type LegacySection = {
 export const LEGACY_SECTIONS: readonly LegacySection[] = [
   { id: "announcements", area: "content", label: "公告", capability: "content.manage" },
   { id: "commentary", area: "content", label: "經文注釋", capability: "content.manage" },
-  { id: "quizzes", area: "quiz", label: "小測驗", capability: "content.manage", pages: "日曆（每天的題目與發布）、規則設定、統計" },
+  { id: "quizzes", area: "quiz", label: "小測驗", capability: "content.manage", pages: "排程（每天的題目與發布）、規則設定、統計" },
   { id: "exam", area: "quiz", label: "大測驗", capability: "content.manage", pages: "試卷清單；每張試卷：題目、設定、作答與成績" },
   {
     id: "lightning-quiz", area: "quiz", label: "雲柱測驗", capability: "content.manage",
-    pages: "排程、題目清單（新增、匯入）、統計（每週統計與公布前三名、週趨勢、逐日明細、得獎與兌換）、⚙ 排程規則"
+    pages: "排程、題目（新增、匯入）、統計（每週統計、週趨勢、逐日明細）、得獎與兌換（公布前三名、兌換券）、規則設定"
   },
   { id: "plans", area: "plans", label: "計畫設定", capability: "operations.manage" },
   // 計畫區最後一個分頁（#569）；隊伍清單與除錯是計畫區的「團隊」（#566），這頁留著是為了隊伍與成員名單的 CSV 匯出
@@ -132,8 +132,8 @@ export type LegacyHostEvents = {
 export type LegacyHostOptions = LegacyHostEvents & {
   win: Window;
   frameWindow: () => Window | null;
-  /** 握手時才讀：iframe 重新載入（舊程式 reload）時拿到的是當下的區塊與主題 */
-  initial: () => { section: string; theme: ResolvedTheme };
+  /** 握手時才讀：iframe 重新載入（舊程式 reload）時拿到的是當下的區塊、主題與計畫 */
+  initial: () => { section: string; theme: ResolvedTheme; plan: string | null };
   getToken: () => string | null;
   getIdToken: () => string | null;
   /** 記稽核；失敗就丟錯（不下載） */
@@ -148,6 +148,8 @@ export type LegacyHostOptions = LegacyHostEvents & {
 export type LegacyHost = {
   open(section: string): void;
   setTheme(theme: ResolvedTheme): void;
+  /** 外框選的計畫（#620）；null＝外框沒有計畫可給（沒有 plans.read），iframe 用自己的計畫篩選 */
+  setPlan(plan: string | null): void;
   stop(): void;
 };
 
@@ -263,7 +265,7 @@ export function startLegacyHost(options: LegacyHostOptions): LegacyHost {
       if (data && typeof data === "object") handleMessage(current, data as Record<string, unknown>);
     };
     const init = options.initial();
-    frame.postMessage({ type: LEGACY_INIT, section: init.section, theme: init.theme }, origin, [channel.port2 as Transferable]);
+    frame.postMessage({ type: LEGACY_INIT, section: init.section, theme: init.theme, plan: init.plan }, origin, [channel.port2 as Transferable]);
   };
   win.addEventListener("message", onWindowMessage);
 
@@ -273,6 +275,9 @@ export function startLegacyHost(options: LegacyHostOptions): LegacyHost {
     },
     setTheme(theme: ResolvedTheme) {
       port?.postMessage({ type: "theme", theme });
+    },
+    setPlan(plan: string | null) {
+      port?.postMessage({ type: "plan", plan });
     },
     stop() {
       stopped = true;

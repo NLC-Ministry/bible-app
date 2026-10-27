@@ -98,7 +98,7 @@ describe("#316 / #317 wiring", () => {
     for (const id of ["admin-lightning-quiz-editor", "admin-lightning-quiz-import", "admin-lightning-quiz-results"]) {
       expect(html).toMatch(new RegExp(`<section class="glass-card admin-lq-subpage hidden" id="${id}"`));
     }
-    for (const id of ["admin-lightning-quiz-question-sheet", "admin-lightning-quiz-preview", "admin-lightning-quiz-rule"]) {
+    for (const id of ["admin-lightning-quiz-question-sheet", "admin-lightning-quiz-preview"]) {
       expect(html).toMatch(new RegExp(`class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="${id}"`));
     }
   });
