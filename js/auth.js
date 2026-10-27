@@ -24,6 +24,10 @@ import {
   withSoftTimeout
 } from "./net-timeout.mjs";
 
+// #615：下一次登入要 Logto 顯示登入頁（prompt=login）。登出會整頁重載，所以存 localStorage。
+// 這不是登入狀態，刻意不放進 auth.keys（那些會被各種清除流程整批刪掉），用一次就刪。
+const SIGN_IN_PROMPT_KEY = "nlc_auth_sign_in_prompt";
+
 const auth = {
   config: {
     issuer: (typeof NLC_CONFIG !== "undefined" && NLC_CONFIG.issuer) || "https://sso.newlife.org.tw/oidc",
@@ -472,7 +476,22 @@ const auth = {
     }
   },
 
+  _consumeSignInPrompt() {
+    try {
+      const prompt = localStorage.getItem(SIGN_IN_PROMPT_KEY) || "";
+      localStorage.removeItem(SIGN_IN_PROMPT_KEY);
+      return prompt === "login" ? prompt : "";
+    } catch (_) {
+      return "";
+    }
+  },
+
+  _navigateToAuthorization(url) {
+    window.location.href = url;
+  },
+
   async startInteractiveLogin(continuation) {
+    const signInPrompt = this._consumeSignInPrompt();
     try {
       await this.resetLocalLogin();
       if (!this.config.clientId) {
@@ -518,8 +537,11 @@ const auth = {
       if (this.config.platformResource) {
         authParams.set("resource", this.config.platformResource);
       }
+      // 平常不帶 prompt：會友在其他 NLC App 已登入就直接通過（SSO）。
+      // 只有「換回原本的帳號」時帶 prompt=login，否則 Logto 會沿用剛才的登入狀態又進到同一個帳號。
+      if (signInPrompt) authParams.set("prompt", signInPrompt);
 
-      window.location.href = `${endpoints.authorizationEndpoint}?${authParams}`;
+      this._navigateToAuthorization(`${endpoints.authorizationEndpoint}?${authParams}`);
     } catch (err) {
       console.error("Logto login redirect failed:", err);
       this._showMessage("\u7121\u6cd5\u958b\u555f\u6559\u6703\u7cfb\u7d71\u767b\u5165\uff0c\u8acb\u91cd\u8a66\u3002");
@@ -940,6 +962,17 @@ const auth = {
     }
 
     this._finishLocalLogout();
+  },
+
+  // #615：會友用錯登入方式、進到新開的空帳號時，提示卡的「登出，改用原本的方式登入」。
+  // 這裡的 logout 只清本機，Logto 那邊仍是登入狀態，所以標記下一次登入要顯示 Logto 登入頁。
+  async logoutToSwitchAccount() {
+    try {
+      localStorage.setItem(SIGN_IN_PROMPT_KEY, "login");
+    } catch (_) {
+      // 存不了就照一般登出
+    }
+    await this.logout();
   }
 };
 

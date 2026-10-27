@@ -125,5 +125,10 @@ export function applyLoginGateView({
     if (hasTokens && block) refreshActionsEl.classList.remove("hidden");
     else refreshActionsEl.classList.add("hidden");
   }
+  // #615「請用跟上次相同的方式登入」只放在一般登入畫面；已登入、卡在會員中心步驟時不需要。
+  const methodHintEl = loginGate && typeof loginGate.querySelector === "function"
+    ? loginGate.querySelector("[data-login-method-hint]")
+    : null;
+  if (methodHintEl) methodHintEl.classList.toggle("hidden", copy.mode !== "sso");
   return copy;
 }
