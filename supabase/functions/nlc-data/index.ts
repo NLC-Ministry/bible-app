@@ -16,6 +16,7 @@ import {
   diffFields,
   isAuditedTableWrite,
   resolveRequestId,
+  rpcResultChanges,
   singleRowKey,
   type AdminAuditEvent,
 } from "./admin-audit.ts";
@@ -477,7 +478,9 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "admin_list_lightning_quiz_vouchers",
   "admin_set_lightning_quiz_voucher_redeemed",
   // 後台得獎與兌換總覽（#614）：改已發出的券的期限
-  "admin_set_lightning_quiz_vouchers_expiry"
+  "admin_set_lightning_quiz_vouchers_expiry",
+  // 開始後更正正解／詳解並重新判分（#616）
+  "admin_set_lightning_quiz_answer_key"
 ]);
 // 個人統計「累積閱讀章數」由伺服器算（#348）；已關閉計畫的已讀章節摘要（#474）。
 // 只算呼叫者自己的紀錄，所以一定要注入 p_actor_id，SQL 端不接受前端傳入的 user id。
@@ -1196,7 +1199,7 @@ Deno.serve(async (req: Request) => {
           requestId,
           result: error ? classifyFailure(error) : "ok",
           error,
-          changes: scopeAfter ? diffFields(scopeBefore, scopeAfter) : null
+          changes: scopeAfter ? diffFields(scopeBefore, scopeAfter) : (error ? null : rpcResultChanges(functionName, data))
         }));
       }
       if (error) return jsonResponse({ error: error.message, code: error.code }, 400);

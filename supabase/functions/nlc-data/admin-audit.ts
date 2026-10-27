@@ -46,6 +46,7 @@ export const AUDITED_ADMIN_RPCS = new Set([
   "admin_revoke_lightning_quiz_week_ranking",
   "admin_set_lightning_quiz_voucher_redeemed",
   "admin_set_lightning_quiz_vouchers_expiry",
+  "admin_set_lightning_quiz_answer_key",
   // 回報、注釋審核
   "issue_admin_set_status",
   "set_commentary_reviewers",
@@ -98,6 +99,17 @@ export function diffFields(
     }
   }
   return Object.keys(out).length ? out : null;
+}
+
+// 參數只看得到新值的 RPC，從回傳值補記修改前後（#616：雲柱更正正解記舊正解 → 新正解與重判筆數）
+export function rpcResultChanges(fn: string, data: unknown): Record<string, { before?: unknown; after?: unknown }> | null {
+  if (fn !== "admin_set_lightning_quiz_answer_key" || !data || typeof data !== "object") return null;
+  const result = data as Record<string, unknown>;
+  if (result.answerChanged !== true) return null;
+  return {
+    answer_key: { before: result.previousAnswer ?? null, after: result.answerKey ?? null },
+    rescored: { after: { attempts: result.attemptsRescored ?? 0, becameCorrect: result.becameCorrect ?? 0, becameWrong: result.becameWrong ?? 0 } }
+  };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

@@ -6943,6 +6943,8 @@ db._lightningQuizErrorMessage = function(error) {
     // 比 lightning_quiz_voucher_invalid 長的要放前面（依序找第一個包含的代碼）
     lightning_quiz_voucher_invalid_expiry: "新的有效期限要在今天到一年內。",
     lightning_quiz_voucher_invalid: "沒有選到要更改的兌換券，請重新整理後再試。",
+    lightning_quiz_invalid_answer_key: "新的正解不完整或跟題目對不上，請檢查後再存。",
+    lightning_quiz_correction_not_published: "只有已排程的題目才需要更正答案；準備中的題目請直接編輯。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
@@ -7023,6 +7025,18 @@ db.adminUpsertLightningQuizQuestion = async function(question) {
     p_payload: q.payload || null,
     p_answer_key: q.answerKey ?? null,
     p_explanation: typeof q.explanation === "string" ? q.explanation : null
+  });
+};
+
+// 開始後更正正解／詳解（#616）：已送出的作答由伺服器重新判對錯。
+// explanation 沒給（undefined）＝不動原本的詳解。
+// 回傳 { changed, answerChanged, attemptsRescored, becameCorrect, becameWrong, weekStart, weekRankingPublished, … }
+db.adminSetLightningQuizAnswerKey = async function(id, answerKey, explanation) {
+  if (!id) return { success: false, message: "找不到這一題。" };
+  return this._callLightningQuizRpc("admin_set_lightning_quiz_answer_key", {
+    p_question_id: id,
+    p_answer_key: answerKey ?? null,
+    p_explanation: typeof explanation === "string" ? explanation : null
   });
 };
 

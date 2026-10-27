@@ -115,6 +115,10 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
       adminListLightningQuizQuestions: vi.fn(async () => ({ success: true, data: questions })),
       adminSetLightningQuizStatus: vi.fn(async () => ({ success: true, data: {} })),
       adminDeleteLightningQuizQuestion: vi.fn(async () => ({ success: true, data: {} })),
+      adminSetLightningQuizAnswerKey: vi.fn(async () => ({
+        success: true,
+        data: { changed: true, answerChanged: true, attemptsRescored: 4, becameCorrect: 3, becameWrong: 1, weekStart: "2026-09-28", weekRankingPublished: false }
+      })),
       adminGetLightningQuizTrend: vi.fn(async () => ({ success: true, data: { days: [] } })),
       adminGetLightningQuizWeek: vi.fn(async () => ({ success: true, data: { questions: [] } })),
       adminGetLightningQuizSettings: vi.fn(async () => ({ success: true, data: { weekdays: [1, 3, 5], timeStart: "07:00", timeEnd: "10:00" } })),
@@ -166,20 +170,24 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     expect(document.querySelector("[data-lq-list-more]")).toBeNull();
   });
 
-  it("the question panel offers only the next step; locked questions can only be tried or copied", async () => {
+  it("the question panel offers only the next step; locked questions can only be tried, copied, or have their answer corrected", async () => {
     await render();
     expect(openDetail("draft-1").classList.contains("hidden")).toBe(false);
     expect(detailStatuses()).toEqual(["published"]);
     expect(detail().querySelector("[data-lightning-quiz-edit]")).not.toBeNull();
     expect(detail().textContent).toContain("正解：亞倫");
 
+    expect(detail().querySelector("[data-lightning-quiz-correct]")).toBeNull();
+
     openDetail("sched-1");
     expect(detailStatuses()).toEqual(["draft"]);
+    expect(detail().querySelector("[data-lightning-quiz-correct]")).toBeNull();
 
     openDetail("live-1");
     expect(detailStatuses()).toEqual([]);
     expect(detail().querySelector("[data-lightning-quiz-edit]")).toBeNull();
     expect(detail().querySelector("[data-lightning-quiz-delete]")).toBeNull();
+    expect(detail().querySelector("[data-lightning-quiz-correct]")).not.toBeNull();
     detail().querySelector("[data-lightning-quiz-copy]").click();
     expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
     expect(isOpen("admin-lightning-quiz-editor")).toBe(true);
@@ -257,6 +265,59 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     expect(db.adminDeleteLightningQuizQuestion).toHaveBeenCalledTimes(2);
     expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
     expect(confirmDialog).not.toHaveBeenCalled();
+  });
+
+  const correctForm = () => detail().querySelector("[data-lq-correct-form]");
+  const submitCorrection = () => correctForm().dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+
+  it("更正答案在面板內換成表單：取消回到按鈕；送出後依新正解重判並告訴管理員結果 (#616)", async () => {
+    await render();
+    openDetail("live-1").querySelector("[data-lightning-quiz-correct]").click();
+    expect(correctForm()).not.toBeNull();
+    expect(actionsRow().classList.contains("hidden")).toBe(true);
+    detail().querySelector("[data-lq-correct-cancel]").click();
+    expect(correctForm()).toBeNull();
+    expect(actionsRow().classList.contains("hidden")).toBe(false);
+
+    actionsRow().querySelector("[data-lightning-quiz-correct]").click();
+    expect(correctForm().querySelector('[data-lq-correct-choice][value="1"]').checked).toBe(true);
+    correctForm().querySelector('[data-lq-correct-choice][value="2"]').checked = true;
+    correctForm().querySelector("[data-lq-correct-explanation]").value = "新詳解";
+    submitCorrection();
+    await flush();
+    expect(db.adminSetLightningQuizAnswerKey).toHaveBeenCalledWith("live-1", 2, "新詳解");
+    expect(showToast).toHaveBeenCalledWith("已更正答案，重新判分 4 筆：3 人改成答對、1 人改成答錯。");
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
+  });
+
+  it("更正失敗時表單留著、按鈕可以再按 (#616)", async () => {
+    db.adminSetLightningQuizAnswerKey.mockResolvedValueOnce({ success: false, message: "新的正解不完整" });
+    await render();
+    openDetail("live-1").querySelector("[data-lightning-quiz-correct]").click();
+    submitCorrection();
+    await flush();
+    expect(showToast).toHaveBeenCalledWith("新的正解不完整");
+    expect(correctForm().querySelector("[data-lq-correct-save]").disabled).toBe(false);
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(true);
+  });
+
+  it("那週前三名已公布過：面板提醒名單不會自動改，前往重新公布會開到那一週的統計 (#616)", async () => {
+    db.adminSetLightningQuizAnswerKey.mockResolvedValueOnce({
+      success: true,
+      data: { changed: true, answerChanged: true, attemptsRescored: 4, becameCorrect: 3, becameWrong: 1, weekStart: "2026-09-28", weekRankingPublished: true }
+    });
+    await render();
+    openDetail("live-1").querySelector("[data-lightning-quiz-correct]").click();
+    submitCorrection();
+    await flush();
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(true);
+    expect(detail().textContent).toContain("這週的前三名已經公布過");
+    detail().querySelector("[data-lq-correct-republish]").click();
+    await flush();
+    await flush();
+    expect(isOpen("admin-lightning-quiz-question-sheet")).toBe(false);
+    expect(document.querySelector('[data-lq-tab-panel="stats"]').classList.contains("hidden")).toBe(false);
+    expect(db.adminGetLightningQuizWeek).toHaveBeenLastCalledWith("2026-09-28");
   });
 
   it("sheets close with the close button or Escape, but not with a click outside (#317)", async () => {
