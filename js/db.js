@@ -6940,6 +6940,9 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_voucher_already_redeemed: "這張兌換券已經兌換過了。",
     lightning_quiz_voucher_expired: "這張兌換券已經過期了。",
     lightning_quiz_voucher_void: "這張兌換券已作廢（重新公布時不在名單上）。",
+    // 比 lightning_quiz_voucher_invalid 長的要放前面（依序找第一個包含的代碼）
+    lightning_quiz_voucher_invalid_expiry: "新的有效期限要在今天到一年內。",
+    lightning_quiz_voucher_invalid: "沒有選到要更改的兌換券，請重新整理後再試。",
     profile_required: "找不到你的會員資料，請重新登入後再試。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
@@ -7130,6 +7133,17 @@ db.adminSetLightningQuizVoucherRedeemed = async function(voucherId, redeemed) {
   return this._callLightningQuizRpc("admin_set_lightning_quiz_voucher_redeemed", {
     p_voucher_id: voucherId,
     p_redeemed: redeemed === true
+  });
+};
+
+// 後台：一次改多張券的有效期限（#614）；只改可使用／已過期的，其他的伺服器會跳過。
+db.adminSetLightningQuizVouchersExpiry = async function(voucherIds, expiresOn) {
+  const ids = Array.isArray(voucherIds) ? voucherIds.filter(Boolean) : [];
+  if (!ids.length) return { success: false, message: "請先勾選要更改的兌換券。" };
+  if (!expiresOn) return { success: false, message: "請選擇新的有效期限。" };
+  return this._callLightningQuizRpc("admin_set_lightning_quiz_vouchers_expiry", {
+    p_voucher_ids: ids,
+    p_expires_on: expiresOn
   });
 };
 

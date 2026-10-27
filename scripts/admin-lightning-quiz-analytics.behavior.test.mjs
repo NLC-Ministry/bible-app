@@ -92,7 +92,8 @@ beforeEach(async () => {
     adminPublishLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: { displayUntil: "2026-09-29" } })),
     adminRevokeLightningQuizWeekRanking: vi.fn(async () => ({ success: true, data: { revoked: true } })),
     adminListLightningQuizVouchers: vi.fn(async () => ({ success: true, data: { vouchers: [] } })),
-    adminSetLightningQuizVoucherRedeemed: vi.fn(async () => ({ success: true, data: {} }))
+    adminSetLightningQuizVoucherRedeemed: vi.fn(async () => ({ success: true, data: {} })),
+    adminSetLightningQuizVouchersExpiry: vi.fn(async (ids) => ({ success: true, data: { updated: ids.length, skipped: 0 } }))
   });
   dom.window.showConfirmDialog = vi.fn(async () => true);
   dom.window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -357,5 +358,196 @@ describe("雲柱測驗 英雄榜兌換券（#445）", () => {
     expect(db.adminPublishLightningQuizWeekRanking).toHaveBeenCalled();
     expect(db.adminListLightningQuizVouchers).toHaveBeenCalledTimes(2);
     expect(window.showConfirmDialog.mock.calls[0][0].message).toContain("克勞斯 100 元抵用券");
+  });
+});
+
+describe("雲柱測驗 得獎與兌換（#614）", () => {
+  const TODAY = "2026-10-26";
+  const allVouchers = [
+    { id: "a1", userId: "u1", code: "AAA111", amount: 100, weekStart: "2026-10-12", riseDate: "2026-10-12", rank: 1, name: "甲", pastoralZone: "中永和", expiresOn: "2026-11-10", status: "redeemed", redeemedAt: "2026-10-20T06:30:00Z", redeemedVia: "self" },
+    { id: "a2", userId: "u2", code: "AAA222", amount: 100, weekStart: "2026-10-12", riseDate: "2026-10-12", rank: 2, name: "乙", pastoralZone: "文山", expiresOn: "2026-10-30", status: "available" },
+    { id: "a3", userId: "u4", code: "AAA333", amount: 100, weekStart: "2026-10-12", riseDate: "2026-10-12", rank: 3, name: "丁", pastoralZone: "文山", expiresOn: "2026-11-10", status: "void" },
+    { id: "a4", userId: "u1", code: "BBB111", amount: 100, weekStart: "2026-10-19", riseDate: "2026-10-21", rank: 1, name: "甲", pastoralZone: "中永和", expiresOn: "2026-11-20", status: "available" },
+    { id: "a5", userId: "u1", code: "BBB222", amount: 100, weekStart: "2026-10-19", riseDate: "2026-10-19", rank: 3, name: "甲", pastoralZone: "中永和", expiresOn: "2026-10-20", status: "expired" },
+    { id: "a6", userId: "u2", code: "BBB333", amount: 100, weekStart: "2026-10-19", riseDate: "2026-10-19", rank: 1, name: "乙", pastoralZone: "文山", expiresOn: "2026-11-01", status: "available" },
+    { id: "a7", userId: "u3", code: "BBB444", amount: 100, weekStart: "2026-10-19", riseDate: "2026-10-19", rank: 2, name: "丙", pastoralZone: "", expiresOn: "2026-11-20", status: "redeemed", redeemedAt: "2026-10-22T06:30:00Z", redeemedVia: "admin", redeemedByName: "管理員" }
+  ];
+  const text = el => el.textContent.replace(/\s+/g, " ").trim();
+  const detailCodes = panel => [...panel.querySelectorAll("[data-lq-awards-detail] .admin-lq-vouchers__code")].map(el => el.textContent);
+  const firstCells = (panel, selector, count) => [...panel.querySelectorAll(`${selector} tbody tr`)].map(row => [...row.cells].slice(0, count).map(cell => cell.textContent));
+
+  async function openAwards() {
+    // 每週統計只拿那週的券；總覽不帶週＝全部週
+    db.adminListLightningQuizVouchers.mockImplementation(async weekStart => ({
+      success: true,
+      data: { today: TODAY, vouchers: weekStart ? [] : allVouchers }
+    }));
+    await renderAdminLightningQuizStats();
+    await flush();
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledTimes(1); // 只有每週統計；還沒切進來不載
+    document.querySelector('[data-lq-stats-tab="awards"]').click();
+    await flush();
+    const panel = document.querySelector('[data-lq-stats-panel="awards"]');
+    expect(panel.classList.contains("hidden")).toBe(false);
+    expect(db.adminListLightningQuizVouchers).toHaveBeenLastCalledWith();
+    return panel;
+  }
+
+  it("loads all weeks when opened: summary, by-week, by-zone, wins per person and the detail list", async () => {
+    const panel = await openAwards();
+    const summary = text(panel.querySelector(".admin-daily-quiz-metrics"));
+    expect(summary).toContain("發出 6 張");
+    expect(summary).toContain("已兌換 2 張（33.3%）");
+    expect(summary).toContain("可使用 3 張（7 天內到期 2 張）");
+    expect(summary).toContain("過期未兌換 1 張");
+    expect(summary).toContain("已作廢 1 張");
+
+    expect(firstCells(panel, "[data-lq-awards-weeks]", 6)).toEqual([
+      ["10/19～10/25", "4", "1", "2", "1", "25.0%"],
+      ["10/12～10/18", "2", "1", "1", "0", "50.0%"]
+    ]);
+    const zoneRows = firstCells(panel, "[data-lq-awards-zones]", 5);
+    expect(zoneRows[0]).toEqual(["中永和", "1", "3", "1", "33.3%"]);
+    expect(zoneRows[2]).toEqual(["未分配牧區", "1", "1", "1", "100.0%"]);
+    expect(zoneRows[3]).toEqual(["合計", "3", "6", "2", "33.3%"]);
+
+    const winners = panel.querySelector("[data-lq-awards-winners]");
+    expect(text(winners)).toContain("得獎 3 次以上 1 人");
+    expect(firstCells(panel, "[data-lq-awards-winners]", 3)).toEqual([["甲", "中永和", "3"], ["乙", "文山", "2"], ["丙", "未分配牧區", "1"]]);
+    expect(winners.querySelector("tbody tr").cells[7].textContent).toBe("10/12、10/19、10/21");
+
+    // 作廢的預設不列；可使用／已過期的才有勾選框
+    expect(detailCodes(panel)).toEqual(["AAA111", "AAA222", "BBB111", "BBB222", "BBB333", "BBB444"]);
+    expect(panel.querySelectorAll("[data-lq-awards-select]").length).toBe(4);
+    expect(text(panel.querySelector("[data-lq-awards-detail]"))).toContain("有效期限至 10/30（五）・7 天內到期");
+    panel.querySelector("[data-lq-awards-show-void]").click();
+    expect(detailCodes(panel)).toContain("AAA333");
+  });
+
+  it("picking a week narrows everything below it; the zone filter narrows wins and the detail list", async () => {
+    const panel = await openAwards();
+    panel.querySelector('[data-lq-awards-week="2026-10-12"]').click();
+    expect(text(panel.querySelector("[data-lq-awards-scope]"))).toContain("下面只看 10/12～10/18");
+    expect(panel.querySelector("[data-lq-awards-weeks] tr.is-active").cells[0].textContent).toBe("10/12～10/18");
+    expect(detailCodes(panel)).toEqual(["AAA111", "AAA222"]);
+    expect(firstCells(panel, "[data-lq-awards-winners]", 1)).toEqual([["甲"], ["乙"]]);
+    // 摘要不跟著週
+    expect(text(panel.querySelector(".admin-daily-quiz-metrics"))).toContain("發出 6 張");
+
+    panel.querySelector("[data-lq-awards-scope] [data-lq-awards-all-weeks]").click();
+    const zone = panel.querySelector("[data-lq-awards-zone]");
+    zone.value = "文山";
+    zone.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(detailCodes(panel)).toEqual(["AAA222", "BBB333"]);
+    expect(firstCells(panel, "[data-lq-awards-winners]", 1)).toEqual([["乙"]]);
+    // 依牧區摘要不跟著牧區篩選
+    expect(panel.querySelectorAll("[data-lq-awards-zones] tbody tr").length).toBe(4);
+
+    const status = panel.querySelector("[data-lq-awards-status]");
+    status.value = "available";
+    status.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    expect(detailCodes(panel)).toEqual(["AAA222", "BBB333"]);
+  });
+
+  it("changes the expiry of the selected vouchers after confirming, then reloads", async () => {
+    const panel = await openAwards();
+    const apply = panel.querySelector("[data-lq-awards-expiry-apply]");
+    const dateInput = panel.querySelector("[data-lq-awards-expiry]");
+    expect(apply.disabled).toBe(true);
+    expect(dateInput.getAttribute("min")).toBe(TODAY);
+    expect(dateInput.getAttribute("max")).toBe("2027-10-26");
+
+    const status = panel.querySelector("[data-lq-awards-status]");
+    status.value = "expired";
+    status.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    panel.querySelector("[data-lq-awards-select-all]").click();
+    expect(text(panel.querySelector("[data-lq-awards-selected]"))).toBe("已選 1 張");
+    expect(apply.disabled).toBe(false);
+
+    // 過去的日期不送出
+    dateInput.value = "2026-10-25";
+    apply.click();
+    await flush();
+    expect(db.adminSetLightningQuizVouchersExpiry).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith("新的有效期限要在今天到一年內。");
+
+    dateInput.value = "2026-11-30";
+    const calls = db.adminListLightningQuizVouchers.mock.calls.length;
+    apply.click();
+    await flush();
+    await flush();
+    expect(window.showConfirmDialog.mock.calls.at(-1)[0].message).toContain("1 張改成 11/30（一）到期");
+    expect(db.adminSetLightningQuizVouchersExpiry).toHaveBeenCalledWith(["a5"], "2026-11-30");
+    expect(showToast).toHaveBeenCalledWith("已把 1 張改成 11/30（一）到期。");
+    expect(db.adminListLightningQuizVouchers.mock.calls.length).toBe(calls + 1);
+  });
+
+  it("tells how many were skipped when some were redeemed or voided in the meantime", async () => {
+    db.adminSetLightningQuizVouchersExpiry.mockResolvedValueOnce({ success: true, data: { updated: 3, skipped: 1 } });
+    const panel = await openAwards();
+    panel.querySelector("[data-lq-awards-select-all]").click();
+    expect(text(panel.querySelector("[data-lq-awards-selected]"))).toBe("已選 4 張");
+    panel.querySelector("[data-lq-awards-expiry]").value = "2026-12-31";
+    panel.querySelector("[data-lq-awards-expiry-apply]").click();
+    await flush();
+    await flush();
+    expect(db.adminSetLightningQuizVouchersExpiry).toHaveBeenCalledWith(["a2", "a4", "a5", "a6"], "2026-12-31");
+    expect(showToast).toHaveBeenCalledWith("已把 3 張改成 12/31（四）到期；1 張已兌換或作廢，沒有更改。");
+  });
+
+  it("changing a filter clears the selection so hidden vouchers are never changed", async () => {
+    const panel = await openAwards();
+    panel.querySelector('[data-lq-awards-select="a2"]').click();
+    expect(text(panel.querySelector("[data-lq-awards-selected]"))).toBe("已選 1 張");
+    panel.querySelector('[data-lq-awards-week="2026-10-19"]').click();
+    expect(text(panel.querySelector("[data-lq-awards-selected]"))).toBe("已選 0 張");
+    expect(panel.querySelector("[data-lq-awards-expiry-apply]").disabled).toBe(true);
+  });
+
+  it("marks a redemption from the detail list and reloads", async () => {
+    const panel = await openAwards();
+    const calls = db.adminListLightningQuizVouchers.mock.calls.length;
+    panel.querySelector('[data-lq-awards-detail] [data-lq-voucher-redeem="a2"]').click();
+    await flush();
+    await flush();
+    expect(db.adminSetLightningQuizVoucherRedeemed).toHaveBeenCalledWith("a2", true);
+    expect(db.adminListLightningQuizVouchers.mock.calls.length).toBe(calls + 1);
+  });
+
+  it("exports the by-week, by-zone, per-person and detail tables", async () => {
+    const panel = await openAwards();
+    panel.querySelector('[data-lq-awards-week="2026-10-19"]').click();
+    for (const kind of ["week", "zone", "winners", "detail"]) panel.querySelector(`[data-lq-awards-export="${kind}"]`).click();
+    expect(downloads.map(d => d.filename)).toEqual([
+      "雲柱測驗_兌換券依週_2026-10-26.csv",
+      "雲柱測驗_兌換券依牧區_2026-10-19週.csv",
+      "雲柱測驗_得獎次數_2026-10-19週.csv",
+      "雲柱測驗_兌換券明細_2026-10-19週.csv"
+    ]);
+    expect(await downloads[0].blob.text()).toContain('"2026-10-12","2","1","1","0","50.0%","1"');
+    const detail = await downloads[3].blob.text();
+    expect(detail).toContain('"週（週一）","日期"');
+    expect(detail).toContain('"2026-10-19","2026-10-21","第一名","甲"');
+    expect(detail).not.toContain("AAA222");
+  });
+
+  it("shows an empty state when no vouchers were issued yet", async () => {
+    db.adminListLightningQuizVouchers.mockResolvedValue({ success: true, data: { today: TODAY, vouchers: [] } });
+    await renderAdminLightningQuizStats();
+    document.querySelector('[data-lq-stats-tab="awards"]').click();
+    await flush();
+    expect(document.querySelector('[data-lq-stats-panel="awards"]').textContent).toContain("還沒有發出任何兌換券");
+  });
+
+  it("the publish screen shows how many times a candidate won before this week", async () => {
+    db.adminGetLightningQuizWeekRanking.mockResolvedValueOnce({ success: true, data: {
+      ...rankingData,
+      days: rankingData.days.map(day => ({ ...day, candidates: day.candidates.map(c => ({ ...c, priorWins: c.userId === "u2" ? 2 : 0 })) }))
+    } });
+    await renderAdminLightningQuizStats();
+    await flush();
+    const names = [...document.querySelectorAll("[data-lq-week-ranking] .admin-lq-ranking__day")[0].querySelectorAll(".admin-lq-ranking__name")];
+    expect(names[0].querySelector(".admin-lq-ranking__prior")).toBeNull();
+    expect(names[1].querySelector(".admin-lq-ranking__prior").textContent).toBe("之前得過 2 次");
   });
 });

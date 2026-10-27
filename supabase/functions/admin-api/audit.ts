@@ -200,6 +200,7 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   admin_publish_lightning_quiz_week_ranking: "公布雲柱測驗每週前三名",
   admin_revoke_lightning_quiz_week_ranking: "撤回雲柱測驗每週前三名",
   admin_set_lightning_quiz_voucher_redeemed: "標記兌換券已兌換",
+  admin_set_lightning_quiz_vouchers_expiry: "更改兌換券有效期限",
   issue_admin_set_status: "變更回報狀態",
   set_commentary_reviewers: "設定注釋審核人",
   resubmit_commentary: "注釋重新送審",

@@ -475,7 +475,9 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   "get_my_lightning_quiz_vouchers",
   "redeem_my_lightning_quiz_voucher",
   "admin_list_lightning_quiz_vouchers",
-  "admin_set_lightning_quiz_voucher_redeemed"
+  "admin_set_lightning_quiz_voucher_redeemed",
+  // 後台得獎與兌換總覽（#614）：改已發出的券的期限
+  "admin_set_lightning_quiz_vouchers_expiry"
 ]);
 // 個人統計「累積閱讀章數」由伺服器算（#348）；已關閉計畫的已讀章節摘要（#474）。
 // 只算呼叫者自己的紀錄，所以一定要注入 p_actor_id，SQL 端不接受前端傳入的 user id。

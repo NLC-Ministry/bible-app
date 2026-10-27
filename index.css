@@ -14909,6 +14909,20 @@ body.profile-subpage-open .main-content {
 .admin-lq-vouchers__note { flex-basis: 100%; font-size: 0.875rem; color: var(--text-muted); }
 .admin-lq-vouchers--void { opacity: 0.6; }
 
+/* 後台統計「得獎與兌換」（#614） */
+.admin-lq-awards .admin-lightning-quiz-stats-table tr.is-active td { background: color-mix(in srgb, var(--color-brand) 8%, var(--bg-card)); }
+.admin-lq-awards__scope { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--text-secondary); }
+.admin-lq-awards__scope strong { color: var(--text-primary); font-weight: 500; }
+.admin-lq-awards__filters label,
+.admin-lq-awards__expiry label { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; color: var(--text-secondary); }
+.admin-lq-awards__filters select { width: auto; }
+.admin-lq-awards__toggle { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.875rem; color: var(--text-secondary); }
+.admin-lq-awards__expiry { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0.75rem 0 0.25rem; font-size: 0.875rem; color: var(--text-secondary); }
+.admin-lq-awards__expiry strong { color: var(--text-primary); font-weight: 500; }
+.admin-lq-awards__expiry input[type="date"] { width: auto; }
+.admin-lq-awards__check { flex: 0 0 1.1rem; width: 1.1rem; height: 1.1rem; margin: 0; }
+.admin-lq-ranking__prior { margin-left: 0.4rem; font-size: 0.875rem; color: var(--text-muted); white-space: nowrap; }
+
 .profile-exams-detail__back {
   display: inline-flex;
   align-items: center;
