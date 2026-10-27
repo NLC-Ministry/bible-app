@@ -288,7 +288,7 @@ function UsageBody({ usage, ui, setUi, doc, loadChart }: {
             <summary>逐日數字</summary>
             <div className="adm-table-wrap">
               <table className="adm-table">
-                <thead><tr><th>日期</th><th>每天讀經人數</th><th>章數</th><th>近 7 天讀過</th><th>近 30 天讀過</th><th>天天讀的比例</th></tr></thead>
+                <thead><tr><th scope="col">日期</th><th scope="col" className="adm-num">每天讀經人數</th><th scope="col" className="adm-num">章數</th><th scope="col" className="adm-num">近 7 天讀過</th><th scope="col" className="adm-num">近 30 天讀過</th><th scope="col" className="adm-num">天天讀的比例</th></tr></thead>
                 <tbody>
                   {[...days].reverse().map((day) => (
                     <tr key={day.date}>
@@ -325,7 +325,7 @@ function UsageBody({ usage, ui, setUi, doc, loadChart }: {
           })}
           <div className="adm-table-wrap">
             <table className="adm-table">
-              <thead><tr><th>讀經天數</th><th>本週人數</th><th>本週佔比</th><th>上週人數</th><th>上週佔比</th></tr></thead>
+              <thead><tr><th scope="col">讀經天數</th><th scope="col" className="adm-num">本週人數</th><th scope="col" className="adm-num">本週佔比</th><th scope="col" className="adm-num">上週人數</th><th scope="col" className="adm-num">上週佔比</th></tr></thead>
               <tbody>
                 {[...l7.current.rows].reverse().map((row) => {
                   const prev = l7.previous.rows[row.days - 1];
@@ -392,7 +392,7 @@ function HoursCard({ usage, ui, setUi, chart, color }: {
           <summary>各時段數字</summary>
           <div className="adm-table-wrap">
             <table className="adm-table">
-              <thead><tr><th>時段</th><th>平均每天{metricText}</th></tr></thead>
+              <thead><tr><th scope="col">時段</th><th scope="col" className="adm-num">平均每天{metricText}</th></tr></thead>
               <tbody>
                 {values.map((value, hour) => (
                   <tr key={hour}><td>{hour}:00–{hour}:59</td><td className="adm-num">{value}</td></tr>
@@ -532,9 +532,10 @@ function RegistrationTable({ title, unit, rows, withLeader = false }: { title: s
               <table className="adm-table">
                 <thead>
                   <tr>
-                    <th>{unit}</th>
-                    {withLeader && <th>牧區長</th>}
-                    <th>報名人數</th><th>註冊人數</th><th>3 人團隊人數</th><th>6 人團隊人數</th>
+                    <th scope="col">{unit}</th>
+                    {withLeader && <th scope="col">牧區長</th>}
+                    <th scope="col" className="adm-num">報名人數</th><th scope="col" className="adm-num">註冊人數</th>
+                    <th scope="col" className="adm-num">3 人團隊人數</th><th scope="col" className="adm-num">6 人團隊人數</th>
                   </tr>
                 </thead>
                 <tbody>
