@@ -31,6 +31,12 @@ import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS, MENU
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { answerCorrectionNote, canCorrectAnswer, readCorrectionAnswerKey, renderAnswerCorrectionHtml } from "./quiz-answer-correction.mjs";
 import {
+  lightningAnswerCorrectionNote,
+  lightningCorrectionResultMessage,
+  readLightningCorrectionAnswerKey,
+  renderLightningAnswerCorrectionHtml
+} from "./lightning-quiz-answer-correction.mjs";
+import {
   QUIZ_GENERATION_STAGES, quizGenerationElapsedSeconds, renderQuizGenerationErrorHtml, renderQuizGenerationProgressHtml
 } from "./quiz-generation-status.mjs";
 import { getQuestionImage, questionImageHtml, installQuizImageViewer, quizImagePublicUrl } from "./quiz-image.mjs";
@@ -2032,6 +2038,67 @@ async function deleteAdminLightningQuizQuestion(question) {
   void renderAdminLightningQuizStats();
 }
 
+// 更正正解／詳解（#616）：跟排程確認一樣在面板內原地換掉按鈕列，不再疊一層（#420）。
+// 那週的前三名公布過時，名單和兌換券不會自動跟著改：留在面板上提醒，可以直接前往重新公布。
+function openAdminLightningQuizCorrection(question) {
+  const body = document.getElementById('admin-lightning-quiz-question-sheet-body');
+  const actions = body?.querySelector('.admin-lq-detail__actions');
+  if (!body || !actions) return;
+  body.querySelector('[data-lq-detail-confirm]')?.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'admin-lq-detail__confirm';
+  wrap.dataset.lqDetailConfirm = '';
+  wrap.innerHTML = renderLightningAnswerCorrectionHtml(question);
+  actions.classList.add('hidden');
+  actions.after(wrap);
+  const restore = () => {
+    wrap.remove();
+    actions.classList.remove('hidden');
+  };
+  const form = wrap.querySelector('[data-lq-correct-form]');
+  wrap.querySelector('[data-lq-correct-cancel]').addEventListener('click', restore);
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const answerKey = readLightningCorrectionAnswerKey(form, question.questionType);
+    if (answerKey === null) {
+      showToast('請把正解填完整（排序不能重複、數量是 0～上限的整數，選單至少一項大於 0）。');
+      return;
+    }
+    const explanation = form.querySelector('[data-lq-correct-explanation]')?.value ?? '';
+    const buttons = [...form.querySelectorAll('button')];
+    buttons.forEach(button => { button.disabled = true; });
+    const result = await db.adminSetLightningQuizAnswerKey(question.id, answerKey, explanation);
+    if (!result.success) {
+      buttons.forEach(button => { button.disabled = false; });
+      showToast(result.message || '更正失敗，請稍後再試。');
+      return;
+    }
+    const data = result.data || {};
+    showToast(lightningCorrectionResultMessage(data));
+    void renderAdminLightningQuizQuestions();
+    if (data.answerChanged) void renderAdminLightningQuizStats();
+    if (!(data.answerChanged && data.weekRankingPublished)) {
+      closeAdminLightningQuizSheet('admin-lightning-quiz-question-sheet');
+      return;
+    }
+    wrap.innerHTML = `
+      <p class="admin-lq-detail__confirm-title">這週的前三名已經公布過</p>
+      <p class="admin-lq-detail__confirm-message">${escapeHTML(lightningCorrectionResultMessage(data))}首頁的前三名和兌換券是依舊答案產生的，不會自動改；要照新答案更新，請到這週的每週統計按「重新公布」（沿用原本的排除名單，掉出名單且還沒兌換的券會作廢）。</p>
+      <div class="admin-lq-detail__confirm-actions">
+        <button type="button" class="secondary-btn" data-lq-correct-later>之後再說</button>
+        <button type="button" class="primary-btn" data-lq-correct-republish>前往重新公布</button>
+      </div>`;
+    wrap.querySelector('[data-lq-correct-later]').addEventListener('click', () => closeAdminLightningQuizSheet('admin-lightning-quiz-question-sheet'));
+    wrap.querySelector('[data-lq-correct-republish]').addEventListener('click', () => {
+      closeAdminLightningQuizSheet('admin-lightning-quiz-question-sheet');
+      document.querySelector('[data-lq-tab="stats"]')?.click();
+      void renderAdminLightningQuizStats({ weekStart: data.weekStart });
+    });
+    wrap.querySelector('[data-lq-correct-republish]').focus?.();
+  });
+  form.querySelector('input, select, textarea')?.focus?.();
+}
+
 // 作答明細（#316、#317）：完整頁面，從統計的「逐日明細」或「每週統計」進來。
 function openAdminLightningQuizResults(day) {
   const title = document.getElementById('admin-lightning-quiz-results-title');
@@ -2048,8 +2115,11 @@ function openAdminLightningQuizDetail(question) {
   const title = document.getElementById('admin-lightning-quiz-question-sheet-title');
   if (!body || !question) return;
   const stage = lightningQuizStage(question, adminLightningQuizTaipeiNow());
-  // 已開始或已有人作答（locked）：不能編輯、不能取消排程、不能刪除，只能複製成新題
+  // 已開始或已有人作答（locked）：不能編輯、不能取消排程、不能刪除，只能複製成新題，
+  // 或只更正正解／詳解（#616）
   const locked = question.locked === true;
+  const correctable = locked && question.status === 'published';
+  const correctionNote = lightningAnswerCorrectionNote(question);
   const payload = question.payload || {};
   const options = Array.isArray(payload.options) ? payload.options : [];
   installQuizImageViewer();
@@ -2063,13 +2133,15 @@ function openAdminLightningQuizDetail(question) {
     ${questionImageHtml(payload)}
     ${options.length ? `<ol class="admin-lq-detail__options" type="A">${options.map(option => `<li>${escapeHTML(option)}</li>`).join('')}</ol>` : ''}
     <p class="admin-lq-detail__answer">正解：<strong>${escapeHTML(formatResponseForDisplay(question.questionType, payload, question.answerKey))}</strong></p>
+    ${correctionNote ? `<p class="admin-daily-quiz-note" data-lq-answer-corrected>${escapeHTML(correctionNote)}</p>` : ''}
     ${question.explanation ? `<p class="admin-lq-detail__explanation">詳解：${escapeHTML(question.explanation)}</p>` : ''}
-    ${locked ? '<p class="admin-daily-quiz-note">已經開始或有人作答，題目已鎖定；要沿用請按「複製成新題」。</p>' : ''}
+    ${locked ? `<p class="admin-daily-quiz-note">已經開始或有人作答，題目已鎖定；${correctable ? '正解或詳解有誤請按「更正答案」，' : ''}要沿用請按「複製成新題」。</p>` : ''}
     <div class="admin-lq-detail__actions">
       <button type="button" class="secondary-btn" data-lq-detail-action="try">試作</button>
       ${stage === 'draft' ? '<button type="button" class="primary-btn" data-lq-detail-action="schedule" data-lightning-quiz-status="published">排程</button>' : ''}
       ${stage !== 'draft' && !locked ? '<button type="button" class="secondary-btn" data-lq-detail-action="unschedule" data-lightning-quiz-status="draft">取消排程</button>' : ''}
       ${locked ? '' : '<button type="button" class="secondary-btn" data-lq-detail-action="edit" data-lightning-quiz-edit>編輯</button>'}
+      ${correctable ? '<button type="button" class="secondary-btn" data-lq-detail-action="correct" data-lightning-quiz-correct>更正答案</button>' : ''}
       <button type="button" class="secondary-btn" data-lq-detail-action="copy" data-lightning-quiz-copy>複製成新題</button>
       ${locked ? '' : '<button type="button" class="secondary-btn admin-lq-detail__delete" data-lq-detail-action="delete" data-lightning-quiz-delete>刪除</button>'}
     </div>`;
@@ -2081,6 +2153,7 @@ function openAdminLightningQuizDetail(question) {
       else if (action === 'unschedule') void changeAdminLightningQuizStatus(question, 'draft');
       else if (action === 'edit') openAdminLightningQuizEditor(question);
       else if (action === 'copy') openAdminLightningQuizEditor(question, { copy: true });
+      else if (action === 'correct') openAdminLightningQuizCorrection(question);
       else if (action === 'delete') void deleteAdminLightningQuizQuestion(question);
     });
   });
@@ -3301,9 +3374,10 @@ function renderAdminLightningQuizAwardsPanel(panel) {
 // 週排行榜。預設本週，可以前後切換；每一題再點進去看當天的作答明細。
 const ADMIN_LIGHTNING_QUIZ_TOP_SHOWN = 5;
 
-function renderAdminLightningQuizWeekPanel(panel) {
+// initialWeekStart：更正正解後「前往重新公布」直接停在那一週（#616）
+function renderAdminLightningQuizWeekPanel(panel, initialWeekStart = null) {
   const thisWeek = weekStartOf(formatTaiwanDate());
-  let weekStart = thisWeek;
+  let weekStart = initialWeekStart && initialWeekStart < thisWeek ? weekStartOf(initialWeekStart) : thisWeek;
   panel.innerHTML = `
     <div class="admin-lightning-quiz-trend__toolbar admin-lightning-quiz-week__toolbar">
       <button type="button" class="secondary-btn" data-lq-week-prev>‹ 上一週</button>
@@ -3454,7 +3528,7 @@ function renderAdminLightningQuizWeekPanel(panel) {
   return load();
 }
 
-export async function renderAdminLightningQuizStats() {
+export async function renderAdminLightningQuizStats({ weekStart = null } = {}) {
   const host = document.getElementById('admin-lightning-quiz-stats-body');
   if (!host) return;
 
@@ -3511,7 +3585,7 @@ export async function renderAdminLightningQuizStats() {
   `;
   if (typeof hydrateIcons === 'function') hydrateIcons(host);
 
-  void renderAdminLightningQuizWeekPanel(host.querySelector('[data-lq-stats-panel="week"]'));
+  void renderAdminLightningQuizWeekPanel(host.querySelector('[data-lq-stats-panel="week"]'), weekStart);
   const trendPanel = host.querySelector('[data-lq-stats-panel="trend"]');
   let drawTrend = null;
   const awardsPanel = host.querySelector('[data-lq-stats-panel="awards"]');

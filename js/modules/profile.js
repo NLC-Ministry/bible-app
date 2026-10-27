@@ -669,6 +669,8 @@ function renderMyLightningQuizDetail(item) {
       result: item.result,
       heading: QUESTION_TYPE_LABELS[item.questionType] || "",
       extraHtml: [
+        // #616：時段開始後管理員更正過正解，對錯已依新正解重新判定（不發通知，只在這裡標示）
+        item.answerCorrected === true ? '<p class="exam-result__ln quiz-review__corrected">此題答案已更正，對錯已重新判定。</p>' : "",
         seconds ? `<p class="exam-result__ln"><span class="exam-result__k">作答時間：</span>${escapeHTML(seconds)}</p>` : "",
         explanation ? `<p class="exam-result__ln exam-result__ln--explanation"><span class="exam-result__k">解說：</span>${escapeHTML(explanation)}</p>` : ""
       ].join("")

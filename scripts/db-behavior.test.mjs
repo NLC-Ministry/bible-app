@@ -382,3 +382,202 @@ describe("雲柱得獎與兌換總覽（#614）", () => {
     expect(outcome.afterVoid[ids.member]).toBe(1);
   });
 });
+
+describe("雲柱更正正解（admin_set_lightning_quiz_answer_key，#616）", () => {
+  // 已結束、已排程的單選題，原正解 0。member 答 1（錯）、other 答 0（對）、admin 開始了還沒送出。
+  const seedQuestion = async (tx, { type = "single", payload, answerKey = 0, riseDate = "2026-09-30", status = "published" } = {}) => {
+    const { rows: [{ id }] } = await tx.query(
+      `INSERT INTO public.lightning_quiz_questions (rise_date, rise_time_start, rise_time_end, question_type, payload, answer_key, explanation, status)
+       VALUES ($1, '07:00', '10:00', $2, $3::jsonb, $4::jsonb, '原詳解', $5) RETURNING id`,
+      [riseDate, type, JSON.stringify(payload || { stem: "題目", options: ["甲", "乙", "丙"] }), JSON.stringify(answerKey), status]
+    );
+    return id;
+  };
+  const attempt = (tx, questionId, userId, response, isCorrect) => tx.query(
+    response === null
+      ? `INSERT INTO public.lightning_quiz_attempts (question_id, user_id) VALUES ($1, $2)`
+      : `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+         VALUES ($1, $2, now(), 4000, $3::jsonb, $4)`,
+    response === null ? [questionId, userId] : [questionId, userId, JSON.stringify(response), isCorrect]
+  );
+  const seedAnswered = async tx => {
+    const questionId = await seedQuestion(tx);
+    await attempt(tx, questionId, ids.member, 1, false);
+    await attempt(tx, questionId, ids.other, 0, true);
+    await attempt(tx, questionId, ids.admin, null, null);
+    return questionId;
+  };
+  const correct = (tx, questionId, answerKey, actorId, explanation = null) => tx.query(
+    `SELECT public.admin_set_lightning_quiz_answer_key($1, $2::jsonb, $3, $4) AS result`,
+    [questionId, JSON.stringify(answerKey), explanation, actorId]
+  ).then(({ rows: [{ result }] }) => result);
+  const attemptsOf = async (tx, questionId) => Object.fromEntries((await tx.query(
+    `SELECT user_id, is_correct, elapsed_ms FROM public.lightning_quiz_attempts WHERE question_id = $1`, [questionId]
+  )).rows.map(row => [row.user_id, row]));
+
+  it("只有系統管理員能更正；client 不能直接呼叫（只給 service_role）", async () => {
+    await expect(asService(async tx => correct(tx, await seedAnswered(tx), 1, ids.member)))
+      .rejects.toThrow(/lightning_quiz_admin_required/);
+    await expect(as("authenticated", { sub: ids.adminAuth }, tx =>
+      tx.query(`SELECT public.admin_set_lightning_quiz_answer_key(gen_random_uuid(), '1'::jsonb, NULL, NULL)`)
+    )).rejects.toThrow(/permission denied/);
+    await expect(as("anon", {}, tx =>
+      tx.query(`SELECT public.admin_set_lightning_quiz_answer_key(gen_random_uuid(), '1'::jsonb, NULL, NULL)`)
+    )).rejects.toThrow(/permission denied/);
+  });
+
+  it("更正後已送出的作答重新判對錯，秒數不動，記下最早的原始正解", async () => {
+    const outcome = await asService(async tx => {
+      const questionId = await seedAnswered(tx);
+      const first = await correct(tx, questionId, 1, ids.admin);
+      const afterFirst = await attemptsOf(tx, questionId);
+      const second = await correct(tx, questionId, 2, ids.admin);
+      const afterSecond = await attemptsOf(tx, questionId);
+      const { rows: [question] } = await tx.query(
+        `SELECT answer_key, explanation, original_answer_key, answer_corrected_by, answer_corrected_at IS NOT NULL AS corrected
+         FROM public.lightning_quiz_questions WHERE id = $1`, [questionId]
+      );
+      return { first, afterFirst, second, afterSecond, question };
+    });
+    expect(outcome.first).toMatchObject({
+      changed: true, answerChanged: true, explanationChanged: false, previousAnswer: 0, answerKey: 1,
+      attemptsRescored: 2, becameCorrect: 1, becameWrong: 1, weekStart: "2026-09-28", weekRankingPublished: false
+    });
+    expect(outcome.afterFirst[ids.member]).toMatchObject({ is_correct: true, elapsed_ms: 4000 });
+    expect(outcome.afterFirst[ids.other].is_correct).toBe(false);
+    // 還沒送出的作答不動
+    expect(outcome.afterFirst[ids.admin].is_correct).toBe(null);
+    expect(outcome.second).toMatchObject({ previousAnswer: 1, answerKey: 2, becameCorrect: 0, becameWrong: 1 });
+    expect(outcome.afterSecond[ids.member].is_correct).toBe(false);
+    expect(outcome.question).toMatchObject({
+      answer_key: 2, explanation: "原詳解", original_answer_key: 0, answer_corrected_by: ids.admin, corrected: true
+    });
+  });
+
+  it("只改詳解：不重判、不標已更正；什麼都沒變就回 changed false", async () => {
+    const outcome = await asService(async tx => {
+      const questionId = await seedAnswered(tx);
+      const same = await correct(tx, questionId, 0, ids.admin);
+      const onlyExplanation = await correct(tx, questionId, 0, ids.admin, "  新詳解 ");
+      const { rows: [question] } = await tx.query(
+        `SELECT explanation, answer_corrected_at, original_answer_key FROM public.lightning_quiz_questions WHERE id = $1`, [questionId]
+      );
+      return { same, onlyExplanation, question, attempts: await attemptsOf(tx, questionId) };
+    });
+    expect(outcome.same).toMatchObject({ changed: false, attemptsRescored: 0 });
+    expect(outcome.onlyExplanation).toMatchObject({ changed: true, answerChanged: false, explanationChanged: true, attemptsRescored: 0 });
+    expect(outcome.question).toEqual({ explanation: "新詳解", answer_corrected_at: null, original_answer_key: null });
+    expect(outcome.attempts[ids.member].is_correct).toBe(false);
+  });
+
+  it("草稿不走更正（照原本的編輯）；找不到題目回 not_found", async () => {
+    await expect(asService(async tx => correct(tx, await seedQuestion(tx, { status: "draft" }), 1, ids.admin)))
+      .rejects.toThrow(/lightning_quiz_correction_not_published/);
+    await expect(asService(tx => correct(tx, "70000000-0000-4000-8000-000000000001", 1, ids.admin)))
+      .rejects.toThrow(/lightning_quiz_not_found/);
+  });
+
+  it("新正解要符合題型和題目內容", async () => {
+    const reject = (options, answerKey) => expect(asService(async tx => correct(tx, await seedQuestion(tx, options), answerKey, ids.admin)))
+      .rejects.toThrow(/lightning_quiz_invalid_answer_key/);
+    await reject({}, 3);
+    await reject({}, true);
+    await reject({}, [0]);
+    await reject({ type: "truefalse", payload: { stem: "對嗎" }, answerKey: true }, 1);
+    await reject({ type: "multiple", answerKey: [0, 1] }, []);
+    await reject({ type: "multiple", answerKey: [0, 1] }, [0, 0]);
+    await reject({ type: "multiple", answerKey: [0, 1] }, [0, 5]);
+    const matching = { stem: "配對", left: [{ id: "L1", text: "甲" }, { id: "L2", text: "乙" }], right: [{ id: "R1", text: "一" }, { id: "R2", text: "二" }] };
+    await reject({ type: "matching", payload: matching, answerKey: { L1: "R1", L2: "R2" } }, { L1: "R1" });
+    await reject({ type: "matching", payload: matching, answerKey: { L1: "R1", L2: "R2" } }, { L1: "R1", L2: "R9" });
+    // 左右一樣多：一對一，不能兩條線連到同一個右邊
+    await reject({ type: "matching", payload: matching, answerKey: { L1: "R1", L2: "R2" } }, { L1: "R1", L2: "R1" });
+    const ordering = { stem: "排序", items: [{ id: "A", text: "甲" }, { id: "B", text: "乙" }, { id: "C", text: "丙" }] };
+    await reject({ type: "ordering", payload: ordering, answerKey: ["A", "B", "C"] }, ["A", "B"]);
+    await reject({ type: "ordering", payload: ordering, answerKey: ["A", "B", "C"] }, ["A", "A", "C"]);
+    const menu = { stem: "點餐", items: [{ id: "I1", text: "麵包" }, { id: "I2", text: "魚" }] };
+    await reject({ type: "menu", payload: menu, answerKey: { I1: 5 } }, { I1: 0 });
+    await reject({ type: "menu", payload: menu, answerKey: { I1: 5 } }, { I9: 1 });
+    await reject({ type: "menu", payload: menu, answerKey: { I1: 5 } }, { I1: 21 });
+    await reject({ type: "menu", payload: menu, answerKey: { I1: 5 } }, { I1: 1.5 });
+  });
+
+  it("各題型都能更正並重判：多選存成排序過的、選單去掉 0、多對一配對可以重複連", async () => {
+    const outcome = await asService(async tx => {
+      const multiple = await seedQuestion(tx, { type: "multiple", answerKey: [0, 1], riseDate: "2026-09-29" });
+      await attempt(tx, multiple, ids.member, [2, 0], false);
+      const multipleResult = await correct(tx, multiple, [2, 0], ids.admin);
+      const manyToOne = await seedQuestion(tx, {
+        type: "matching", riseDate: "2026-09-27",
+        payload: { stem: "配對", left: [{ id: "L1", text: "甲" }, { id: "L2", text: "乙" }], right: [{ id: "R1", text: "一" }] },
+        answerKey: { L1: "R1", L2: "R1" }
+      });
+      const matchingResult = await correct(tx, manyToOne, { L1: "R1", L2: "R1" }, ids.admin, "多對一");
+      const menu = await seedQuestion(tx, {
+        type: "menu", riseDate: "2026-09-26",
+        payload: { stem: "點餐", items: [{ id: "I1", text: "麵包" }, { id: "I2", text: "魚" }] }, answerKey: { I1: 5 }
+      });
+      await attempt(tx, menu, ids.member, { I1: 5, I2: 2 }, false);
+      const menuResult = await correct(tx, menu, { I1: 5, I2: 2 }, ids.admin);
+      const ordering = await seedQuestion(tx, {
+        type: "ordering", riseDate: "2026-09-25",
+        payload: { stem: "排序", items: [{ id: "A", text: "甲" }, { id: "B", text: "乙" }] }, answerKey: ["A", "B"]
+      });
+      await attempt(tx, ordering, ids.member, ["B", "A"], false);
+      const orderingResult = await correct(tx, ordering, ["B", "A"], ids.admin);
+      const truefalse = await seedQuestion(tx, { type: "truefalse", riseDate: "2026-09-24", payload: { stem: "對嗎" }, answerKey: true });
+      await attempt(tx, truefalse, ids.member, true, true);
+      const truefalseResult = await correct(tx, truefalse, false, ids.admin);
+      return { multipleResult, matchingResult, menuResult, orderingResult, truefalseResult };
+    });
+    expect(outcome.multipleResult).toMatchObject({ answerKey: [0, 2], becameCorrect: 1 });
+    expect(outcome.matchingResult).toMatchObject({ answerChanged: false, explanationChanged: true });
+    expect(outcome.menuResult).toMatchObject({ answerKey: { I1: 5, I2: 2 }, becameCorrect: 1 });
+    expect(outcome.orderingResult).toMatchObject({ becameCorrect: 1 });
+    expect(outcome.truefalseResult).toMatchObject({ becameWrong: 1 });
+  });
+
+  it("選單題的正解去掉數量 0 的項目", async () => {
+    const result = await asService(async tx => {
+      const menu = await seedQuestion(tx, {
+        type: "menu", payload: { stem: "點餐", items: [{ id: "I1", text: "麵包" }, { id: "I2", text: "魚" }] }, answerKey: { I1: 5 }
+      });
+      return correct(tx, menu, { I1: 4, I2: 0 }, ids.admin);
+    });
+    expect(result.answerKey).toEqual({ I1: 4 });
+  });
+
+  it("那週前三名已公布過 → 回 weekRankingPublished，已公布的名單與兌換券不動", async () => {
+    const outcome = await asService(async tx => {
+      const questionId = await seedAnswered(tx);
+      await tx.query(
+        `INSERT INTO public.lightning_quiz_week_rankings (week_start, entries, display_days, display_until)
+         VALUES ('2026-09-28', $1::jsonb, 1, '2026-10-06')`,
+        [JSON.stringify([{ riseDate: "2026-09-30", winners: [{ rank: 1, userId: ids.other, name: "得獎者", pastoralZone: "牧區 A-1", elapsedMs: 4000 }] }])]
+      );
+      const result = await correct(tx, questionId, 1, ids.admin);
+      const { rows: [{ entries }] } = await tx.query(`SELECT entries FROM public.lightning_quiz_week_rankings WHERE week_start = '2026-09-28'`);
+      const { rows: vouchers } = await tx.query(`SELECT user_id, voided_at FROM public.lightning_quiz_vouchers WHERE week_start = '2026-09-28'`);
+      return { result, entries, vouchers };
+    });
+    expect(outcome.result).toMatchObject({ weekStart: "2026-09-28", weekRankingPublished: true });
+    expect(outcome.entries[0].winners[0].userId).toBe(ids.other);
+    expect(outcome.vouchers).toEqual([{ user_id: ids.other, voided_at: null }]);
+  });
+
+  it("會友「我的測驗」帶 answerCorrected；後台清單帶更正紀錄", async () => {
+    const outcome = await asService(async tx => {
+      const questionId = await seedAnswered(tx);
+      const historyBefore = (await tx.query(`SELECT public.get_my_lightning_quiz_history('2026-09-30', '2026-09-30', $1) AS h`, [ids.member])).rows[0].h;
+      await correct(tx, questionId, 1, ids.admin);
+      const history = (await tx.query(`SELECT public.get_my_lightning_quiz_history('2026-09-30', '2026-09-30', $1) AS h`, [ids.member])).rows[0].h;
+      const list = (await tx.query(`SELECT public.admin_list_lightning_quiz_questions('2026-09-30', '2026-09-30', $1) AS l`, [ids.admin])).rows[0].l;
+      return { historyBefore, history, list };
+    });
+    expect(outcome.historyBefore[0]).toMatchObject({ answerCorrected: false, result: "wrong" });
+    expect(outcome.history[0]).toMatchObject({ answerCorrected: true, result: "correct", answerKey: 1 });
+    expect(outcome.history[0]).not.toHaveProperty("originalAnswerKey");
+    expect(outcome.list[0]).toMatchObject({ originalAnswerKey: 0, answerKey: 1 });
+    expect(typeof outcome.list[0].answerCorrectedAt).toBe("string");
+  });
+});

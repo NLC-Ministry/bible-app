@@ -193,6 +193,10 @@ describe("個人「我的測驗」分頁", () => {
           questionId: "lq1", riseDate: "2026-09-24", questionType: "single",
           payload: { stem: "雲柱測驗題目", options: ["A", "B"] }, answerKey: 1,
           result: "not_participated", response: null, elapsedMs: null
+        }, {
+          questionId: "lq2", riseDate: "2026-09-22", questionType: "single",
+          payload: { stem: "更正過的題目", options: ["A", "B"] }, answerKey: 0, answerCorrected: true,
+          result: "correct", response: 0, elapsedMs: 4200
         }]
       }))
     });
@@ -229,6 +233,12 @@ describe("個人「我的測驗」分頁", () => {
     document.querySelector('#profile-lightning-quiz-results [data-profile-exams-kind="lightning"]').click();
     expect(detail.textContent).toContain("未參與");
     expect(detail.textContent).toContain("正解");
+    expect(detail.textContent).not.toContain("此題答案已更正");
+
+    // #616：時段開始後更正過正解的題目標「此題答案已更正」
+    document.getElementById("profile-exams-detail-back").click();
+    document.querySelectorAll('#profile-lightning-quiz-results [data-profile-exams-kind="lightning"]')[1].click();
+    expect(detail.querySelector(".quiz-review__corrected").textContent).toBe("此題答案已更正，對錯已重新判定。");
   });
 });
 
