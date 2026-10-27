@@ -6,6 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { AdminApp } from "../src/App.tsx";
 import { createAdminApi } from "../src/api.ts";
+import { LEGACY_HELLO, LEGACY_INIT } from "../src/legacy.ts";
 import type { AdminAuth } from "../src/auth.ts";
 import { addDays, defaultUsageRange, rangeError, taipeiToday, topHours } from "../src/stats.ts";
 import { buildUsage, normalizeRegistrationStats } from "../../supabase/functions/admin-api/stats.ts";
@@ -253,17 +254,17 @@ describe("導覽", () => {
     expect([...el.querySelectorAll(".adm-nav__link")].map((link) => link.textContent)).not.toContain("報表");
   });
 
-  it("測驗作答 is the third tab and shares the chosen plan with 報名註冊 (#581)", async () => {
+  it("報表 keeps two tabs; the quiz overview (#619) still shares the chosen plan with 報名註冊 (#581)", async () => {
     const { requests, el } = await mount("#/stats/registrations");
     const tabs = [...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent);
-    expect(tabs).toEqual(["讀經使用率", "報名註冊", "測驗作答"]);
+    expect(tabs).toEqual(["讀經使用率", "報名註冊"]);
     const pick = el.querySelector<HTMLSelectElement>("#adm-stats-plan")!;
     await act(async () => {
       pick.value = OTHER_PLAN;
       pick.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await flush();
-    await go("#/stats/quiz");
+    await go("#/quiz");
     expect(actions(requests).slice(3)).toEqual(["plan_options", "plan_quiz"]);
     expect(requests.at(-1)!.params).toEqual({ global_plan_id: OTHER_PLAN });
     expect(el.querySelector<HTMLSelectElement>("#adm-quiz-plan")!.value).toBe(OTHER_PLAN);
@@ -274,9 +275,10 @@ describe("導覽", () => {
     expect(actions(requests).slice(5)).toEqual([]);
   });
 
-  it("hides 測驗作答 without plans.read (its numbers come from plan_quiz)", async () => {
-    const { el } = await mount("#/stats", { caps: CAPS.filter((cap) => cap !== "plans.read") });
-    expect([...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent)).toEqual(["讀經使用率", "報名註冊"]);
+  it("an old 測驗作答 bookmark opens the quiz area (#619)", async () => {
+    const { el } = await mount("#/stats/quiz");
+    expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toBe("測驗");
+    expect(el.querySelector("#adm-quiz-plan")).not.toBeNull();
   });
 
   it("the old 營運 pages land on the report tabs", async () => {
@@ -287,5 +289,81 @@ describe("導覽", () => {
     await go("#/operations/registrations");
     expect(actions(requests).slice(2)).toEqual(["registration_stats"]);
     expect(el.querySelector("#adm-stats-plan")).toBeTruthy();
+  });
+});
+
+// #620：計畫、測驗、報表三區只有一個「目前選的計畫」；照搬的小測驗與組隊狀況用外框的計畫選單，經 bridge 告訴 iframe
+describe("one chosen plan for 計畫、測驗、報表 (#620)", () => {
+  const pickIn = async (el: Element, selector: string, value: string) => {
+    const select = el.querySelector<HTMLSelectElement>(selector);
+    expect(select).toBeTruthy();
+    await act(async () => {
+      select!.value = value;
+      select!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flush();
+  };
+  const valueOf = (el: Element, selector: string) => el.querySelector<HTMLSelectElement>(selector)?.value;
+
+  it("the legacy quiz and team tabs get the shell's plan menu; picking anywhere moves every area", async () => {
+    const { el } = await mount("#/stats/registrations");
+    await pickIn(el, "#adm-stats-plan", OTHER_PLAN);
+    await go("#/quiz/quizzes");
+    expect(el.querySelector<HTMLSelectElement>("#adm-legacy-plan")!.disabled).toBe(false);
+    expect(valueOf(el, "#adm-legacy-plan")).toBe(OTHER_PLAN);
+
+    await pickIn(el, "#adm-legacy-plan", PLAN);
+    await go("#/quiz");
+    expect(valueOf(el, "#adm-quiz-plan")).toBe(PLAN);
+    await go("#/stats/registrations");
+    expect(valueOf(el, "#adm-stats-plan")).toBe(PLAN);
+    await go("#/plans");
+    expect(valueOf(el, "#adm-plan-pick")).toBe(PLAN);
+
+    await pickIn(el, "#adm-plan-pick", OTHER_PLAN);
+    await go("#/plans/team-status");
+    expect(valueOf(el, "#adm-legacy-plan")).toBe(OTHER_PLAN);
+    // 計畫設定（所有計畫的設定）不分計畫，沒有選單
+    await go("#/plans/settings");
+    expect(el.querySelector("#adm-legacy-plan")).toBeNull();
+  });
+
+  it("Lightning Quiz and the big exam do not take a plan: the menu is disabled and says why", async () => {
+    const { el } = await mount("#/quiz/lightning-quiz");
+    const bar = () => el.querySelector(".adm-legacy__plan");
+    expect(el.querySelector<HTMLSelectElement>("#adm-legacy-plan")!.disabled).toBe(true);
+    expect(bar()!.textContent).toContain("雲柱不分計畫");
+    await go("#/quiz/exam");
+    expect(el.querySelector<HTMLSelectElement>("#adm-legacy-plan")!.disabled).toBe(true);
+    expect(bar()!.textContent).toContain("大測驗在每張試卷的設定裡選計畫");
+    await go("#/quiz/quizzes");
+    expect(el.querySelector<HTMLSelectElement>("#adm-legacy-plan")!.disabled).toBe(false);
+    expect(bar()!.textContent).not.toContain("不分計畫");
+  });
+
+  it("tells the iframe the plan at the handshake and again whenever it changes", async () => {
+    const { el } = await mount("#/quiz/quizzes");
+    const frame = el.querySelector<HTMLIFrameElement>("iframe.adm-legacy__frame")!;
+    const posted: { message: any; transfer: any[] }[] = [];
+    (frame.contentWindow as any).postMessage = (message: unknown, _origin: string, transfer: any[]) => posted.push({ message, transfer });
+    const hello = new MessageEvent("message", { data: { type: LEGACY_HELLO }, origin: window.location.origin });
+    Object.defineProperty(hello, "source", { value: frame.contentWindow });
+    await act(async () => { window.dispatchEvent(hello); });
+    expect(posted[0].message).toMatchObject({ type: LEGACY_INIT, section: "quizzes", plan: PLAN });
+
+    const port = posted[0].transfer[0] as MessagePort;
+    const heard: unknown[] = [];
+    port.onmessage = (event) => heard.push(event.data);
+    await pickIn(el, "#adm-legacy-plan", OTHER_PLAN);
+    await flush();
+    expect(heard).toContainEqual({ type: "plan", plan: OTHER_PLAN });
+    port.close();
+  });
+
+  it("without plans.read there is no plan to give: no menu, no request, the iframe keeps its own filter", async () => {
+    const { requests, el } = await mount("#/quiz/quizzes", { caps: ["console.access", "support.read", "content.manage"] });
+    expect(el.querySelector("iframe.adm-legacy__frame")).not.toBeNull();
+    expect(el.querySelector("#adm-legacy-plan")).toBeNull();
+    expect(actions(requests)).toEqual(["bootstrap"]);
   });
 });

@@ -124,7 +124,7 @@ function HomeBody({ home, can, onOpenInbox, onOpenPlan, now }: {
 
         {showQuiz(quiz) && can("content.manage") && (
           <a className={`adm-tile adm-home__tile${quizNotReady(quiz.status) ? " adm-home__tile--todo" : ""}`}
-            href={formatRoute({ view: "legacy", area: "content", section: "quizzes" })}>
+            href={formatRoute({ view: "legacy", area: "quiz", section: "quizzes" })}>
             <span><ClipboardList className="adm-icon adm-icon--small" aria-hidden="true" />明天的小測驗</span>
             <strong>{quiz.status ? QUIZ_STATUS_LABEL[quiz.status] : "—"}</strong>
             <small>{quiz.date.replace(/-/g, "/")}・{planName}</small>

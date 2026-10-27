@@ -1,7 +1,7 @@
 // 舊管理畫面（iframe）和後台外殼（admin/src/views/LegacyHost.tsx）之間的通道（#550）。
 //
 // 握手：iframe 對 parent 送 hello → 外殼建一條 MessageChannel，把其中一端連同 init（要開哪一區、主題）
-// 送過來 → 之後全部走這條 port：要 token、匯出前記稽核、換區、主題、操作中（延後閒置登出）。
+// 送過來 → 之後全部走這條 port：要 token、匯出前記稽核、換區、主題、計畫（#620）、操作中（延後閒置登出）。
 // 只收同網域、而且是 parent 送來的 init；直接開 /legacy（不在後台裡）就停在說明畫面。
 
 export const HELLO_TYPE = "adm-legacy-hello";
@@ -53,7 +53,9 @@ export function createBridge(win, port, init = {}) {
   return {
     init: {
       section: typeof init.section === "string" ? init.section : "",
-      theme: typeof init.theme === "string" ? init.theme : "light"
+      theme: typeof init.theme === "string" ? init.theme : "light",
+      // 外框選的計畫（#620）；null＝外框沒給，用 iframe 自己的計畫篩選
+      plan: typeof init.plan === "string" && init.plan ? init.plan : null
     },
     /** 送出並等回覆（{ ok, ... }）；外殼沒回就當失敗。 */
     request(type, payload = {}) {

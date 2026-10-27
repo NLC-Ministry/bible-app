@@ -92,16 +92,36 @@ describe("parseRoute / formatRoute", () => {
     expect(parseRoute("#/stats/usage/extra")).toEqual({ view: "not_found" });
   });
 
-  it("moves 測驗作答 to the 報表 area, keeping the plan; old plan-area bookmarks follow (#581)", () => {
+  it("測驗 area: the overview keeps the plan; old 測驗作答 bookmarks follow it (#619, #581)", () => {
     const PLAN = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
-    const route = parseRoute(`#/stats/quiz?plan=${PLAN.toUpperCase()}`);
-    expect(route).toEqual({ view: "stats", tab: "quiz", planId: PLAN });
-    expect(formatRoute(route)).toBe(`#/stats/quiz?plan=${PLAN}`);
-    expect(formatRoute({ view: "stats", tab: "quiz", planId: null })).toBe("#/stats/quiz");
-    expect(areaOf(route)).toBe("stats");
+    const route = parseRoute(`#/quiz?plan=${PLAN.toUpperCase()}`);
+    expect(route).toEqual({ view: "quiz", planId: PLAN });
+    expect(formatRoute(route)).toBe(`#/quiz?plan=${PLAN}`);
+    expect(formatRoute({ view: "quiz", planId: null })).toBe("#/quiz");
+    expect(areaOf(route)).toBe("quiz");
+    expect(parseRoute("#/quiz")).toEqual({ view: "quiz", planId: null });
+    expect(parseRoute(`#/quiz/overview?plan=${PLAN}`)).toEqual(route);
+    // 舊網址：報表區的測驗作答（#581）、更早的計畫區測驗作答（#565）
+    expect(parseRoute(`#/stats/quiz?plan=${PLAN}`)).toEqual(route);
+    expect(parseRoute("#/stats/quiz")).toEqual({ view: "quiz", planId: null });
     expect(parseRoute(`#/plans/quiz?plan=${PLAN}`)).toEqual(route);
-    expect(parseRoute("#/plans/quiz")).toEqual({ view: "stats", tab: "quiz", planId: null });
+    expect(parseRoute("#/plans/quiz")).toEqual({ view: "quiz", planId: null });
     expect(parseRoute("#/plans/quiz/x")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/stats/quiz/x")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/quiz/overview/x")).toEqual({ view: "not_found" });
+  });
+
+  it("測驗 area: the three copied quiz sections live here; old content addresses follow them (#619)", () => {
+    for (const section of ["quizzes", "exam", "lightning-quiz"]) {
+      const route = parseRoute(`#/quiz/${section}`);
+      expect(route).toEqual({ view: "legacy", area: "quiz", section });
+      expect(formatRoute(route)).toBe(`#/quiz/${section}`);
+      expect(areaOf(route)).toBe("quiz");
+      expect(parseRoute(`#/content/${section}`)).toEqual(route);
+    }
+    expect(parseRoute("#/quiz/announcements")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/quiz/exam/extra")).toEqual({ view: "not_found" });
+    expect(parseRoute("#/quiz/__proto__")).toEqual({ view: "not_found" });
   });
 
   it("parses the plan area: three native tabs, an optional plan, and the copied settings tab (#565)", () => {
@@ -159,9 +179,9 @@ describe("parseRoute / formatRoute", () => {
     expect(parseRoute("#/accounts/users")).toEqual({ view: "not_found" });
   });
 
-  it("parses the content area: the legacy sections moved over as-is (#550)", () => {
+  it("parses the content area: announcements and commentary (#550; the quizzes moved out in #619)", () => {
     expect(parseRoute("#/content")).toEqual({ view: "legacy", area: "content", section: "announcements" });
-    for (const section of ["announcements", "commentary", "quizzes", "exam", "lightning-quiz"]) {
+    for (const section of ["announcements", "commentary"]) {
       const route = parseRoute(`#/content/${section}`);
       expect(route).toEqual({ view: "legacy", area: "content", section });
       expect(formatRoute(route)).toBe(`#/content/${section}`);
@@ -188,6 +208,11 @@ describe("navigation by capability", () => {
     expect(canUse(["accounts.read"], "people")).toBe(false);
     expect(canUse(["console.access"], "content")).toBe(false);
     expect(canUse(["console.access", "content.manage"], "content")).toBe(true);
+    // 測驗區（#619）：總覽要 plans.read、三種測驗要 content.manage，有一個就看得到
+    expect(canUse(["console.access"], "quiz")).toBe(false);
+    expect(canUse(["console.access", "plans.read"], "quiz")).toBe(true);
+    expect(canUse(["console.access", "content.manage"], "quiz")).toBe(true);
+    expect(canUse(["plans.read"], "quiz")).toBe(false);
     expect(canUse(["console.access", "operations.manage"], "plans")).toBe(false);
     expect(canUse(["console.access", "plans.read"], "plans")).toBe(true);
     // 系統區：稽核紀錄或功能開放設定有一個就看得到
@@ -197,9 +222,9 @@ describe("navigation by capability", () => {
     expect(canUse(["audit.read"], "system")).toBe(false);
   });
 
-  it("orders the menu by what there is to do (#569)", () => {
+  it("orders the menu by what there is to do (#569); 測驗 follows 計畫 (#619)", () => {
     const all = ["console.access", "support.read", "accounts.read", "plans.read", "stats.read", "content.manage", "audit.read", "operations.manage"];
-    expect(visibleNavItems(all).map((item) => item.label)).toEqual(["首頁", "計畫", "報表", "人", "回報收件匣", "內容", "系統"]);
+    expect(visibleNavItems(all).map((item) => item.label)).toEqual(["首頁", "計畫", "測驗", "報表", "人", "回報收件匣", "內容", "系統"]);
   });
 });
 

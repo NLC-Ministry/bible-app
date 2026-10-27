@@ -14,31 +14,38 @@
 // #569：選單拿掉「營運」，組隊狀況（隊伍與成員名單的 CSV 匯出還在這頁）移到「計畫」區最後一個分頁。同一份清單另外兩處：
 // admin-legacy/sections.mjs（iframe）、admin-api policy.ts 的 LEGACY_EXPORT_SECTIONS；
 // scripts/admin-legacy.test.mjs 檢查三邊一致。
+// #619：小測驗、大測驗、雲柱測驗從「內容」搬到新的「測驗」區。只改 area（決定網址與在哪一區），區塊 id 不改——
+// iframe 通道、admin-api 權限、稽核標籤都靠 id，三邊的清單也不含 area。
 
 import type { ResolvedTheme } from "./theme.ts";
 
-export type LegacyArea = "plans" | "content" | "system";
+export type LegacyArea = "plans" | "quiz" | "content" | "system";
 
 export type LegacySection = {
   id: string;
   area: LegacyArea;
   label: string;
   capability: string;
+  /** 這個區塊裡面還有哪些頁（舊畫面自己的分頁，外殼連不進去）；測驗區總覽列給管理者看，免得忘記有什麼（#619） */
+  pages?: string;
 };
 
 export const LEGACY_SECTIONS: readonly LegacySection[] = [
   { id: "announcements", area: "content", label: "公告", capability: "content.manage" },
   { id: "commentary", area: "content", label: "經文注釋", capability: "content.manage" },
-  { id: "quizzes", area: "content", label: "小測驗", capability: "content.manage" },
-  { id: "exam", area: "content", label: "大測驗", capability: "content.manage" },
-  { id: "lightning-quiz", area: "content", label: "雲柱測驗", capability: "content.manage" },
+  { id: "quizzes", area: "quiz", label: "小測驗", capability: "content.manage", pages: "排程（每天的題目與發布）、規則設定、統計" },
+  { id: "exam", area: "quiz", label: "大測驗", capability: "content.manage", pages: "試卷清單；每張試卷：題目、設定、作答與成績" },
+  {
+    id: "lightning-quiz", area: "quiz", label: "雲柱測驗", capability: "content.manage",
+    pages: "排程、題目（新增、匯入）、統計（每週統計、週趨勢、逐日明細）、得獎與兌換（公布前三名、兌換券）、規則設定"
+  },
   { id: "plans", area: "plans", label: "計畫設定", capability: "operations.manage" },
   // 計畫區最後一個分頁（#569）；隊伍清單與除錯是計畫區的「團隊」（#566），這頁留著是為了隊伍與成員名單的 CSV 匯出
   { id: "teams", area: "plans", label: "組隊狀況", capability: "operations.manage" },
   { id: "settings", area: "system", label: "功能開放設定", capability: "settings.manage" }
 ];
 
-export const LEGACY_AREAS: readonly LegacyArea[] = ["plans", "content", "system"];
+export const LEGACY_AREAS: readonly LegacyArea[] = ["plans", "quiz", "content", "system"];
 
 export function isLegacyArea(value: unknown): value is LegacyArea {
   return typeof value === "string" && (LEGACY_AREAS as readonly string[]).includes(value);
@@ -125,8 +132,8 @@ export type LegacyHostEvents = {
 export type LegacyHostOptions = LegacyHostEvents & {
   win: Window;
   frameWindow: () => Window | null;
-  /** 握手時才讀：iframe 重新載入（舊程式 reload）時拿到的是當下的區塊與主題 */
-  initial: () => { section: string; theme: ResolvedTheme };
+  /** 握手時才讀：iframe 重新載入（舊程式 reload）時拿到的是當下的區塊、主題與計畫 */
+  initial: () => { section: string; theme: ResolvedTheme; plan: string | null };
   getToken: () => string | null;
   getIdToken: () => string | null;
   /** 記稽核；失敗就丟錯（不下載） */
@@ -141,6 +148,8 @@ export type LegacyHostOptions = LegacyHostEvents & {
 export type LegacyHost = {
   open(section: string): void;
   setTheme(theme: ResolvedTheme): void;
+  /** 外框選的計畫（#620）；null＝外框沒有計畫可給（沒有 plans.read），iframe 用自己的計畫篩選 */
+  setPlan(plan: string | null): void;
   stop(): void;
 };
 
@@ -256,7 +265,7 @@ export function startLegacyHost(options: LegacyHostOptions): LegacyHost {
       if (data && typeof data === "object") handleMessage(current, data as Record<string, unknown>);
     };
     const init = options.initial();
-    frame.postMessage({ type: LEGACY_INIT, section: init.section, theme: init.theme }, origin, [channel.port2 as Transferable]);
+    frame.postMessage({ type: LEGACY_INIT, section: init.section, theme: init.theme, plan: init.plan }, origin, [channel.port2 as Transferable]);
   };
   win.addEventListener("message", onWindowMessage);
 
@@ -266,6 +275,9 @@ export function startLegacyHost(options: LegacyHostOptions): LegacyHost {
     },
     setTheme(theme: ResolvedTheme) {
       port?.postMessage({ type: "theme", theme });
+    },
+    setPlan(plan: string | null) {
+      port?.postMessage({ type: "plan", plan });
     },
     stop() {
       stopped = true;

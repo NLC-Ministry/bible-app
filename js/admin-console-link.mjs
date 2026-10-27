@@ -32,7 +32,7 @@ export const ADMIN_CONSOLE_SECTION_ROUTES = Object.freeze({
   plans: "#/plans/settings", // #565：計畫區的「計畫設定」
   announcements: "#/content/announcements",
   commentary: "#/content/commentary",
-  "lightning-quiz": "#/content/lightning-quiz",
+  "lightning-quiz": "#/quiz/lightning-quiz", // #619：測驗區
   settings: "#/system/settings"
 });
 

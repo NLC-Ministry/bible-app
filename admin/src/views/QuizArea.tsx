@@ -1,44 +1,85 @@
-// 報表區的「測驗作答」分頁（#581，原本在計畫區，#565）：每日小測驗、大測驗、雲柱的作答數字，只有數字、不記稽核。
-// 數字照計畫算（這一期設定的測驗、這一期報名者的作答），所以上面仍要選計畫——和「報名註冊」共用同一個選的計畫
-// （App 那一層的 StatsUiState.planId），切分頁時不變。計畫選單用 plan_options（和計畫區同一個預設）。
-// 請求預算：打開＝plan_options＋plan_quiz，換計畫 1 個 plan_quiz；都走 60 秒快取，重新整理鈕先 invalidate。
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+// 後台「測驗」區（#619）的總覽：原本報表區的「測驗作答」分頁（#581，更早在計畫區，#565）。
+// 上面是這一區的地圖——三種測驗（照搬的區塊，要 content.manage）各有哪些頁，免得忘記有什麼；下面是這一期的作答數字
+// （每日小測驗、大測驗、雲柱），只有數字、不記稽核。數字照計畫算（這一期設定的測驗、這一期報名者的作答），所以要選計畫——
+// 和計畫區、報表區的「報名註冊」、照搬的小測驗共用同一個選的計畫（App 那一層，#620），切分頁時不變。計畫選單用 plan_options（和計畫區同一個預設）。
+// 請求預算：打開＝plan_options＋plan_quiz，換計畫 1 個 plan_quiz；都走 60 秒快取，重新整理鈕先 invalidate。地圖不發請求。
+import { useEffect, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import type { AdminApi } from "../api.ts";
 import { formatDate, formatDateTime, text } from "../format.ts";
+import { legacySectionsOf } from "../legacy.ts";
 import { pct, pickPlanId, type PlanOptions, type PlanQuiz } from "../plans.ts";
 import { formatRoute, type AdminRoute } from "../route.ts";
 import { shortDate } from "../stats.ts";
 import { Bar, ErrorNotice, Spinner } from "../ui.tsx";
 import { useAdminData, type Loaded } from "../use-admin-data.ts";
-import type { StatsUiState } from "./StatsArea.tsx";
+import { AreaTabs } from "./AreaTabs.tsx";
 
-export function QuizTab({ api, route, capabilities, ui, setUi, doc }: {
+type Props = {
   api: AdminApi;
-  route: Extract<AdminRoute, { view: "stats" }>;
+  route: Extract<AdminRoute, { view: "quiz" }>;
   capabilities: readonly string[];
-  ui: StatsUiState;
-  setUi: Dispatch<SetStateAction<StatsUiState>>;
+  /** 計畫、測驗、報表三區共用的「目前選的計畫」（#620）；null＝用預設計畫 */
+  planId: string | null;
+  onPlanChange: (planId: string) => void;
   doc: Document;
-}) {
+};
+
+const sectionHref = (section: string) => formatRoute({ view: "legacy", area: "quiz", section });
+
+export function QuizArea(props: Props) {
+  const { capabilities } = props;
+  return (
+    <div className="adm-quiz-area">
+      <div className="adm-plan-head"><h2>測驗</h2></div>
+      <AreaTabs area="quiz" current="overview" capabilities={capabilities} />
+      <QuizMap capabilities={capabilities} />
+      {capabilities.includes("plans.read")
+        ? <QuizOverview {...props} />
+        : <p className="adm-muted adm-empty">你的帳號沒有看測驗作答數字的權限。</p>}
+    </div>
+  );
+}
+
+/** 三種測驗各有哪些頁（舊畫面自己的分頁，名稱在 legacy.ts）；點名稱進那一種測驗 */
+function QuizMap({ capabilities }: { capabilities: readonly string[] }) {
+  const sections = legacySectionsOf("quiz").filter((section) => capabilities.includes(section.capability));
+  if (sections.length === 0) return null;
+  return (
+    <section className="adm-card adm-quiz-map" aria-label="測驗區有哪些頁">
+      <div className="adm-card__body">
+        <ul className="adm-plain-list">
+          {sections.map((section) => (
+            <li key={section.id} className="adm-quiz-map__item">
+              <a className="adm-link adm-quiz-map__name" href={sectionHref(section.id)}>{section.label}</a>
+              {section.pages && <span className="adm-muted adm-small">{section.pages}</span>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function QuizOverview({ api, route, capabilities, planId: chosenPlanId, onPlanChange, doc }: Props) {
   const [refresh, setRefresh] = useState(0);
   const options = useAdminData<PlanOptions>(api, "plan_options", {}, refresh);
-  const planId = options.data ? pickPlanId(options.data, [route.planId, ui.planId]) : null;
+  const planId = options.data ? pickPlanId(options.data, [route.planId, chosenPlanId]) : null;
   const quiz = useAdminData<PlanQuiz>(api, "plan_quiz", planId ? { global_plan_id: planId } : null, refresh);
   const plans = options.data?.plans || [];
 
   useEffect(() => {
-    if (planId && planId !== ui.planId) setUi((prev) => ({ ...prev, planId }));
-  }, [planId, ui.planId, setUi]);
+    if (planId && planId !== chosenPlanId) onPlanChange(planId);
+  }, [planId, chosenPlanId, onPlanChange]);
 
   const reload = () => {
     api.invalidate(["plan_options", "plan_quiz"]);
     setRefresh((value) => value + 1);
   };
   const pick = (id: string) => {
-    setUi((prev) => ({ ...prev, planId: id }));
+    onPlanChange(id);
     const view = doc.defaultView;
-    if (view) view.location.hash = formatRoute({ view: "stats", tab: "quiz", planId: id });
+    if (view) view.location.hash = formatRoute({ view: "quiz", planId: id });
   };
 
   return (
@@ -110,6 +151,7 @@ function QuizBody({ quiz, capabilities, onReload }: { quiz: Loaded<PlanQuiz>; ca
                     </ul>
                   </>
                 )}
+              <DetailLink capabilities={capabilities} section="quizzes">每天的題目、規則與完整統計在「小測驗」</DetailLink>
             </div>
           </section>
         )}
@@ -128,6 +170,7 @@ function QuizBody({ quiz, capabilities, onReload }: { quiz: Loaded<PlanQuiz>; ca
                 <div className="adm-tile adm-tile--static"><span>簡答待批改</span><strong>{paper.pending}</strong></div>
                 <div className="adm-tile adm-tile--static"><span>平均（已批改）</span><strong>{paper.average ?? "—"}</strong></div>
               </div>
+              <DetailLink capabilities={capabilities} section="exam">批改與各單位成績在「大測驗」</DetailLink>
             </div>
           </section>
         ))}
@@ -156,17 +199,23 @@ function QuizBody({ quiz, capabilities, onReload }: { quiz: Loaded<PlanQuiz>; ca
                   ))}
                 </ul>
               )}
-              {capabilities.includes("content.manage") && (
-                <a className="adm-link" href={formatRoute({ view: "legacy", area: "content", section: "lightning-quiz" })}>
-                  前三名公布與兌換券在「內容 → 雲柱測驗」<ExternalLink className="adm-icon adm-icon--small" aria-hidden="true" />
-                </a>
-              )}
+              <DetailLink capabilities={capabilities} section="lightning-quiz">所有人的統計、前三名公布與兌換券在「雲柱測驗」</DetailLink>
             </div>
           </section>
         )}
       </div>
       {notes.map((note) => <p key={note} className="adm-muted adm-small">{note}</p>)}
-      <p className="adm-muted adm-small">打開這個分頁才調閱；這期沒設定的測驗不顯示。出題、審題在「內容」，這裡只看作答。</p>
+      <p className="adm-muted adm-small">打開這個分頁才調閱；這期沒設定的測驗不顯示。出題、審題、完整統計在上面各測驗的分頁，這裡只看這一期的作答。</p>
     </div>
+  );
+}
+
+/** 卡片底下連到那一種測驗（照搬區塊，要 content.manage） */
+function DetailLink({ capabilities, section, children }: { capabilities: readonly string[]; section: string; children: string }) {
+  if (!capabilities.includes("content.manage")) return null;
+  return (
+    <a className="adm-link" href={sectionHref(section)}>
+      {children}<ExternalLink className="adm-icon adm-icon--small" aria-hidden="true" />
+    </a>
   );
 }

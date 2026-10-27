@@ -10,14 +10,17 @@
 //   #/plans/teams/<uuid>[?plan=<uuid>]       隊伍頁（#566；隊伍自己知道屬於哪個計畫，plan 只是回清單時用）
 //   #/plans/settings                         計畫設定（照搬的「全域計畫管理」卡片）
 //   #/plans/team-status                      組隊狀況（照搬；#569 從營運區搬來，計畫區最後一個分頁）
-//   #/stats[/registrations|quiz][?plan=<uuid>] 報表區（#568）：讀經使用率／報名註冊／測驗作答（#581；plan 只有後兩頁用）
-//   #/content[/<區塊>]                       照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）
+//   #/quiz[?plan=<uuid>]                     測驗區（#619）的總覽：原本報表區的「測驗作答」（#581）；#/quiz/overview 也認得
+//   #/quiz/<區塊>                            測驗區的小測驗／大測驗／雲柱測驗（照搬，#619 從內容區搬來）
+//   #/stats[/registrations][?plan=<uuid>]    報表區（#568）：讀經使用率／報名註冊（plan 只有報名註冊用）
+//   #/content[/<區塊>]                       照搬的舊管理區塊（#550，見 legacy.ts；沒指定就是第一個）：公告、經文注釋
 //   #/system[/audit][?actor=<uuid>&target=<uuid>]  稽核紀錄（#550；actor／target 是篩選條件，可以從別頁連過來）
 //   #/system/settings                        功能開放設定（照搬）
 //
 // 用 hash 而不是路徑：靜態網站不用設定改寫規則，重新整理、登入導回來都回得到同一頁。
 // 搬到計畫區的舊營運區塊（#565），舊書籤導到新位置：計畫管理 → 計畫設定、加入計畫狀況／組員總覽 → 名單、計畫統計 → 總覽；
 // #568 讀經使用率、報名註冊統計 → 報表區。#581 計畫區的測驗作答 #/plans/quiz[?plan=] → 報表區 #/stats/quiz[?plan=]。#569 選單拿掉「營運」：#/operations、#/operations/teams → 計畫區的組隊狀況。
+// #619 測驗獨立成一區：#/stats/quiz、#/plans/quiz（都帶著計畫）→ #/quiz；#/content/<測驗區塊> → #/quiz/<同一個區塊>。
 // 「人」區的舊網址（#567）也導到新位置：#/support/users、#/accounts → 名單；#/support/user/<uuid>[/<舊分頁>] → 個人頁
 // （個人頁不再分頁，舊分頁名稱略過）；#/accounts/scopes[/<uuid>] → 管理範圍。會友 App 的舊連結因此仍然有效。
 
@@ -26,8 +29,8 @@ import { isLegacyArea, legacySectionsOf, type LegacyArea } from "./legacy.ts";
 // 舊個人頁的分頁（#555）：只為了認得舊網址
 const OLD_USER_TABS: readonly string[] = ["overview", "reading_logs", "team_events", "tests", "vouchers", "reports", "timeline"];
 
-// 選單順序（#569）：照「要做什麼事」排
-export const AREAS = ["home", "plans", "stats", "people", "support", "content", "system"] as const;
+// 選單順序（#569）：照「要做什麼事」排；測驗（#619）跟在計畫後面
+export const AREAS = ["home", "plans", "quiz", "stats", "people", "support", "content", "system"] as const;
 export type Area = typeof AREAS[number];
 
 export const PEOPLE_TABS = ["directory", "scopes"] as const;
@@ -36,7 +39,7 @@ export type PeopleTab = typeof PEOPLE_TABS[number];
 export const PLAN_TABS = ["overview", "roster", "teams"] as const;
 export type PlanTab = typeof PLAN_TABS[number];
 
-export const STATS_TABS = ["usage", "registrations", "quiz"] as const;
+export const STATS_TABS = ["usage", "registrations"] as const;
 export type StatsTab = typeof STATS_TABS[number];
 
 export type AdminRoute =
@@ -46,6 +49,7 @@ export type AdminRoute =
   | { view: "people"; tab: PeopleTab; profileId: string | null }
   | { view: "plans"; tab: PlanTab; planId: string | null; teamId?: string | null }
   | { view: "stats"; tab: StatsTab; planId: string | null }
+  | { view: "quiz"; planId: string | null }
   | { view: "legacy"; area: LegacyArea; section: string }
   | { view: "audit"; actorId: string | null; targetId: string | null }
   | { view: "not_found" };
@@ -90,6 +94,21 @@ export function cleanReason(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, MAX_REASON_CHARS) : "";
 }
 
+function planIdOf(query: URLSearchParams): string | null {
+  const plan = query.get("plan");
+  return isUuid(plan) ? plan.toLowerCase() : null;
+}
+
+/** 測驗區的總覽（#619）；舊的 #/stats/quiz、#/plans/quiz 也導到這裡 */
+function quizOverview(query: URLSearchParams): AdminRoute {
+  return { view: "quiz", planId: planIdOf(query) };
+}
+
+/** 測驗區的照搬區塊；不是測驗區塊就回 null（#/content/<測驗區塊> 的舊網址也用這個認） */
+function quizSection(id: string | undefined): AdminRoute | null {
+  return legacySectionsOf("quiz").some((section) => section.id === id) ? { view: "legacy", area: "quiz", section: String(id) } : null;
+}
+
 export function parseRoute(hash: string): AdminRoute {
   const raw = String(hash || "").replace(/^#/, "");
   const queryAt = raw.indexOf("?");
@@ -125,19 +144,28 @@ export function parseRoute(hash: string): AdminRoute {
       return { view: "legacy", area: "plans", section: PLAN_LEGACY_PATHS[rest[0]] };
     }
     const tab = (rest[0] || "overview") as PlanTab;
-    const plan = query.get("plan");
-    const planId = isUuid(plan) ? plan.toLowerCase() : null;
-    // 測驗作答搬到報表區（#581），舊書籤帶著計畫過去
-    if (rest.length === 1 && rest[0] === "quiz") return { view: "stats", tab: "quiz", planId };
+    const planId = planIdOf(query);
+    // 測驗作答搬走（#581 報表區、#619 測驗區），舊書籤帶著計畫過去
+    if (rest.length === 1 && rest[0] === "quiz") return quizOverview(query);
     if (rest.length === 2 && tab === "teams" && isUuid(rest[1])) return { view: "plans", tab, planId, teamId: rest[1].toLowerCase() };
     if (rest.length > 1 || !(PLAN_TABS as readonly string[]).includes(tab)) return { view: "not_found" };
     return { view: "plans", tab, planId };
   }
   if (area === "stats") {
+    // 測驗作答搬到測驗區的總覽（#619）
+    if (rest.length === 1 && rest[0] === "quiz") return quizOverview(query);
     const tab = (rest[0] || "usage") as StatsTab;
     if (rest.length > 1 || !(STATS_TABS as readonly string[]).includes(tab)) return { view: "not_found" };
-    const plan = query.get("plan");
-    return { view: "stats", tab, planId: tab !== "usage" && isUuid(plan) ? plan.toLowerCase() : null };
+    return { view: "stats", tab, planId: tab !== "usage" ? planIdOf(query) : null };
+  }
+  if (area === "quiz") {
+    if (rest.length === 0 || (rest.length === 1 && rest[0] === "overview")) return quizOverview(query);
+    return (rest.length === 1 && quizSection(rest[0])) || { view: "not_found" };
+  }
+  if (area === "content" && rest.length === 1) {
+    // 三種測驗搬到測驗區（#619），舊書籤與會友 App 的舊連結跟過去
+    const moved = quizSection(rest[0]);
+    if (moved) return moved;
   }
   if (area === "operations") {
     // 營運區已拿掉（#569），舊書籤導到新位置
@@ -176,6 +204,8 @@ export function formatRoute(route: AdminRoute): string {
     case "stats":
       if (route.tab === "usage") return "#/stats";
       return `#/stats/${route.tab}${route.planId ? `?plan=${route.planId}` : ""}`;
+    case "quiz":
+      return `#/quiz${route.planId ? `?plan=${route.planId}` : ""}`;
     case "legacy": {
       if (route.area !== "plans") return `#/${route.area}/${route.section}`;
       const path = Object.keys(PLAN_LEGACY_PATHS).find((key) => PLAN_LEGACY_PATHS[key] === route.section) || "settings";
@@ -202,6 +232,7 @@ export function areaOf(route: AdminRoute): Area {
   if (route.view === "people" || route.view === "user") return "people";
   if (route.view === "plans") return "plans";
   if (route.view === "stats") return "stats";
+  if (route.view === "quiz") return "quiz";
   if (route.view === "home" || route.view === "not_found") return "home";
   return "support";
 }
