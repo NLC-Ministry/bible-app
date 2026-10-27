@@ -1234,6 +1234,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 使用者中途切過分頁就不要把他拉走（#388）。
     const navGenBeforeDataLoad = navRenderGuard.current;
 
+    // 快取先畫（#630）：有上次的開機快照就先用它畫首頁，不等上面的網路資料。
+    // 這次 switchTab 會讓導覽號碼前進，資料回來時就走下面「原地重畫目前分頁」那條路，
+    // 不重設捲動位置。快照不能用（第一次開、換人、太舊、深連結）就照舊等網路。
+    if (initialSessionSyncSucceeded && !resumePlan && !bootHashRoute && isAppShellVisible(document)) {
+      try {
+        if (await db.applyBootSnapshot()) {
+          if (typeof updateAdminNavVisibility === 'function') updateAdminNavVisibility();
+          await appRouter.switchTab("dashboard-view");
+          window.__bootMark?.("snapshot-tab-rendered");
+        }
+      } catch (err) {
+        console.warn("[BootSnapshot] render from snapshot failed, waiting for live data:", err);
+      }
+    }
+
     const [roleResult, userDataResult] = await dataLoadPromise;
     window.__bootMark?.("initial-data-load-done");
     if (roleResult.status === "rejected") {
@@ -1267,7 +1282,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.renderReaderText();
       }
     } else if (userNavigatedDuringLoad) {
-      // The user's tab rendered before plans/profile arrived — redraw it in place.
+      // The user's tab (or the boot-snapshot dashboard, #630) rendered before the
+      // live plans/profile arrived — redraw it in place.
       await appRouter.switchTab(postLoadTab, { keepPlanDetail: true, restoreTabScroll: false });
     } else if (!deferToBootRoute) {
       await appRouter.switchTab(postLoadTab);
