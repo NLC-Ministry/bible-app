@@ -3412,6 +3412,64 @@ body:not(.dark-theme) .settings-row-btn:hover {
   line-height: 1.5;
 }
 
+/* #615：提醒用同一種方式登入（換方式會開出新的空帳號） */
+.login-method-hint {
+  margin: 0 0 0.8rem;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* #615：沒有計畫的畫面上，請可能用錯登入方式的會友改回原本的方式 */
+.account-switch-hint {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-subtle);
+  text-align: left;
+}
+
+.account-switch-hint__title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.account-switch-hint__title .nlc-icon {
+  color: var(--color-brand);
+  flex-shrink: 0;
+}
+
+.account-switch-hint__body {
+  margin: 0 0 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.account-switch-hint__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.account-switch-hint__actions button {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding-inline: 1rem;
+}
+
 .auth-environment-dialog {
   position: fixed;
   inset: 0;

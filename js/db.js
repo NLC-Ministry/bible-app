@@ -1120,6 +1120,8 @@ const db = {
     if (profile.email) state.currentUser.email = profile.email;
     if (profile.phone) state.currentUser.phone = profile.phone;
     if (profile.membership_status) state.membershipStatus = profile.membership_status;
+    // 換登入方式提示（#615）用；舊版 nlc-session 沒回這個欄位就保留原值。
+    if (profile.created_at) state.currentUser.account_created_at = profile.created_at;
     state.currentUser.member_context_synced_at = profile.member_context_synced_at || "";
     state.currentUser.member_context_sync_attempted_at = profile.member_context_sync_attempted_at || "";
     state.currentUser.member_context_sync_status = profile.member_context_sync_status || "";

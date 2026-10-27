@@ -50,6 +50,14 @@ window.APP_COPY = {
   },
   auth: {
     loginSubtitle: "跟弟兄姊妹一起速讀聖經，登入後進度會自動同步。",
+    loginMethodHint: "請用跟上次相同的方式登入（手機號碼或 Email），換一種方式會變成新的帳號。",
+  },
+  // #615：換一種方式登入而開出新的空帳號時，在沒有計畫的畫面提示改回原本的方式。
+  accountSwitchHint: {
+    title: "以前參加過讀經計畫嗎？",
+    body: "如果你之前用手機號碼（或其他方式）登入過，你的計畫和閱讀紀錄都在那個帳號裡。請先登出，再改用原本的方式登入。",
+    switchCta: "登出，改用原本的方式登入",
+    dismissCta: "我是第一次使用",
   },
   memberHub: {
     cardTitle: "新生命會員中心",
