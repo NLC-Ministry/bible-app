@@ -758,9 +758,8 @@ const auth = {
       if (this.config.platformResource) {
         refreshParams.set("resource", this.config.platformResource);
       }
-      if (this.config.scopes) {
-        refreshParams.set("scope", this.config.scopes);
-      }
+      // 不帶 scope＝沿用登入時授予的範圍（#627）。第一方應用沒有同意畫面，offline_access
+      // 不會被授予，續期時再要它 Logto 會回 400 invalid_scope → 清 token → 每小時被登出。
 
       // 呼叫端用軟逾時，這裡只設很長的硬上限：真的卡死的請求不能永遠佔著跨分頁鎖。
       const response = await fetchWithTimeout(endpoints.tokenEndpoint, {
