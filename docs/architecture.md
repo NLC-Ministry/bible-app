@@ -53,6 +53,16 @@ When adding data access, use the `state.supabase.from(...)` builder so it works 
 
 Logto OIDC + PKCE client for NLC SSO. Does discovery on `issuer`, handles the redirect callback, stores tokens in `localStorage` (`nlc_*` keys), and exchanges the Logto token for a Supabase profile via the `nlc-session` Edge Function. `auth.getValidAccessToken()` transparently refreshes; `db.js` retries once on 401.
 
+**Logto application settings** (Admin Console → Applications → the member app → *Refresh token*). These live only in Logto, so carry them over whenever the application is recreated — #580 copied only the redirect/sign-out/CORS settings and the refresh-token block silently fell back to Logto's defaults:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| Always issue refresh token | **ON** | The member app is a first-party application: there is no consent screen and sign-in sends no `prompt=consent`, so `offline_access` is never granted. Without this switch no refresh token is issued and everyone is signed out when the access token (60 min) expires. |
+| Rotate refresh token | **OFF** | The PWA, a Safari tab and the full-screen exam page each hold the same refresh token; with rotation one refresh revokes the others' token → `invalid_grant` → signed out. |
+| Refresh token TTL | **30 days** | Rotation is off, so the TTL counts from sign-in and is not extended by use. |
+
+Because `offline_access` is not granted, the refresh request must **not** send `scope` (omitted = the scopes granted at sign-in). Asking for the configured scopes again gets `400 invalid_scope` ("refresh token missing requested scope"), which the client treats as a rejected session and signs the user out every hour (#627, `scripts/auth-refresh-scope.test.mjs`). Sign-in still requests `offline_access`. Keep the staging application's refresh-token settings identical.
+
 ### Bible text (`js/data/bible_data.js`)
 
 Chapter text is fetched live from public Bible APIs (bible-api.com, bolls.life) with `assertCompleteEnough()` validation (must be Chinese, not truncated to 10 verses) and a small hardcoded `BIBLE_FALLBACK` for offline/failure. `bible_verse_counts.js` holds per-chapter verse counts. `CHURCH_PLAN_PRESETS` book names are Traditional Chinese; `BOLLS_BOOK_CODES` maps English names to API codes.
