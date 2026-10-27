@@ -48,20 +48,31 @@ import {
   buildWeekRegionCsv,
   buildWeekZoneCsv,
   buildVoucherCsv,
+  buildVoucherWeekCsv,
+  buildVoucherZoneCsv,
   buildWeeklyTrendCsv,
   buildWeeklyTrendSeries,
+  buildWinnersCsv,
   buildZoneCsv,
+  canChangeVoucherExpiry,
   filterAttempts,
+  filterVouchers,
   formatElapsedSeconds,
+  formatMonthDay,
   formatRate,
   formatWeekRange,
   formatWeekday,
   formatRankLabel,
+  isVoucherExpiringSoon,
   normalizeRankingExcluded,
   pickDayWinners,
   rankAttempts,
   sortZoneRowsByRegion,
+  summarizeVoucherOverview,
   summarizeVouchers,
+  summarizeVouchersByWeek,
+  summarizeVouchersByZone,
+  summarizeWinners,
   VOUCHER_REDEEMED_VIA_LABELS,
   VOUCHER_STATUS_LABELS,
   formatVoucherTime,
@@ -2732,9 +2743,11 @@ function adminLightningQuizRankingDayHtml(day, dayExcluded, expanded) {
     const id = String(candidate.userId);
     const isExcluded = dayExcluded.has(id);
     const rank = winnerRank.get(id);
+    // 這週以前得過幾次獎（#614，未作廢的券數），給人工排除參考
+    const priorWins = Number(candidate.priorWins) || 0;
     return `<li class="admin-lq-ranking__row${rank ? ' is-winner' : ''}${isExcluded ? ' is-excluded' : ''}">
       <span class="admin-lq-ranking__rank">${isExcluded ? '已排除' : rank ? escapeHTML(formatRankLabel(rank)) : ''}</span>
-      <span class="admin-lq-ranking__name">${escapeHTML(candidate.name || '（未命名）')}</span>
+      <span class="admin-lq-ranking__name">${escapeHTML(candidate.name || '（未命名）')}${priorWins > 0 ? `<span class="admin-lq-ranking__prior">之前得過 ${escapeHTML(String(priorWins))} 次</span>` : ''}</span>
       <span class="admin-lq-ranking__zone">${escapeHTML(candidate.pastoralZone || UNASSIGNED_ZONE_LABEL)}</span>
       <span class="admin-lq-ranking__time">${escapeHTML(formatElapsedSeconds(candidate.elapsedMs))} 秒</span>
       <button type="button" class="pill-btn" data-lq-ranking-toggle data-date="${escapeHTML(day.riseDate)}" data-user="${escapeHTML(id)}">${isExcluded ? '取消排除' : '排除'}</button>
@@ -2778,7 +2791,7 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, o
     const displayDays = daysInput ? daysInput.value : String(publication?.displayDays || 1);
     host.innerHTML = `
       <p class="admin-lq-ranking__status">${escapeHTML(formatAdminLightningQuizRankingStatus(publication))}</p>
-      <p class="admin-daily-quiz-note">依作答秒數由快到慢列出答對的人。按「排除」把人移出名單，下面的人會遞補。名字照會員資料顯示；首頁不顯示個人名次。</p>
+      <p class="admin-daily-quiz-note">依作答秒數由快到慢列出答對的人。按「排除」把人移出名單，下面的人會遞補。名字照會員資料顯示；首頁不顯示個人名次。「之前得過 N 次」只算這週以前、沒有作廢的兌換券。</p>
       <div class="admin-lq-ranking__days">
         ${days.map(day => adminLightningQuizRankingDayHtml(day, excluded[day.riseDate], expanded.has(day.riseDate))).join('')}
       </div>
@@ -2870,13 +2883,15 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, o
 // （例如店家事後回報）或撤銷誤按的兌換；作廢的券（重新公布時被排除）只顯示不能操作。
 const ADMIN_VOUCHER_STATUS_KIND = { available: 'success', redeemed: 'brand', expired: 'neutral', void: 'neutral' };
 
-function adminVoucherRowHtml(voucher) {
+// leading：得獎與兌換總覽（#614）放在最前面的勾選框；today：有給就標出 7 天內到期的券。
+function adminVoucherRowHtml(voucher, { leading = '', today = '' } = {}) {
   const status = voucher.status || 'available';
   const badge = `<span class="stat-badge stat-badge--${ADMIN_VOUCHER_STATUS_KIND[status] || 'neutral'}">${escapeHTML(VOUCHER_STATUS_LABELS[status] || status)}</span>`;
   let action = '';
   if (status === 'redeemed') action = `<button type="button" class="pill-btn" data-lq-voucher-undo="${escapeHTML(String(voucher.id))}">撤銷兌換</button>`;
   else if (status !== 'void') action = `<button type="button" class="pill-btn" data-lq-voucher-redeem="${escapeHTML(String(voucher.id))}">標記已兌換</button>`;
-  let note = `有效期限至 ${formatWeekday(voucher.expiresOn)}`;
+  let note = `有效期限至 ${formatWeekday(voucher.expiresOn)}${today && isVoucherExpiringSoon(voucher, today) ? '・7 天內到期' : ''}`;
+  if (status === 'expired') note = `已於 ${formatWeekday(voucher.expiresOn)} 到期`;
   if (status === 'redeemed') {
     const via = VOUCHER_REDEEMED_VIA_LABELS[voucher.redeemedVia] || '';
     const by = voucher.redeemedVia === 'admin' && voucher.redeemedByName ? `（${voucher.redeemedByName}）` : '';
@@ -2885,7 +2900,7 @@ function adminVoucherRowHtml(voucher) {
     note = '重新公布時不在名單上，已作廢';
   }
   return `<li class="admin-lq-vouchers__row${status === 'void' ? ' admin-lq-vouchers--void' : ''}">
-    <span>${escapeHTML(formatWeekday(voucher.riseDate))}${escapeHTML(formatRankLabel(voucher.rank))}</span>
+    ${leading}<span>${escapeHTML(formatWeekday(voucher.riseDate))}${escapeHTML(formatRankLabel(voucher.rank))}</span>
     <span class="admin-lq-vouchers__who">${escapeHTML(voucher.name || '（未命名）')}${voucher.pastoralZone ? `<span>${escapeHTML(voucher.pastoralZone)}</span>` : ''}</span>
     <span class="admin-lq-vouchers__code">${escapeHTML(voucher.code || '')}</span>
     ${badge}
@@ -2926,21 +2941,9 @@ async function renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent) 
   `;
 
   const setRedeemed = async (button, voucherId, redeemed) => {
-    const voucher = vouchers.find(v => String(v.id) === voucherId);
-    const label = voucher ? `${voucher.name || ''} ${formatWeekday(voucher.riseDate)}${formatRankLabel(voucher.rank)}（${voucher.code}）` : '這張券';
-    const confirmed = await window.showConfirmDialog(redeemed
-      ? { title: '標記為已兌換？', message: `${label} 會變成已兌換，會友就不能再使用。`, confirmText: '標記已兌換', cancelText: '取消' }
-      : { title: '撤銷這次兌換？', message: `${label} 會恢復成可使用（過了期限的會顯示已過期）。`, confirmText: '撤銷兌換', cancelText: '取消', isDestructive: true });
-    if (!confirmed) return;
-    button.disabled = true;
-    const saved = await db.adminSetLightningQuizVoucherRedeemed(voucherId, redeemed);
-    if (!saved.success) {
-      button.disabled = false;
-      showToast(saved.message || '更新失敗，請稍後再試。');
-      return;
+    if (await confirmAdminVoucherRedeemed(button, vouchers, voucherId, redeemed)) {
+      void renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent);
     }
-    showToast(redeemed ? '已標記為已兌換。' : '已撤銷兌換。');
-    void renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent);
   };
 
   // 用 onclick（不是 addEventListener）：重畫時同一個 host 不能疊監聽。
@@ -2950,6 +2953,348 @@ async function renderAdminLightningQuizWeekVouchers(host, weekStart, isCurrent) 
     const undo = event.target.closest('[data-lq-voucher-undo]');
     if (undo) void setRedeemed(undo, undo.dataset.lqVoucherUndo, false);
   };
+}
+
+// 標記已兌換／撤銷兌換：先確認再送出。每週統計的兌換券區塊與得獎與兌換總覽（#614）共用；
+// 成功回傳 true，呼叫的人自己重畫。
+async function confirmAdminVoucherRedeemed(button, vouchers, voucherId, redeemed) {
+  const voucher = vouchers.find(v => String(v.id) === voucherId);
+  const label = voucher ? `${voucher.name || ''} ${formatWeekday(voucher.riseDate)}${formatRankLabel(voucher.rank)}（${voucher.code}）` : '這張券';
+  const confirmed = await window.showConfirmDialog(redeemed
+    ? { title: '標記為已兌換？', message: `${label} 會變成已兌換，會友就不能再使用。`, confirmText: '標記已兌換', cancelText: '取消' }
+    : { title: '撤銷這次兌換？', message: `${label} 會恢復成可使用（過了期限的會顯示已過期）。`, confirmText: '撤銷兌換', cancelText: '取消', isDestructive: true });
+  if (!confirmed) return false;
+  button.disabled = true;
+  const saved = await db.adminSetLightningQuizVoucherRedeemed(voucherId, redeemed);
+  if (!saved.success) {
+    button.disabled = false;
+    showToast(saved.message || '更新失敗，請稍後再試。');
+    return false;
+  }
+  showToast(redeemed ? '已標記為已兌換。' : '已撤銷兌換。');
+  return true;
+}
+
+// ── 得獎與兌換（#614）──────────────────────────────────────────────────────────
+// 統計的第四個分頁：跨週追蹤英雄榜兌換券、分析得獎次數，各表可匯出，也能改已發出的券的
+// 期限。每次切進來才向伺服器拿全部週的券（admin_list_lightning_quiz_vouchers 不帶週），
+// 篩選、彙總都在前端做。點依週表的一週，下面的區塊只看那週；牧區篩選套用在得獎次數與明細。
+const ADMIN_LQ_AWARDS_PEOPLE_SHOWN = 20;
+const ADMIN_LQ_AWARDS_ALL_ZONES = '__all__';
+const ADMIN_LQ_AWARDS_NO_ZONE = '__none__';
+
+function adminLightningQuizAwardsZoneOptions(vouchers, zone) {
+  const names = [...new Set(vouchers.map(voucher => voucher.pastoralZone || ''))]
+    .sort((a, b) => (!a !== !b ? (a ? -1 : 1) : a.localeCompare(b, 'zh-Hant')));
+  const current = zone === null ? ADMIN_LQ_AWARDS_ALL_ZONES : zone || ADMIN_LQ_AWARDS_NO_ZONE;
+  const option = (value, label) => `<option value="${escapeHTML(value)}"${value === current ? ' selected' : ''}>${escapeHTML(label)}</option>`;
+  return option(ADMIN_LQ_AWARDS_ALL_ZONES, '全部牧區')
+    + names.map(name => option(name || ADMIN_LQ_AWARDS_NO_ZONE, name || UNASSIGNED_ZONE_LABEL)).join('');
+}
+
+function renderAdminLightningQuizAwardsPanel(panel) {
+  let vouchers = [];
+  let today = '';
+  const filters = { weekStart: '', zone: null, status: 'all', showVoid: false };
+  const selected = new Set();
+  let showAllPeople = false;
+  let requestSeq = 0;
+
+  const weekScoped = () => filterVouchers(vouchers, { weekStart: filters.weekStart, showVoid: true });
+  const zoneScoped = () => filterVouchers(vouchers, { weekStart: filters.weekStart, zone: filters.zone, showVoid: true });
+  const detailList = () => filterVouchers(vouchers, filters);
+  const scopeLabel = () => (filters.weekStart ? formatWeekRange(filters.weekStart) : '全部週');
+  const fileSuffix = () => (filters.weekStart ? `${filters.weekStart}週` : `全部週_${today}`);
+
+  const summaryHtml = () => {
+    const overview = summarizeVoucherOverview(vouchers, today);
+    return `<div class="admin-daily-quiz-metrics">
+      <span>發出 <strong>${escapeHTML(String(overview.issued))} 張</strong></span>
+      <span>已兌換 <strong>${escapeHTML(String(overview.redeemed))} 張（${escapeHTML(formatRate(overview.redeemRate))}）</strong></span>
+      <span>可使用 <strong>${escapeHTML(String(overview.available))} 張</strong>（7 天內到期 ${escapeHTML(String(overview.expiringSoon))} 張）</span>
+      <span>過期未兌換 <strong>${escapeHTML(String(overview.expired))} 張</strong></span>
+      ${overview.void ? `<span>已作廢 <strong>${escapeHTML(String(overview.void))} 張</strong></span>` : ''}
+    </div>
+    <p class="admin-daily-quiz-note">一張券＝一次得獎（每天每個名次各一張）。重新公布時被排除、還沒兌換的券會作廢，不算發出。</p>`;
+  };
+
+  const weekTableHtml = () => adminLightningQuizOrgTable(
+    ['週', '發出', '已兌換', '可使用', '已過期', '兌換率', ''],
+    summarizeVouchersByWeek(vouchers).map(row => {
+      const active = row.weekStart === filters.weekStart;
+      return `<tr${active ? ' class="is-active"' : ''}>
+        <td>${escapeHTML(formatWeekRange(row.weekStart))}</td>
+        <td>${escapeHTML(String(row.issued))}</td>
+        <td>${escapeHTML(String(row.redeemed))}</td>
+        <td>${escapeHTML(String(row.available))}</td>
+        <td>${escapeHTML(String(row.expired))}</td>
+        <td>${escapeHTML(formatRate(row.redeemRate))}</td>
+        <td>${active
+          ? '<button type="button" class="pill-btn" data-lq-awards-all-weeks>看全部週</button>'
+          : `<button type="button" class="pill-btn" data-lq-awards-week="${escapeHTML(row.weekStart)}">只看這週</button>`}</td>
+      </tr>`;
+    }).join('')
+  );
+
+  const zoneTableHtml = () => {
+    const summary = summarizeVouchersByZone(weekScoped());
+    const cells = row => `<td>${escapeHTML(String(row.winners))}</td>
+      <td>${escapeHTML(String(row.issued))}</td>
+      <td>${escapeHTML(String(row.redeemed))}</td>
+      <td>${escapeHTML(formatRate(row.redeemRate))}</td>`;
+    if (!summary.rows.length) return '<div class="admin-user-directory__empty">這個範圍沒有發出的兌換券。</div>';
+    return adminLightningQuizOrgTable(
+      ['牧區', '得獎人數', '發出（得獎人次）', '已兌換', '兌換率'],
+      summary.rows.map(row => `<tr><td>${escapeHTML(row.pastoralZone || UNASSIGNED_ZONE_LABEL)}</td>${cells(row)}</tr>`).join('')
+        + `<tr class="admin-lightning-quiz-stats-total"><td>合計</td>${cells(summary.total)}</tr>`
+    );
+  };
+
+  const winnersHtml = () => {
+    const winners = summarizeWinners(zoneScoped());
+    if (!winners.winners) return '<div class="admin-user-directory__empty">這個範圍沒有得獎紀錄。</div>';
+    const shown = showAllPeople ? winners.people : winners.people.slice(0, ADMIN_LQ_AWARDS_PEOPLE_SHOWN);
+    return `<div class="admin-daily-quiz-metrics">
+        <span>得獎人數 <strong>${escapeHTML(String(winners.winners))} 人</strong></span>
+        <span>得獎人次 <strong>${escapeHTML(String(winners.totalWins))} 次</strong></span>
+        ${winners.distribution.map(bucket => `<span>${escapeHTML(bucket.label)} <strong>${escapeHTML(String(bucket.people))} 人</strong></span>`).join('')}
+      </div>
+      ${adminLightningQuizOrgTable(
+        ['姓名', '牧區', '得獎次數', '第一名', '第二名', '第三名', '已兌換', '得獎日期'],
+        shown.map(person => `<tr>
+          <td>${escapeHTML(person.name || '（未命名）')}</td>
+          <td>${escapeHTML(person.pastoralZone || UNASSIGNED_ZONE_LABEL)}</td>
+          <td>${escapeHTML(String(person.wins))}</td>
+          <td>${escapeHTML(String(person.rank1))}</td>
+          <td>${escapeHTML(String(person.rank2))}</td>
+          <td>${escapeHTML(String(person.rank3))}</td>
+          <td>${escapeHTML(String(person.redeemed))}</td>
+          <td>${escapeHTML(person.dates.map(formatMonthDay).join('、'))}</td>
+        </tr>`).join('')
+      )}
+      ${winners.people.length > shown.length ? `<button type="button" class="pill-btn" data-lq-awards-people-more>看全部（${escapeHTML(String(winners.people.length))} 人）</button>` : ''}`;
+  };
+
+  const detailHtml = () => {
+    const list = detailList();
+    if (!list.length) return '<div class="admin-user-directory__empty">這個範圍沒有符合的兌換券。</div>';
+    return `<ul class="admin-lq-vouchers__list">${list.map(voucher => {
+      const id = String(voucher.id);
+      const leading = canChangeVoucherExpiry(voucher)
+        ? `<input type="checkbox" class="admin-lq-awards__check" data-lq-awards-select="${escapeHTML(id)}" aria-label="選取這張券"${selected.has(id) ? ' checked' : ''}>`
+        : '<span class="admin-lq-awards__check" aria-hidden="true"></span>';
+      return adminVoucherRowHtml(voucher, { leading, today });
+    }).join('')}</ul>`;
+  };
+
+  const selectionHtml = () => `已選 <strong>${escapeHTML(String(selected.size))}</strong> 張`;
+
+  const drawSelection = () => {
+    const count = panel.querySelector('[data-lq-awards-selected]');
+    if (count) count.innerHTML = selectionHtml();
+    const button = panel.querySelector('[data-lq-awards-expiry-apply]');
+    if (button) button.disabled = selected.size === 0;
+  };
+
+  // 換週、換牧區、換狀態：重畫下面幾區；選取清掉，免得改到看不見的券。
+  const drawScoped = () => {
+    selected.clear();
+    const set = (selector, html) => { const el = panel.querySelector(selector); if (el) el.innerHTML = html; };
+    set('[data-lq-awards-weeks]', weekTableHtml());
+    set('[data-lq-awards-scope]', `下面只看 <strong>${escapeHTML(scopeLabel())}</strong>${filters.weekStart ? ' <button type="button" class="pill-btn" data-lq-awards-all-weeks>看全部週</button>' : ''}`);
+    set('[data-lq-awards-zones]', zoneTableHtml());
+    set('[data-lq-awards-winners]', winnersHtml());
+    set('[data-lq-awards-detail]', detailHtml());
+    drawSelection();
+  };
+
+  const draw = () => {
+    if (!vouchers.length) {
+      panel.innerHTML = '<div class="admin-user-directory__empty">還沒有發出任何兌換券；在「每週統計」公布前三名後會自動發給得獎者。</div>';
+      return;
+    }
+    const zoneValue = filters.zone;
+    panel.innerHTML = `
+      ${summaryHtml()}
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="依週">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>依週</h5>
+          ${adminLightningQuizExportButton('data-lq-awards-export="week"')}
+        </div>
+        <div data-lq-awards-weeks></div>
+        <p class="admin-lq-awards__scope" data-lq-awards-scope></p>
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="依牧區">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>依牧區（公布當時的牧區）</h5>
+          ${adminLightningQuizExportButton('data-lq-awards-export="zone"')}
+        </div>
+        <div data-lq-awards-zones></div>
+      </section>
+
+      <div class="admin-quiz-stats-roster-toolbar admin-lq-awards__filters">
+        <label>牧區
+          <select class="form-control" data-lq-awards-zone aria-label="篩選牧區">${adminLightningQuizAwardsZoneOptions(vouchers, zoneValue)}</select>
+        </label>
+        <span class="admin-daily-quiz-note">牧區篩選套用在下面的得獎次數與明細。</span>
+      </div>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="得獎次數">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>得獎次數（次數多的在前，同次數比第一名次數）</h5>
+          ${adminLightningQuizExportButton('data-lq-awards-export="winners"')}
+        </div>
+        <div data-lq-awards-winners></div>
+      </section>
+
+      <section class="admin-lightning-quiz-detail__section" aria-label="兌換券明細">
+        <div class="admin-lightning-quiz-detail__section-head">
+          <h5>兌換券明細</h5>
+          ${adminLightningQuizExportButton('data-lq-awards-export="detail"')}
+        </div>
+        <div class="admin-quiz-stats-roster-toolbar">
+          <select class="form-control" data-lq-awards-status aria-label="篩選狀態">
+            ${[['all', '全部狀態'], ['available', '可使用'], ['redeemed', '已兌換'], ['expired', '已過期']]
+              .map(([value, label]) => `<option value="${value}"${filters.status === value ? ' selected' : ''}>${label}</option>`).join('')}
+          </select>
+          <label class="admin-lq-awards__toggle"><input type="checkbox" data-lq-awards-show-void${filters.showVoid ? ' checked' : ''}> 顯示已作廢</label>
+        </div>
+        <div class="admin-lq-awards__expiry">
+          <span data-lq-awards-selected></span>
+          <button type="button" class="pill-btn" data-lq-awards-select-all>全選目前篩選結果</button>
+          <button type="button" class="pill-btn" data-lq-awards-select-none>清除選取</button>
+          <label>新的有效期限
+            <input type="date" class="form-control" data-lq-awards-expiry min="${escapeHTML(today)}" max="${escapeHTML(addDays(today, 365))}">
+          </label>
+          <button type="button" class="primary-btn" data-lq-awards-expiry-apply disabled>更改期限</button>
+        </div>
+        <p class="admin-daily-quiz-note">只有可使用與已過期的券能改期限；新日期要在今天到一年內。已過期的券延長後會恢復成可使用，會友在「我的兌換券」會直接看到新日期。</p>
+        <div data-lq-awards-detail></div>
+      </section>
+    `;
+    if (typeof hydrateIcons === 'function') hydrateIcons(panel);
+    drawScoped();
+  };
+
+  const load = async () => {
+    const seq = ++requestSeq;
+    if (!panel.childElementCount) panel.innerHTML = '<div class="admin-user-directory__empty">正在載入得獎與兌換紀錄…</div>';
+    const result = await db.adminListLightningQuizVouchers();
+    if (seq !== requestSeq) return;
+    if (!result.success) {
+      panel.innerHTML = `<div class="admin-user-directory__empty">${escapeHTML(result.message || '載入兌換券失敗，請稍後再試。')}</div>`;
+      return;
+    }
+    vouchers = Array.isArray(result.data?.vouchers) ? result.data.vouchers : [];
+    today = result.data?.today || formatTaiwanDate();
+    // 重新載入後，原本選的週／牧區沒有券了就回到全部
+    if (filters.weekStart && !vouchers.some(voucher => voucher.weekStart === filters.weekStart)) filters.weekStart = '';
+    if (filters.zone !== null && !vouchers.some(voucher => (voucher.pastoralZone || '') === filters.zone)) filters.zone = null;
+    draw();
+  };
+
+  const changeExpiry = async button => {
+    const ids = [...selected];
+    const expiresOn = panel.querySelector('[data-lq-awards-expiry]')?.value || '';
+    if (!ids.length) { showToast('請先勾選要更改的兌換券。'); return; }
+    if (!expiresOn || expiresOn < today || expiresOn > addDays(today, 365)) {
+      showToast('新的有效期限要在今天到一年內。');
+      return;
+    }
+    const confirmed = await window.showConfirmDialog({
+      title: '更改兌換券的有效期限？',
+      message: `${ids.length} 張改成 ${formatWeekday(expiresOn)}到期。已過期的券會恢復成可使用；會友在「我的兌換券」會直接看到新日期，不另外通知。`,
+      confirmText: '更改期限',
+      cancelText: '取消'
+    });
+    if (!confirmed) return;
+    button.disabled = true;
+    const saved = await db.adminSetLightningQuizVouchersExpiry(ids, expiresOn);
+    if (!saved.success) {
+      button.disabled = false;
+      showToast(saved.message || '更改失敗，請稍後再試。');
+      return;
+    }
+    const updated = Number(saved.data?.updated) || 0;
+    const skipped = Number(saved.data?.skipped) || 0;
+    showToast(`已把 ${updated} 張改成 ${formatWeekday(expiresOn)}到期${skipped ? `；${skipped} 張已兌換或作廢，沒有更改` : ''}。`);
+    selected.clear();
+    await load();
+  };
+
+  const exportCsv = kind => {
+    if (kind === 'week') {
+      downloadAdminLightningQuizCsv(buildVoucherWeekCsv(summarizeVouchersByWeek(vouchers)), `雲柱測驗_兌換券依週_${today}.csv`);
+    } else if (kind === 'zone') {
+      downloadAdminLightningQuizCsv(buildVoucherZoneCsv(summarizeVouchersByZone(weekScoped())), `雲柱測驗_兌換券依牧區_${fileSuffix()}.csv`);
+    } else if (kind === 'winners') {
+      const people = summarizeWinners(zoneScoped()).people;
+      downloadAdminLightningQuizCsv(people.length ? buildWinnersCsv(people) : '', `雲柱測驗_得獎次數_${fileSuffix()}.csv`);
+    } else if (kind === 'detail') {
+      const list = detailList();
+      downloadAdminLightningQuizCsv(list.length ? buildVoucherCsv(list, new Date(), { includeWeek: true }) : '', `雲柱測驗_兌換券明細_${fileSuffix()}.csv`);
+    }
+  };
+
+  // 用 onclick／onchange（不是 addEventListener）：每次切進來都會重新載入、重畫同一個 panel。
+  panel.onclick = event => {
+    const target = event.target;
+    const week = target.closest('[data-lq-awards-week]');
+    if (week) { filters.weekStart = week.dataset.lqAwardsWeek; showAllPeople = false; drawScoped(); return; }
+    if (target.closest('[data-lq-awards-all-weeks]')) { filters.weekStart = ''; showAllPeople = false; drawScoped(); return; }
+    if (target.closest('[data-lq-awards-people-more]')) {
+      showAllPeople = true;
+      const host = panel.querySelector('[data-lq-awards-winners]');
+      if (host) host.innerHTML = winnersHtml();
+      return;
+    }
+    const exportButton = target.closest('[data-lq-awards-export]');
+    if (exportButton) { exportCsv(exportButton.dataset.lqAwardsExport); return; }
+    if (target.closest('[data-lq-awards-select-all]')) {
+      detailList().filter(canChangeVoucherExpiry).forEach(voucher => selected.add(String(voucher.id)));
+      panel.querySelectorAll('[data-lq-awards-select]').forEach(box => { box.checked = true; });
+      drawSelection();
+      return;
+    }
+    if (target.closest('[data-lq-awards-select-none]')) {
+      selected.clear();
+      panel.querySelectorAll('[data-lq-awards-select]').forEach(box => { box.checked = false; });
+      drawSelection();
+      return;
+    }
+    const apply = target.closest('[data-lq-awards-expiry-apply]');
+    if (apply) { void changeExpiry(apply); return; }
+    const redeem = target.closest('[data-lq-voucher-redeem]');
+    const undo = target.closest('[data-lq-voucher-undo]');
+    if (redeem || undo) {
+      const button = redeem || undo;
+      const id = redeem ? redeem.dataset.lqVoucherRedeem : undo.dataset.lqVoucherUndo;
+      void confirmAdminVoucherRedeemed(button, vouchers, id, Boolean(redeem)).then(saved => { if (saved) void load(); });
+    }
+  };
+  panel.onchange = event => {
+    const target = event.target;
+    if (target.matches('[data-lq-awards-select]')) {
+      if (target.checked) selected.add(target.dataset.lqAwardsSelect);
+      else selected.delete(target.dataset.lqAwardsSelect);
+      drawSelection();
+    } else if (target.matches('[data-lq-awards-zone]')) {
+      const value = target.value;
+      filters.zone = value === ADMIN_LQ_AWARDS_ALL_ZONES ? null : value === ADMIN_LQ_AWARDS_NO_ZONE ? '' : value;
+      showAllPeople = false;
+      drawScoped();
+    } else if (target.matches('[data-lq-awards-status]')) {
+      filters.status = target.value;
+      drawScoped();
+    } else if (target.matches('[data-lq-awards-show-void]')) {
+      filters.showVoid = target.checked;
+      drawScoped();
+    }
+  };
+
+  return load;
 }
 
 // 每週統計（#311）：一週（週一到週日）的參與、全部答完、答對率、大區／牧區、
@@ -3150,9 +3495,11 @@ export async function renderAdminLightningQuizStats() {
       <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-lq-stats-tab="week">每週統計</button>
       <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="trend">週趨勢</button>
       <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="daily">逐日明細</button>
+      <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-lq-stats-tab="awards">得獎與兌換</button>
     </div>
     <div data-lq-stats-panel="week" class="admin-lightning-quiz-week"></div>
     <div data-lq-stats-panel="trend" class="admin-lightning-quiz-trend hidden"></div>
+    <div data-lq-stats-panel="awards" class="admin-lq-awards hidden"></div>
     <div data-lq-stats-panel="daily" class="hidden">
       ${days.length ? `<div class="admin-lightning-quiz-stats-table-wrap">
         <table class="admin-lightning-quiz-stats-table">
@@ -3167,6 +3514,8 @@ export async function renderAdminLightningQuizStats() {
   void renderAdminLightningQuizWeekPanel(host.querySelector('[data-lq-stats-panel="week"]'));
   const trendPanel = host.querySelector('[data-lq-stats-panel="trend"]');
   let drawTrend = null;
+  const awardsPanel = host.querySelector('[data-lq-stats-panel="awards"]');
+  let loadAwards = null;
   host.querySelectorAll('[data-lq-stats-tab]').forEach(tab => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.lqStatsTab;
@@ -3181,6 +3530,11 @@ export async function renderAdminLightningQuizStats() {
       // 週趨勢第一次切進來才載資料、建圖表（Chart.js 也是這時候才載入）
       if (target === 'trend' && !drawTrend) {
         drawTrend = renderAdminLightningQuizTrendPanel(trendPanel).then(draw => draw && draw());
+      }
+      // 得獎與兌換（#614）：每次切進來都重新拿一次（每週統計那邊可能剛公布或改了兌換）
+      if (target === 'awards') {
+        if (!loadAwards) loadAwards = renderAdminLightningQuizAwardsPanel(awardsPanel);
+        void loadAwards();
       }
     });
   });

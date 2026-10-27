@@ -240,6 +240,11 @@ export function formatWeekday(dateStr) {
   return date ? `${shortDate(dateStr)}（${WEEKDAY_LABELS[date.getUTCDay()]}）` : "";
 }
 
+// 只要月／日，例如「9/21」（得獎日期一次列很多天時用）。
+export function formatMonthDay(dateStr) {
+  return shortDate(dateStr);
+}
+
 export function formatWeekRange(weekStart) {
   return weekStart ? `${shortDate(weekStart)}～${shortDate(addDays(weekStart, 6))}` : "";
 }
@@ -504,9 +509,12 @@ export function summarizeVouchers(vouchers) {
   return counts;
 }
 
-export function buildVoucherCsv(vouchers, exportedAt = new Date()) {
+// includeWeek：跨週的總覽（#614）在最前面多一欄「週（週一）」。
+export function buildVoucherCsv(vouchers, exportedAt = new Date(), { includeWeek = false } = {}) {
   const headers = ["日期", "名次", "姓名", "牧區", "兌換碼", "面額", "狀態", "有效期限", "兌換時間", "兌換方式", "標記者"];
+  if (includeWeek) headers.unshift("週（週一）");
   const rows = (Array.isArray(vouchers) ? vouchers : []).map(voucher => [
+    ...(includeWeek ? [voucher.weekStart || ""] : []),
     voucher.riseDate || "",
     formatRankLabel(voucher.rank),
     voucher.name || "",
@@ -518,6 +526,164 @@ export function buildVoucherCsv(vouchers, exportedAt = new Date()) {
     formatTaiwanDateTimeShort(voucher.redeemedAt),
     VOUCHER_REDEEMED_VIA_LABELS[voucher.redeemedVia] || "",
     voucher.redeemedVia === "admin" ? (voucher.redeemedByName || "") : ""
+  ]);
+  return toCsv(headers, rows, exportedAt);
+}
+
+// ── 得獎與兌換總覽（#614）────────────────────────────────────────────────────
+// 後台跨週看英雄榜兌換券：admin_list_lightning_quiz_vouchers 不帶週（全部週）的回傳。
+// 一張未作廢的券＝一次得獎（每天每個名次各一張）；作廢的（重新公布時被排除）不算。
+// 日期一律跟伺服器回傳的 today 比，不用瀏覽器的日期。
+
+export const VOUCHER_EXPIRING_SOON_DAYS = 7;
+
+// 可以改期限的券：可使用、已過期（已兌換、已作廢不能改，伺服器也會跳過）。
+export function canChangeVoucherExpiry(voucher) {
+  return voucher?.status === "available" || voucher?.status === "expired";
+}
+
+// 7 天內到期：可使用、期限在今天起 7 天內（含今天）。
+export function isVoucherExpiringSoon(voucher, today, days = VOUCHER_EXPIRING_SOON_DAYS) {
+  if (voucher?.status !== "available" || !today || !voucher.expiresOn) return false;
+  return voucher.expiresOn < addDays(today, days);
+}
+
+function voucherCounts(list) {
+  const counts = summarizeVouchers(list);
+  return { ...counts, redeemRate: ratio(counts.redeemed, counts.issued) };
+}
+
+export function summarizeVoucherOverview(vouchers, today) {
+  const list = Array.isArray(vouchers) ? vouchers : [];
+  return {
+    ...voucherCounts(list),
+    expiringSoon: list.filter(voucher => isVoucherExpiringSoon(voucher, today)).length
+  };
+}
+
+// 依週：新的週在前。
+export function summarizeVouchersByWeek(vouchers) {
+  const weeks = new Map();
+  (Array.isArray(vouchers) ? vouchers : []).forEach(voucher => {
+    const key = voucher.weekStart || "";
+    if (!weeks.has(key)) weeks.set(key, []);
+    weeks.get(key).push(voucher);
+  });
+  return [...weeks.entries()]
+    .map(([weekStart, list]) => ({ weekStart, ...voucherCounts(list) }))
+    .sort((a, b) => String(b.weekStart).localeCompare(String(a.weekStart)));
+}
+
+// 認人用 userId；舊版後端沒回 userId 時退回姓名＋牧區，畫面不會壞。
+function winnerKey(voucher) {
+  return voucher.userId ? `id:${voucher.userId}` : `name:${voucher.name || ""}\u0000${voucher.pastoralZone || ""}`;
+}
+
+// 依牧區（公布當時的牧區）：得獎人數（同一人不重複算）、發出張數（一張＝一次得獎，
+// 所以也是得獎人次）、已兌換、兌換率。牧區名稱沒有排序資料，依發出多的在前、未分配排最後。
+export function summarizeVouchersByZone(vouchers) {
+  const zones = new Map();
+  const won = (Array.isArray(vouchers) ? vouchers : []).filter(voucher => voucher.status !== "void");
+  won.forEach(voucher => {
+    const key = voucher.pastoralZone || "";
+    if (!zones.has(key)) zones.set(key, { pastoralZone: key, list: [], people: new Set() });
+    const zone = zones.get(key);
+    zone.list.push(voucher);
+    zone.people.add(winnerKey(voucher));
+  });
+  const toRow = (pastoralZone, list, people) => {
+    const counts = voucherCounts(list);
+    return { pastoralZone, winners: people.size, issued: counts.issued, redeemed: counts.redeemed, redeemRate: counts.redeemRate };
+  };
+  const rows = [...zones.values()]
+    .map(zone => toRow(zone.pastoralZone, zone.list, zone.people))
+    .sort((a, b) => {
+      if (!a.pastoralZone !== !b.pastoralZone) return a.pastoralZone ? -1 : 1;
+      return b.issued - a.issued || String(a.pastoralZone).localeCompare(String(b.pastoralZone), "zh-Hant");
+    });
+  return { rows, total: toRow("", won, new Set(won.map(winnerKey))) };
+}
+
+// 依人：得獎次數（第 1／2／3 名各幾次）、得獎日期、已兌換幾張。姓名／牧區用最近一次
+// 得獎時的紀錄。排序：次數多 → 第一名次數多 → 最近得獎在前。
+export function summarizeWinners(vouchers) {
+  const people = new Map();
+  (Array.isArray(vouchers) ? vouchers : []).forEach(voucher => {
+    if (voucher.status === "void") return;
+    const key = winnerKey(voucher);
+    if (!people.has(key)) {
+      people.set(key, { userId: voucher.userId || null, name: "", pastoralZone: "", wins: 0, rank1: 0, rank2: 0, rank3: 0, redeemed: 0, dates: [], lastWinDate: "" });
+    }
+    const person = people.get(key);
+    person.wins += 1;
+    if (Number(voucher.rank) === 1) person.rank1 += 1;
+    else if (Number(voucher.rank) === 2) person.rank2 += 1;
+    else if (Number(voucher.rank) === 3) person.rank3 += 1;
+    if (voucher.status === "redeemed") person.redeemed += 1;
+    person.dates.push(voucher.riseDate || "");
+    if (String(voucher.riseDate || "") >= person.lastWinDate) {
+      person.lastWinDate = voucher.riseDate || "";
+      person.name = voucher.name || "";
+      person.pastoralZone = voucher.pastoralZone || "";
+    }
+  });
+  const list = [...people.values()]
+    .map(person => ({ ...person, dates: [...person.dates].sort() }))
+    .sort((a, b) => b.wins - a.wins
+      || b.rank1 - a.rank1
+      || String(b.lastWinDate).localeCompare(String(a.lastWinDate))
+      || String(a.name).localeCompare(String(b.name), "zh-Hant"));
+  const count = test => list.filter(person => test(person.wins)).length;
+  return {
+    people: list,
+    winners: list.length,
+    totalWins: list.reduce((sum, person) => sum + person.wins, 0),
+    distribution: [
+      { label: "得獎 1 次", people: count(wins => wins === 1) },
+      { label: "得獎 2 次", people: count(wins => wins === 2) },
+      { label: "得獎 3 次以上", people: count(wins => wins >= 3) }
+    ]
+  };
+}
+
+// 篩選：weekStart＝''（全部週）；zone＝null（全部牧區）、''＝未分配；status＝'all' 或
+// available／redeemed／expired；作廢的券只在 showVoid 且狀態是「全部」時才列。
+export function filterVouchers(vouchers, { weekStart = "", zone = null, status = "all", showVoid = false } = {}) {
+  return (Array.isArray(vouchers) ? vouchers : []).filter(voucher => {
+    if (weekStart && voucher.weekStart !== weekStart) return false;
+    if (zone !== null && (voucher.pastoralZone || "") !== zone) return false;
+    if (voucher.status === "void") return showVoid && status === "all";
+    return status === "all" || voucher.status === status;
+  });
+}
+
+export function buildVoucherWeekCsv(rows, exportedAt = new Date()) {
+  const headers = ["週（週一）", "發出", "已兌換", "可使用", "已過期", "兌換率", "已作廢"];
+  const body = (Array.isArray(rows) ? rows : []).map(row => [
+    row.weekStart, row.issued, row.redeemed, row.available, row.expired, csvRate(row.redeemRate), row.void
+  ]);
+  return toCsv(headers, body, exportedAt);
+}
+
+export function buildVoucherZoneCsv(summary, exportedAt = new Date()) {
+  const headers = ["牧區", "得獎人數", "發出張數（得獎人次）", "已兌換", "兌換率"];
+  const cells = row => [row.winners, row.issued, row.redeemed, csvRate(row.redeemRate)];
+  const rows = (summary?.rows || []).map(row => [row.pastoralZone || UNASSIGNED_ZONE_LABEL, ...cells(row)]);
+  if (summary?.total) rows.push(["合計", ...cells(summary.total)]);
+  return toCsv(headers, rows, exportedAt);
+}
+
+export function buildWinnersCsv(people, exportedAt = new Date()) {
+  const headers = ["姓名", "牧區", "得獎次數", "第一名", "第二名", "第三名", "已兌換", "得獎日期"];
+  const rows = (Array.isArray(people) ? people : []).map(person => [
+    person.name || "（未命名）",
+    person.pastoralZone || UNASSIGNED_ZONE_LABEL,
+    person.wins,
+    person.rank1,
+    person.rank2,
+    person.rank3,
+    person.redeemed,
+    person.dates.join("、")
   ]);
   return toCsv(headers, rows, exportedAt);
 }
