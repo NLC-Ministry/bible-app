@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import {
   formatRankLabel,
   normalizeRankingExcluded,
@@ -181,8 +182,8 @@ describe("首頁「雲柱測驗前三名」卡片", () => {
 // ── 後端與串接 ──────────────────────────────────────────────────────────────
 
 describe("wiring", () => {
-  // Windows 取出可能是 CRLF，比對多行字串前先統一換行
-  const migration = readFileSync("supabase/migrations/20261004015336_lightning_quiz_week_ranking.sql", "utf8").replace(/\r\n/g, "\n");
+  // 函式換成最新定義（admin_get_lightning_quiz_week_ranking 在 #614 改寫過），換行已統一成 LF
+  const migration = currentMigrationSql("20261004015336_lightning_quiz_week_ranking.sql");
   const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
   const db = readFileSync("js/db.js", "utf8");
   const home = readFileSync("js/modules/home.js", "utf8");

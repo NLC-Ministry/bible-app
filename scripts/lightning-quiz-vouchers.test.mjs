@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import {
   buildVoucherCsv,
   buildVoucherWeekCsv,
@@ -248,7 +249,8 @@ describe("得獎與兌換總覽（#614）", () => {
 // ── 後端與串接 ──────────────────────────────────────────────────────────────
 
 describe("wiring", () => {
-  const migration = readFileSync("supabase/migrations/20261005110447_lightning_quiz_vouchers.sql", "utf8").replace(/\r\n/g, "\n");
+  // 函式換成最新定義（admin_list_lightning_quiz_vouchers 在 #614 改寫過），換行已統一成 LF
+  const migration = currentMigrationSql("20261005110447_lightning_quiz_vouchers.sql");
   const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
   const db = readFileSync("js/db.js", "utf8");
   const html = readFileSync("index.html", "utf8").replace(/\r\n/g, "\n");
