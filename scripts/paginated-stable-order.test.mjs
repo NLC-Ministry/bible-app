@@ -28,7 +28,8 @@ function loadNlcQueryBuilder(callEdge) {
   const end = db.indexOf("\n    return {\n      async saveProfile", start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  return new Function("callEdge", `${db.slice(start, end)}\nreturn NlcQueryBuilder;`)(callEdge);
+  // 讀取經 readCoalescer 送出（#631）；這裡直接交給 callEdge，只看 builder 組出的請求
+  return new Function("callEdge", "readCoalescer", `${db.slice(start, end)}\nreturn NlcQueryBuilder;`)(callEdge, { send: callEdge });
 }
 
 function loadApplyOrder() {

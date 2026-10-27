@@ -178,10 +178,11 @@ describe("nlc-data wiring", () => {
   });
 
   it("records denied for every role-guarded RPC refusal", () => {
-    const rpcBlock = nlcData.slice(nlcData.indexOf('if (action === "rpc") {'), nlcData.indexOf("// ── batch:"));
+    // 單支 RPC 和 batch 裡的 RPC 共用 runRpcRequest（#631）
+    const rpcBlock = nlcData.slice(nlcData.indexOf("async function runRpcRequest("), nlcData.indexOf("Deno.serve(async (req"));
     // 只剩「不在允許清單」那一行直接回 forbidden_rpc；權限不足的都經過 denyAdminRpc 記 denied
-    expect(rpcBlock.match(/return jsonResponse\(\{ error: "forbidden_rpc" \}, 403\)/g)).toHaveLength(2);
-    expect(rpcBlock).toContain('if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);');
+    expect(rpcBlock.match(/return rpcResult\(\{ error: "forbidden_rpc" \}, 403\)/g)).toHaveLength(2);
+    expect(rpcBlock).toContain('if (!RPC_FUNCTIONS.has(functionName)) return rpcResult({ error: "forbidden_rpc" }, 403);');
     expect(rpcBlock.match(/return await denyAdminRpc\(\);/g)).toHaveLength(6);
   });
 

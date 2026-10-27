@@ -1,6 +1,7 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchNlcTracked } from './diagnostics/report-diagnostics.mjs';
 import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
+import { createReadCoalescer } from './data/nlc-read-coalescer.mjs';
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
@@ -882,6 +883,12 @@ const db = {
       };
     };
 
+    // 同一瞬間的讀取（select、首頁的唯讀 RPC）併成一支 batch 送出（#631）
+    const readCoalescer = createReadCoalescer({
+      sendOne: callEdge,
+      sendBatch: queries => callEdge({ action: "batch", queries })
+    });
+
     class NlcQueryBuilder {
       constructor(table) {
         this.request = { table, action: null, filters: [] };
@@ -954,7 +961,7 @@ const db = {
       }
       async execute() {
         if (!this.request.action) this.request.action = "select";
-        return callEdge(this.request);
+        return readCoalescer.send(this.request);
       }
       then(resolve, reject) {
         return this.execute().then(resolve, reject);
@@ -1018,7 +1025,7 @@ const db = {
       },
       rpc(functionName, args = {}) {
         return {
-          execute: () => callEdge({ action: "rpc", function: functionName, args }),
+          execute: () => readCoalescer.send({ action: "rpc", function: functionName, args }),
           then(resolve, reject) {
             return this.execute().then(resolve, reject);
           }

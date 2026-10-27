@@ -1,0 +1,167 @@
+// 同一瞬間的 nlc-data 讀取併成一支 batch（#631）
+import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import {
+  BATCHABLE_RPC_FUNCTIONS,
+  createReadCoalescer,
+  isCoalescableNlcRead
+} from "../js/data/nlc-read-coalescer.mjs";
+
+const edge = readFileSync(new URL("../supabase/functions/nlc-data/index.ts", import.meta.url), "utf8");
+const setLiteral = (name) => {
+  const match = edge.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\);`));
+  return match ? [...match[1].matchAll(/"([^"]+)"/g)].map(m => m[1]) : null;
+};
+
+// 手動觸發時間窗，讓測試可以決定「同一瞬間」包含哪些請求
+function setup({ batch, one } = {}) {
+  let flush = null;
+  const sendOne = vi.fn(one || (async (request) => ({ data: `one:${request.table || request.function}`, error: null })));
+  const sendBatch = vi.fn(batch || (async (queries) => ({ data: queries.map(q => ({ data: `batch:${q.table || q.function}` })), error: null })));
+  const coalescer = createReadCoalescer({ sendOne, sendBatch, schedule: (fn) => { flush = fn; } });
+  return { coalescer, sendOne, sendBatch, flush: () => flush && flush() };
+}
+
+const select = (table) => ({ action: "select", table, filters: [] });
+const rpc = (fn) => ({ action: "rpc", function: fn, args: {} });
+
+describe("isCoalescableNlcRead", () => {
+  it("takes selects and the allowlisted read-only RPCs only", () => {
+    expect(isCoalescableNlcRead(select("verse_likes"))).toBe(true);
+    expect(isCoalescableNlcRead({ table: "verse_likes", filters: [] })).toBe(true);
+    expect(isCoalescableNlcRead(rpc("exam_home_exams"))).toBe(true);
+    expect(isCoalescableNlcRead(rpc("start_lightning_quiz_attempt"))).toBe(false);
+    expect(isCoalescableNlcRead({ action: "insert", table: "reading_logs" })).toBe(false);
+    expect(isCoalescableNlcRead({ action: "batch", queries: [] })).toBe(false);
+    expect(isCoalescableNlcRead({ action: "save_profile" })).toBe(false);
+  });
+});
+
+describe("createReadCoalescer", () => {
+  it("sends reads issued together as one batch and hands each caller its own slot, in order", async () => {
+    const { coalescer, sendOne, sendBatch, flush } = setup();
+    const results = [coalescer.send(select("verse_likes")), coalescer.send(rpc("exam_home_exams")), coalescer.send(select("church_announcements"))];
+    flush();
+    expect(await Promise.all(results)).toEqual([
+      { data: "batch:verse_likes", error: null },
+      { data: "batch:exam_home_exams", error: null },
+      { data: "batch:church_announcements", error: null }
+    ]);
+    expect(sendBatch).toHaveBeenCalledTimes(1);
+    expect(sendOne).not.toHaveBeenCalled();
+  });
+
+  it("sends a lone read as an ordinary single request", async () => {
+    const { coalescer, sendOne, sendBatch, flush } = setup();
+    const result = coalescer.send(select("verse_likes"));
+    flush();
+    expect(await result).toEqual({ data: "one:verse_likes", error: null });
+    expect(sendBatch).not.toHaveBeenCalled();
+    expect(sendOne).toHaveBeenCalledTimes(1);
+  });
+
+  it("never holds back writes or non-allowlisted RPCs", async () => {
+    const { coalescer, sendOne, sendBatch } = setup();
+    await coalescer.send({ action: "insert", table: "reading_logs", payload: {} });
+    await coalescer.send(rpc("start_lightning_quiz_attempt"));
+    expect(sendOne).toHaveBeenCalledTimes(2);
+    expect(sendBatch).not.toHaveBeenCalled();
+  });
+
+  it("returns a slot's own error in the same shape as a single request's error payload", async () => {
+    const { coalescer, flush } = setup({
+      batch: async () => ({ data: [{ data: [1] }, { error: "speed_reading_exam_feature_disabled", code: "x1" }], error: null })
+    });
+    const ok = coalescer.send(select("verse_likes"));
+    const failed = coalescer.send(rpc("exam_home_exams"));
+    flush();
+    expect(await ok).toEqual({ data: [1], error: null });
+    expect(await failed).toEqual({ data: null, error: { error: "speed_reading_exam_feature_disabled", code: "x1" } });
+  });
+
+  it("re-sends a slot singly when an older server refuses RPCs inside a batch", async () => {
+    const { coalescer, sendOne, flush } = setup({
+      batch: async () => ({ data: [{ data: "batched" }, { error: "batch_read_only" }], error: null })
+    });
+    const a = coalescer.send(select("verse_likes"));
+    const b = coalescer.send(rpc("exam_home_banner"));
+    flush();
+    expect(await a).toEqual({ data: "batched", error: null });
+    expect(await b).toEqual({ data: "one:exam_home_banner", error: null });
+    expect(sendOne).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to single requests when the whole batch fails or throws", async () => {
+    for (const batch of [
+      async () => ({ data: null, error: { error: "internal_error" } }),
+      async () => { throw new TypeError("Failed to fetch"); }
+    ]) {
+      const { coalescer, sendOne, flush } = setup({ batch });
+      const results = [coalescer.send(select("verse_likes")), coalescer.send(select("app_feature_settings"))];
+      flush();
+      expect(await Promise.all(results)).toEqual([
+        { data: "one:verse_likes", error: null },
+        { data: "one:app_feature_settings", error: null }
+      ]);
+      expect(sendOne).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  it("stops batching once the server shows it does not know action:'batch'", async () => {
+    const { coalescer, sendOne, sendBatch, flush } = setup({
+      batch: async () => ({ data: null, error: { error: "missing_table" } })
+    });
+    const first = [coalescer.send(select("verse_likes")), coalescer.send(select("app_feature_settings"))];
+    flush();
+    await Promise.all(first);
+    await coalescer.send(select("church_announcements"));
+    expect(sendBatch).toHaveBeenCalledTimes(1);
+    expect(sendOne).toHaveBeenCalledTimes(3);
+  });
+
+  it("splits more than 25 reads into several batches", async () => {
+    const { coalescer, sendBatch, flush } = setup();
+    const results = Array.from({ length: 27 }, (_, i) => coalescer.send(select(`t${i}`)));
+    flush();
+    const settled = await Promise.all(results);
+    expect(settled[26]).toEqual({ data: "batch:t26", error: null });
+    expect(sendBatch).toHaveBeenCalledTimes(2);
+    expect(sendBatch.mock.calls.map(call => call[0].length)).toEqual([25, 2]);
+  });
+
+  it("snapshots the request when it is issued", async () => {
+    const { coalescer, sendBatch, flush } = setup();
+    const request = select("verse_likes");
+    const pending = [coalescer.send(request), coalescer.send(select("app_feature_settings"))];
+    request.table = "changed_later";
+    flush();
+    await Promise.all(pending);
+    expect(sendBatch.mock.calls[0][0][0].table).toBe("verse_likes");
+  });
+});
+
+describe("batchable RPC allowlist stays in step with nlc-data", () => {
+  it("matches the Edge Function's BATCH_RPC_FUNCTIONS exactly", () => {
+    expect(setLiteral("BATCH_RPC_FUNCTIONS")?.sort()).toEqual([...BATCHABLE_RPC_FUNCTIONS].sort());
+  });
+
+  it("contains no admin, audited or write RPC", () => {
+    const forbidden = new Set([
+      ...(setLiteral("ADMIN_RPC_FUNCTIONS") || []),
+      ...(setLiteral("EXAM_ADMIN_RPC_FUNCTIONS") || []),
+      ...(setLiteral("ISSUE_ADMIN_RPC_FUNCTIONS") || []),
+      ...(setLiteral("PLAN_MANAGEMENT_RPC_FUNCTIONS") || []),
+      ...(setLiteral("AUDITED_ADMIN_RPCS") || [])
+    ]);
+    for (const fn of BATCHABLE_RPC_FUNCTIONS) {
+      expect(forbidden.has(fn), fn).toBe(false);
+      expect(fn, fn).toMatch(/^(get_|exam_home_)/);
+    }
+  });
+
+  it("routes the data-layer shim's selects and RPCs through the coalescer", () => {
+    const db = readFileSync(new URL("../js/db.js", import.meta.url), "utf8");
+    expect(db).toContain("return readCoalescer.send(this.request);");
+    expect(db).toContain('execute: () => readCoalescer.send({ action: "rpc", function: functionName, args })');
+  });
+});
