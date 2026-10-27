@@ -3,15 +3,30 @@
 //
 // iframe 第一次進來才載入，之後切到別區只是藏起來，回來不用重新開機（舊程式要先載一輪資料）。
 // iframe 和外殼之間的通道、匯出前的稽核都在 legacy.ts；這裡只管畫面狀態。
+//
+// 計畫（#620）：小測驗、組隊狀況用外框的計畫選單（和計畫區、測驗總覽、報表同一個「目前選的計畫」），經通道告訴
+// iframe，iframe 就不顯示自己的「計畫篩選」。雲柱、大測驗不分計畫：選單停用並說明。沒有 plans.read 就沒有選單、
+// 不送計畫（null），iframe 照舊用自己的計畫篩選。
 import { useEffect, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
 import { describeAdminError, type AdminApi } from "../api.ts";
 import { downloadBlob } from "../download.ts";
+import { formatDate, text } from "../format.ts";
 import { IFRAME_ACTIVITY_EVENT } from "../idle.ts";
 import { LEGACY_PATH, findLegacySection, startLegacyHost, unavailableHint, type LegacyArea, type LegacyHost as Host } from "../legacy.ts";
+import { pickPlanId, type PlanOptions } from "../plans.ts";
 import type { ResolvedTheme } from "../theme.ts";
 import { legacyTabId } from "../tabs.ts";
+import { useAdminData } from "../use-admin-data.ts";
 import { AreaTabs } from "./AreaTabs.tsx";
+
+// 有計畫選單的區塊：note 有值＝這一區不分計畫，選單停用並說明
+const PLAN_BAR: Readonly<Record<string, { note: string | null }>> = Object.freeze({
+  quizzes: { note: null },
+  teams: { note: null },
+  "lightning-quiz": { note: "雲柱不分計畫" },
+  exam: { note: "大測驗在每張試卷的設定裡選計畫" }
+});
 
 type FrameState =
   | { name: "booting" }
@@ -26,16 +41,26 @@ type Props = {
   section: string;
   capabilities: readonly string[];
   theme: ResolvedTheme;
+  /** 計畫、測驗、報表三區共用的「目前選的計畫」（#620） */
+  planId: string | null;
+  onPlanChange: (planId: string) => void;
   getToken: () => string | null;
   getIdToken: () => string | null;
   onLoginRequired: () => void;
 };
 
-export function LegacyHost({ api, win, visible, area, section, capabilities, theme, getToken, getIdToken, onLoginRequired }: Props) {
+export function LegacyHost({ api, win, visible, area, section, capabilities, theme, planId, onPlanChange, getToken, getIdToken, onLoginRequired }: Props) {
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const hostRef = useRef<Host | null>(null);
-  const latest = useRef({ section, theme, getToken, getIdToken, onLoginRequired });
-  latest.current = { section, theme, getToken, getIdToken, onLoginRequired };
+  const canPickPlan = capabilities.includes("plans.read");
+  const bar = canPickPlan && visible ? PLAN_BAR[section] || null : null;
+  const options = useAdminData<PlanOptions>(api, "plan_options", bar ? {} : null, 0);
+  const plans = options.data?.plans || [];
+  const resolvedPlan = options.data ? pickPlanId(options.data, [planId]) : planId;
+  // 給 iframe 的計畫；沒有 plans.read＝null（iframe 用自己的計畫篩選）
+  const framePlan = canPickPlan ? resolvedPlan : null;
+  const latest = useRef({ section, theme, plan: framePlan, getToken, getIdToken, onLoginRequired });
+  latest.current = { section, theme, plan: framePlan, getToken, getIdToken, onLoginRequired };
   const [frame, setFrame] = useState<FrameState>({ name: "booting" });
   // iframe 回報的「目前這一區開不開得了」（小測驗、大測驗要功能開關打開；其他區看會友 App 的角色）
   const [unavailable, setUnavailable] = useState<string | null>(null);
@@ -52,7 +77,7 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
     const host = startLegacyHost({
       win,
       frameWindow: () => frameRef.current?.contentWindow ?? null,
-      initial: () => ({ section: latest.current.section, theme: latest.current.theme }),
+      initial: () => ({ section: latest.current.section, theme: latest.current.theme, plan: latest.current.plan }),
       getToken: () => latest.current.getToken(),
       getIdToken: () => latest.current.getIdToken(),
       auditExport: (file) => api.call("legacy_export_audit", file),
@@ -85,6 +110,15 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
     hostRef.current?.setTheme(theme);
   }, [theme]);
 
+  useEffect(() => {
+    hostRef.current?.setPlan(framePlan);
+  }, [framePlan]);
+
+  // 還沒選過計畫：記下預設計畫，其他區也從這個開始
+  useEffect(() => {
+    if (canPickPlan && resolvedPlan && resolvedPlan !== planId) onPlanChange(resolvedPlan);
+  }, [canPickPlan, resolvedPlan, planId, onPlanChange]);
+
   const reload = () => {
     setFrame({ name: "booting" });
     setUnavailable(null);
@@ -96,6 +130,26 @@ export function LegacyHost({ api, win, visible, area, section, capabilities, the
   return (
     <div className="adm-legacy" hidden={!visible}>
       <AreaTabs area={area} current={legacyTabId(section)} capabilities={capabilities} className="adm-legacy__tabs" />
+      {bar && (
+        <div className="adm-stats__toolbar adm-legacy__plan">
+          <label className="adm-visually-hidden" htmlFor="adm-legacy-plan">選擇計畫</label>
+          <select
+            id="adm-legacy-plan"
+            className="adm-select adm-plan-head__pick"
+            value={resolvedPlan || ""}
+            disabled={bar.note !== null || plans.length === 0}
+            onChange={(event) => onPlanChange(event.target.value)}
+          >
+            {plans.length === 0 && <option value="">{options.error !== null ? "計畫清單載入失敗" : options.loading ? "載入計畫…" : "沒有可選的計畫"}</option>}
+            {plans.map((plan) => (
+              <option key={plan.id} value={plan.id}>
+                {text(plan.name, "未命名計畫")}{plan.start_date ? `（${formatDate(plan.start_date)} 起）` : ""}
+              </option>
+            ))}
+          </select>
+          {bar.note && <span className="adm-muted adm-small">{bar.note}</span>}
+        </div>
+      )}
       {frame.name === "failed" && (
         <div className="adm-message">
           <h2>管理畫面載入失敗</h2>

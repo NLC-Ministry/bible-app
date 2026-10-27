@@ -44,11 +44,9 @@ export type StatsUiState = {
   to: string | null;
   hourDays: HourDays;
   hourMetric: HourMetric;
-  /** 報名註冊、測驗區總覽選的計畫（兩頁共用，#581、#619）；null＝伺服器挑的預設計畫 */
-  planId: string | null;
 };
 
-export const INITIAL_STATS_UI: StatsUiState = { from: null, to: null, hourDays: "all", hourMetric: "users", planId: null };
+export const INITIAL_STATS_UI: StatsUiState = { from: null, to: null, hourDays: "all", hourMetric: "users" };
 
 type Props = {
   api: AdminApi;
@@ -56,6 +54,9 @@ type Props = {
   capabilities: readonly string[];
   ui: StatsUiState;
   setUi: Dispatch<SetStateAction<StatsUiState>>;
+  /** 計畫、測驗、報表三區共用的「目前選的計畫」（App 那一層，#620）；null＝伺服器挑的預設計畫 */
+  planId: string | null;
+  onPlanChange: (planId: string) => void;
   doc: Document;
   /** 換主題時 App 會帶新的值進來、整區重新 render：圖的顏色從 token 重讀，設定變了就重畫 */
   theme: string;
@@ -63,13 +64,13 @@ type Props = {
   now?: () => Date;
 };
 
-export function StatsArea({ api, route, capabilities, ui, setUi, doc, theme, loadChart = defaultLoadChart, now = () => new Date() }: Props) {
+export function StatsArea({ api, route, capabilities, ui, setUi, planId, onPlanChange, doc, theme, loadChart = defaultLoadChart, now = () => new Date() }: Props) {
   return (
     <div className="adm-stats-area" data-theme-key={theme}>
       <div className="adm-plan-head"><h2>報表</h2></div>
       <AreaTabs area="stats" current={route.tab} capabilities={capabilities} />
       {route.tab === "usage" && <UsageTab api={api} ui={ui} setUi={setUi} doc={doc} loadChart={loadChart} today={taipeiToday(now())} />}
-      {route.tab === "registrations" && <RegistrationTab api={api} route={route} capabilities={capabilities} ui={ui} setUi={setUi} doc={doc} />}
+      {route.tab === "registrations" && <RegistrationTab api={api} route={route} capabilities={capabilities} chosenPlanId={planId} onPlanChange={onPlanChange} doc={doc} />}
     </div>
   );
 }
@@ -406,28 +407,29 @@ function HoursCard({ usage, ui, setUi, chart, color }: {
 }
 
 // ── 報名註冊 ──────────────────────────────────────────────────────────────
-function RegistrationTab({ api, route, capabilities, ui, setUi, doc }: {
+function RegistrationTab({ api, route, capabilities, chosenPlanId, onPlanChange, doc }: {
   api: AdminApi;
   route: Extract<AdminRoute, { view: "stats" }>;
   capabilities: readonly string[];
-  ui: StatsUiState;
-  setUi: Dispatch<SetStateAction<StatsUiState>>;
+  chosenPlanId: string | null;
+  onPlanChange: (planId: string) => void;
   doc: Document;
 }) {
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState<"export" | "sheet" | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
   const [synced, setSynced] = useState<{ planId: string; at: string } | null>(null);
-  const requested = route.planId || ui.planId || null;
+  const requested = route.planId || chosenPlanId || null;
   const data = useAdminData<RegistrationData>(api, "registration_stats", { global_plan_id: requested }, refresh);
   const plans = data.data?.plans || [];
   const planId = data.data?.planId || requested;
   const stats = data.data?.stats || null;
   const canExport = capabilities.includes("export");
 
+  // 只記網址帶的計畫；伺服器挑的預設不寫回去（寫回去會換快取 key、多打一次）
   useEffect(() => {
-    if (route.planId && route.planId !== ui.planId) setUi((prev) => ({ ...prev, planId: route.planId }));
-  }, [route.planId, ui.planId, setUi]);
+    if (route.planId && route.planId !== chosenPlanId) onPlanChange(route.planId);
+  }, [route.planId, chosenPlanId, onPlanChange]);
 
   const reload = () => {
     api.invalidate(["registration_stats"]);
@@ -435,7 +437,7 @@ function RegistrationTab({ api, route, capabilities, ui, setUi, doc }: {
   };
   const pick = (id: string) => {
     setActionError(null);
-    setUi((prev) => ({ ...prev, planId: id }));
+    onPlanChange(id);
     const view = doc.defaultView;
     if (view) view.location.hash = formatRoute({ view: "stats", tab: "registrations", planId: id });
   };

@@ -5,6 +5,7 @@ import { readLegacyIndexHtml } from "./lib/legacy-markup.mjs";
 
 let dom;
 let renderAdminLightningQuizStats;
+let renderAdminLightningQuizAwards;
 let downloads;
 
 const days = [
@@ -101,7 +102,7 @@ beforeEach(async () => {
   vi.spyOn(URL, "createObjectURL").mockImplementation(blob => { downloads.push({ blob }); return "blob:test"; });
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   dom.window.HTMLAnchorElement.prototype.click = function () { downloads[downloads.length - 1].filename = this.getAttribute("download"); };
-  ({ renderAdminLightningQuizStats } = await import("../js/modules/admin.js?admin-lightning-quiz-analytics"));
+  ({ renderAdminLightningQuizStats, renderAdminLightningQuizAwards } = await import("../js/modules/admin.js?admin-lightning-quiz-analytics"));
 });
 
 afterEach(() => {
@@ -174,6 +175,10 @@ describe("雲柱測驗 作答明細", () => {
     expect(text).not.toContain("2. 李小華"); // 沒答對的人不上榜
     expect(text).toContain("大區分析");
     expect(text).toContain("牧區分析");
+    // 統計只看數字（#620）：公布前三名與兌換券搬到「得獎與兌換」分頁
+    expect([...document.querySelectorAll("[data-lq-stats-tab]")].map(tab => tab.textContent)).toEqual(["每週統計", "週趨勢", "逐日明細"]);
+    expect(panel.querySelector("[data-lq-week-ranking]")).toBeNull();
+    expect(panel.querySelector("[data-lq-week-vouchers]")).toBeNull();
 
     panel.querySelector('[data-lq-week-question="q1"]').click();
     await flush();
@@ -232,11 +237,30 @@ describe("雲柱測驗 作答明細", () => {
 });
 
 describe("雲柱測驗 首頁公布前三名（#429）", () => {
+  it("lives in 得獎與兌換 with a week picker; the next button stops at this week (#620)", async () => {
+    await renderAdminLightningQuizAwards();
+    await flush();
+    const host = document.getElementById("admin-lightning-quiz-awards-body");
+    const thisWeek = db.adminGetLightningQuizWeekRanking.mock.calls[0][0];
+    expect(thisWeek).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledWith(thisWeek);
+    expect(host.querySelector("[data-lq-awards-week-label]").textContent).toContain("本週");
+    expect(host.querySelector("[data-lq-awards-week-next]").disabled).toBe(true);
+    host.querySelector("[data-lq-awards-week-prev]").click();
+    await flush();
+    const prevWeek = db.adminGetLightningQuizWeekRanking.mock.calls.at(-1)[0];
+    expect(new Date(thisWeek) - new Date(prevWeek)).toBe(7 * 24 * 3600 * 1000);
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledWith(prevWeek);
+    host.querySelector("[data-lq-awards-week-today]").click();
+    await flush();
+    expect(db.adminGetLightningQuizWeekRanking.mock.calls.at(-1)[0]).toBe(thisWeek);
+  });
+
   const winnersOf = (section, index) => [...section.querySelectorAll(".admin-lq-ranking__day")[index].querySelectorAll(".admin-lq-ranking__row")]
     .map(row => `${row.querySelector(".admin-lq-ranking__rank").textContent}|${row.querySelector(".admin-lq-ranking__name").textContent}`);
 
   it("lists each day's correct answers fastest first; excluding someone moves the next one up on that day only", async () => {
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     const section = document.querySelector("[data-lq-week-ranking]");
     expect(db.adminGetLightningQuizWeekRanking).toHaveBeenCalledWith("2026-09-21");
@@ -254,7 +278,7 @@ describe("雲柱測驗 首頁公布前三名（#429）", () => {
   });
 
   it("publishes the exclusions per day with the chosen number of days (default 1, limited to 1–7)", async () => {
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     const section = document.querySelector("[data-lq-week-ranking]");
     expect(section.querySelector("[data-lq-ranking-days]").value).toBe("1");
@@ -280,7 +304,7 @@ describe("雲柱測驗 首頁公布前三名（#429）", () => {
 
   it("can't publish while a question this week hasn't ended", async () => {
     db.adminGetLightningQuizWeekRanking.mockResolvedValueOnce({ success: true, data: { ...rankingData, allEnded: false } });
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     const section = document.querySelector("[data-lq-week-ranking]");
     expect(section.querySelector("[data-lq-ranking-publish]").disabled).toBe(true);
@@ -292,7 +316,7 @@ describe("雲柱測驗 首頁公布前三名（#429）", () => {
       ...rankingData,
       publication: { excluded: { "2026-09-21": ["u1"] }, displayDays: 2, displayUntil: "2026-09-29", revoked: false, showing: true }
     } });
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     const section = document.querySelector("[data-lq-week-ranking]");
     expect(section.textContent).toContain("首頁公布中，顯示到 9/29（二） 23:59。");
@@ -316,7 +340,7 @@ describe("雲柱測驗 英雄榜兌換券（#445）", () => {
 
   it("lists this week's vouchers with counts; admin can mark or undo a redemption", async () => {
     db.adminListLightningQuizVouchers.mockResolvedValue({ success: true, data: { vouchers } });
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     const section = document.querySelector("[data-lq-week-vouchers]");
     expect(db.adminListLightningQuizVouchers).toHaveBeenCalledWith("2026-09-21");
@@ -340,7 +364,7 @@ describe("雲柱測驗 英雄榜兌換券（#445）", () => {
 
   it("exports the week's vouchers as CSV", async () => {
     db.adminListLightningQuizVouchers.mockResolvedValue({ success: true, data: { vouchers } });
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     document.querySelector("[data-lq-vouchers-export]").click();
     const download = downloads[downloads.length - 1];
@@ -348,15 +372,16 @@ describe("雲柱測驗 英雄榜兌換券（#445）", () => {
     expect(await download.blob.text()).toContain('"2026-09-21","第一名","甲","中永和","ERAJP5","100","可使用"');
   });
 
-  it("reloads the voucher list after publishing", async () => {
-    await renderAdminLightningQuizStats();
+  it("reloads this week's vouchers and the all-weeks overview after publishing", async () => {
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
-    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledTimes(1);
+    const calls = withWeek => db.adminListLightningQuizVouchers.mock.calls.filter(([week]) => Boolean(week) === withWeek).length;
+    expect([calls(true), calls(false)]).toEqual([1, 1]);
     document.querySelector("[data-lq-week-ranking] [data-lq-ranking-publish]").click();
     await flush();
     await flush();
     expect(db.adminPublishLightningQuizWeekRanking).toHaveBeenCalled();
-    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledTimes(2);
+    expect([calls(true), calls(false)]).toEqual([2, 2]);
     expect(window.showConfirmDialog.mock.calls[0][0].message).toContain("克勞斯 100 元抵用券");
   });
 });
@@ -382,15 +407,12 @@ describe("雲柱測驗 得獎與兌換（#614）", () => {
       success: true,
       data: { today: TODAY, vouchers: weekStart ? [] : allVouchers }
     }));
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-10-19" });
     await flush();
-    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledTimes(1); // 只有每週統計；還沒切進來不載
-    document.querySelector('[data-lq-stats-tab="awards"]').click();
-    await flush();
-    const panel = document.querySelector('[data-lq-stats-panel="awards"]');
-    expect(panel.classList.contains("hidden")).toBe(false);
-    expect(db.adminListLightningQuizVouchers).toHaveBeenLastCalledWith();
-    return panel;
+    // 上面是選的那週（只拿那週的券），下面的跨週總覽不帶週
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledWith("2026-10-19");
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledWith();
+    return document.querySelector("[data-lq-awards-overview]");
   }
 
   it("loads all weeks when opened: summary, by-week, by-zone, wins per person and the detail list", async () => {
@@ -427,7 +449,11 @@ describe("雲柱測驗 得獎與兌換（#614）", () => {
   it("picking a week narrows everything below it; the zone filter narrows wins and the detail list", async () => {
     const panel = await openAwards();
     panel.querySelector('[data-lq-awards-week="2026-10-12"]').click();
+    await flush();
     expect(text(panel.querySelector("[data-lq-awards-scope]"))).toContain("下面只看 10/12～10/18");
+    // 點一週＝上面的公布前三名與這週的券也切到那一週（#620）
+    expect(db.adminGetLightningQuizWeekRanking).toHaveBeenLastCalledWith("2026-10-12");
+    expect(db.adminListLightningQuizVouchers).toHaveBeenCalledWith("2026-10-12");
     expect(panel.querySelector("[data-lq-awards-weeks] tr.is-active").cells[0].textContent).toBe("10/12～10/18");
     expect(detailCodes(panel)).toEqual(["AAA111", "AAA222"]);
     expect(firstCells(panel, "[data-lq-awards-winners]", 1)).toEqual([["甲"], ["乙"]]);
@@ -472,14 +498,17 @@ describe("雲柱測驗 得獎與兌換（#614）", () => {
     expect(showToast).toHaveBeenCalledWith("新的有效期限要在今天到一年內。");
 
     dateInput.value = "2026-11-30";
-    const calls = db.adminListLightningQuizVouchers.mock.calls.length;
+    // 跨週總覽（不帶週）重拿一次；上面這週的券也跟著重拿
+    const overviewCalls = () => db.adminListLightningQuizVouchers.mock.calls.filter(([week]) => !week).length;
+    const calls = overviewCalls();
     apply.click();
     await flush();
     await flush();
     expect(window.showConfirmDialog.mock.calls.at(-1)[0].message).toContain("1 張改成 11/30（一）到期");
     expect(db.adminSetLightningQuizVouchersExpiry).toHaveBeenCalledWith(["a5"], "2026-11-30");
     expect(showToast).toHaveBeenCalledWith("已把 1 張改成 11/30（一）到期。");
-    expect(db.adminListLightningQuizVouchers.mock.calls.length).toBe(calls + 1);
+    expect(overviewCalls()).toBe(calls + 1);
+    expect(db.adminListLightningQuizVouchers.mock.calls.at(-1)).toEqual(["2026-10-19"]);
   });
 
   it("tells how many were skipped when some were redeemed or voided in the meantime", async () => {
@@ -506,12 +535,15 @@ describe("雲柱測驗 得獎與兌換（#614）", () => {
 
   it("marks a redemption from the detail list and reloads", async () => {
     const panel = await openAwards();
-    const calls = db.adminListLightningQuizVouchers.mock.calls.length;
+    // 跨週總覽（不帶週）重拿一次；上面這週的券也跟著重拿
+    const overviewCalls = () => db.adminListLightningQuizVouchers.mock.calls.filter(([week]) => !week).length;
+    const calls = overviewCalls();
     panel.querySelector('[data-lq-awards-detail] [data-lq-voucher-redeem="a2"]').click();
     await flush();
     await flush();
     expect(db.adminSetLightningQuizVoucherRedeemed).toHaveBeenCalledWith("a2", true);
-    expect(db.adminListLightningQuizVouchers.mock.calls.length).toBe(calls + 1);
+    expect(overviewCalls()).toBe(calls + 1);
+    expect(db.adminListLightningQuizVouchers.mock.calls.at(-1)).toEqual(["2026-10-19"]);
   });
 
   it("exports the by-week, by-zone, per-person and detail tables", async () => {
@@ -533,10 +565,9 @@ describe("雲柱測驗 得獎與兌換（#614）", () => {
 
   it("shows an empty state when no vouchers were issued yet", async () => {
     db.adminListLightningQuizVouchers.mockResolvedValue({ success: true, data: { today: TODAY, vouchers: [] } });
-    await renderAdminLightningQuizStats();
-    document.querySelector('[data-lq-stats-tab="awards"]').click();
+    await renderAdminLightningQuizAwards();
     await flush();
-    expect(document.querySelector('[data-lq-stats-panel="awards"]').textContent).toContain("還沒有發出任何兌換券");
+    expect(document.querySelector("[data-lq-awards-overview]").textContent).toContain("還沒有發出任何兌換券");
   });
 
   it("the publish screen shows how many times a candidate won before this week", async () => {
@@ -544,7 +575,7 @@ describe("雲柱測驗 得獎與兌換（#614）", () => {
       ...rankingData,
       days: rankingData.days.map(day => ({ ...day, candidates: day.candidates.map(c => ({ ...c, priorWins: c.userId === "u2" ? 2 : 0 })) }))
     } });
-    await renderAdminLightningQuizStats();
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     const names = [...document.querySelectorAll("[data-lq-week-ranking] .admin-lq-ranking__day")[0].querySelectorAll(".admin-lq-ranking__name")];
     expect(names[0].querySelector(".admin-lq-ranking__prior")).toBeNull();

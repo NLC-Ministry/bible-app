@@ -1830,7 +1830,7 @@
     <div class="overlay-scroll-content" id="global-search-results"></div>
   </div>
 
-  <!-- 雲柱測驗後台的彈出面板（#313、#317）：題目、試作、排程規則。一開始就放在 body 底下，
+  <!-- 雲柱測驗後台的彈出面板（#313、#317）：題目、試作（排程規則 #620 起是規則設定分頁）。一開始就放在 body 底下，
        不放在後台子頁裡、也不在打開時才搬過來——iPhone 上從後台捲動區塊搬出來的面板曾經
        看得到卻點不到，點擊落到後面的頁面（#420）。 -->
   <!-- lightning-quiz-sheets:start -->
@@ -1859,15 +1859,6 @@
     </div>
   </div>
 
-  <div class="bottom-sheet-backdrop admin-lq-sheet-backdrop hidden" id="admin-lightning-quiz-rule" aria-hidden="true">
-    <div class="bottom-sheet-container admin-lq-sheet" role="dialog" aria-modal="true" aria-labelledby="admin-lightning-quiz-rule-title">
-      <div class="bottom-sheet-header">
-        <h3 id="admin-lightning-quiz-rule-title">排程規則</h3>
-        <button type="button" class="bottom-sheet-close-x icon-button icon-button--subtle" data-lq-sheet-close aria-label="關閉"><span class="nlc-icon" data-icon="closeLg"></span></button>
-      </div>
-      <div class="bottom-sheet-body" id="admin-lightning-quiz-rule-body"></div>
-    </div>
-  </div>
   <!-- lightning-quiz-sheets:end -->
 
   <!-- 管理分頁的全頁畫面（#584）：範圍選擇、名單篩選、個人頁。照聖經目錄的 full-page-overlay＋上方返回；

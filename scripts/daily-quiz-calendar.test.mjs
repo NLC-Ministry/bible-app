@@ -136,8 +136,8 @@ describe("admin UI (#307)", () => {
   // 說明註解本身會提到「版本 A／B」「審核」「發佈範圍」，檢查畫面時先拿掉註解
   const ui = uiWithComments.split("\n").filter(line => !line.trim().startsWith("//")).join("\n");
 
-  it("three tabs: 日曆／規則設定／統計; leaders only get 統計", () => {
-    expect(ui).toContain("{ key: 'calendar', label: '日曆' }");
+  it("three tabs: 排程／規則設定／統計 (#620 日曆→排程); leaders only get 統計", () => {
+    expect(ui).toContain("{ key: 'calendar', label: '排程' }");
     expect(ui).toContain("{ key: 'rules', label: '規則設定' }");
     expect(ui).toContain("{ key: 'stats', label: '統計' }");
     expect(ui).toContain(": 'stats';");

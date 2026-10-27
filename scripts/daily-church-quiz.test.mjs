@@ -161,7 +161,7 @@ describe("daily church quiz", () => {
   it("#308: the old 自訂題目／審核／發佈 tabs are gone; plan management is calendar／rules／stats", () => {
     // Admin nav moved from data-plan-subtab tabs to unified #admin-section-* panels.
     expect(html).toContain('id="admin-section-quizzes"');
-    expect(admin).toContain("{ key: 'calendar', label: '日曆' }");
+    expect(admin).toContain("{ key: 'calendar', label: '排程' }");
     expect(admin).toContain("renderAdminQuizCalendar(root)");
     for (const gone of [
       "{ key: 'custom', label: '自訂題目' }", "{ key: 'review'", "renderAdminQuizReviewCards",

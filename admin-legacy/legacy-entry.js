@@ -7,6 +7,7 @@
 //   · 所有下載先經後台外殼記稽核才存檔（admin-legacy/export-guard.mjs）
 //   · 雲柱測驗題目附圖經後台外殼上傳（js/modules/quiz-image-upload.mjs，#585）
 // 開機步驟對照 js/app.js 打開管理分頁的流程（switchTab('admin-view') → 網址指定的功能）。
+// 計畫由後台外框的計畫選單決定（#620）：開機的 init 帶一次，之後外框換計畫送 plan 訊息。
 import "./globals.js";
 import "../js/data/bible_data.js";
 import "../js/data/bible_verse_counts.js";
@@ -219,9 +220,11 @@ async function boot() {
   // 雲柱測驗題目附圖（#585）：經後台外殼呼叫 admin-api 上傳，回 { ok, name } 或 { ok: false, message }
   setQuizImageUploader((image) => bridge.request("quiz_image_upload", { image }));
   applyTheme(bridge.init.theme);
+  adminModule.setHostManagementPlan(bridge.init.plan);
   bridge.onMessage((message) => {
     if (message.type === "open" && typeof message.section === "string") void openSection(message.section);
     else if (message.type === "theme") applyTheme(message.theme);
+    else if (message.type === "plan") adminModule.setHostManagementPlan(typeof message.plan === "string" ? message.plan : null);
   });
 
   try {
