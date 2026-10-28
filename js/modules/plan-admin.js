@@ -212,10 +212,27 @@ function initAdminPlanManagement() {
   };
 }
 
-// 延後大區梯次：後台小面板（migration 0126–0128 + db.createRegionStageCohort）
+// 來源選單：全教會正式階段（含 4 張月度期末賽），依開始日排序。每次重繪都重填，保留目前選的那張。
+function fillRegionCohortSourceOptions() {
+  const sourceSel = document.getElementById("cohort-source");
+  if (!sourceSel) return;
+  const selected = sourceSel.value;
+  const sources = (state.globalPlans || [])
+    .filter(plan => plan && plan.planKind === "church_campaign_stage")
+    .slice()
+    .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")));
+  sourceSel.innerHTML = sources.length
+    ? sources.map(plan => `<option value="${escapeHTML(plan.id)}">${escapeHTML(plan.name || plan.id)}</option>`).join("")
+    : `<option value="">（尚無全教會階段計畫）</option>`;
+  if (selected && sources.some(plan => String(plan.id) === selected)) sourceSel.value = selected;
+}
+
+// 延後大區梯次：後台小面板（#633：只新增；修改從計畫列表的「編輯」／「開放給使用者」）
 function wireRegionCohortPanel() {
   const box = document.getElementById("admin-region-cohort");
-  if (!box || box.dataset.wired === "1") return;
+  if (!box) return;
+  fillRegionCohortSourceOptions();
+  if (box.dataset.wired === "1") return;
   box.dataset.wired = "1";
 
   const regionSel = document.getElementById("cohort-region");
@@ -229,18 +246,19 @@ function wireRegionCohortPanel() {
   const btn = document.getElementById("cohort-create-btn");
   btn?.addEventListener("click", async () => {
     const greatRegion = (document.getElementById("cohort-region")?.value || "").trim();
-    const sourceStageNo = Number(document.getElementById("cohort-stage")?.value || 0);
+    const sourcePlanId = document.getElementById("cohort-source")?.value || "";
     const startDate = document.getElementById("cohort-start")?.value || "";
     const endDate = document.getElementById("cohort-end")?.value || "";
     const isHidden = document.getElementById("cohort-hidden")?.checked !== false;
     if (!greatRegion) { showToast("請選擇大區"); return; }
+    if (!sourcePlanId) { showToast("請選擇來源計畫"); return; }
     if (!startDate || !endDate) { showToast("請填起訖日期"); return; }
     if (endDate <= startDate) { showToast("結束日要晚於開始日"); return; }
     btn.disabled = true;
-    const res = await db.createRegionStageCohort({ greatRegion, sourceStageNo, startDate, endDate, isHidden });
+    const res = await db.createRegionStageCohort({ greatRegion, sourcePlanId, startDate, endDate, isHidden });
     btn.disabled = false;
     if (!res.success) { showToast(res.message || "建立失敗"); return; }
-    showToast(res.data?.created ? `已建立「${res.data.name}」` : `已更新「${res.data?.name || "梯次"}」`);
+    showToast(`已建立「${res.data?.name || "梯次"}」`);
     if (typeof db.loadGlobalPlans === "function") await db.loadGlobalPlans();
     renderAdminPlanManagement();
     if (typeof renderPresetPlansList === "function") renderPresetPlansList();

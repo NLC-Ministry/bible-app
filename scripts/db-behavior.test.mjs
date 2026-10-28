@@ -661,38 +661,100 @@ describe("雲柱更正正解（admin_set_lightning_quiz_answer_key，#616）", (
   });
 });
 
-describe("大區延後梯次的名稱（create_region_stage_cohort，#632）", () => {
-  const createCohort = (tx, isHidden) => tx.query(
-    `SELECT public.create_region_stage_cohort('大區 A', 3, '2026-11-01', '2026-11-30', $1, $2) AS result`,
-    [isHidden, ids.admin]
+describe("大區梯次面板只新增（create_region_stage_cohort，#633）", () => {
+  const DEUT = "00000000-0000-0000-c126-000000202612";
+  const STAGE3 = "00000000-0000-0000-c026-000000000003";
+  const TAOYUAN_DEUT = "00000000-0000-0000-c326-000000202701";
+  const createCohort = (tx, { region = "大區 A", source = DEUT, isHidden = true, actor = ids.admin } = {}) => tx.query(
+    `SELECT public.create_region_stage_cohort($1, $2::uuid, '2027-02-01', '2027-02-28', $3, $4) AS result`,
+    [region, source, isHidden, actor]
   );
-  const sourceName = async tx =>
-    (await tx.query(`SELECT name FROM public.global_plans WHERE id = '00000000-0000-0000-c026-000000000003'`)).rows[0].name;
+  const cohortRows = async tx => (await tx.query(
+    `SELECT id, name, start_date::text AS start_date, target_books, is_hidden, rules, source_plan_id
+     FROM public.global_plans WHERE plan_kind = 'church_campaign_stage_cohort' ORDER BY id`
+  )).rows;
 
-  it("新建的梯次名稱只標大區，不加「延後梯次」", async () => {
+  it("選全教會 12 月申命記：新增一張新 id 的梯次，經卷、規則從來源複製，記下複製來源；既有梯次不變", async () => {
     const outcome = await asService(async tx => {
-      const result = (await createCohort(tx, true)).rows[0].result;
-      const { rows } = await tx.query(`SELECT name, rules->>'name' AS rules_name, is_hidden FROM public.global_plans WHERE id = $1`, [result.planId]);
-      return { result, row: rows[0], src: await sourceName(tx) };
+      const before = await cohortRows(tx);
+      const result = (await createCohort(tx)).rows[0].result;
+      const after = await cohortRows(tx);
+      const source = (await tx.query(`SELECT name, rules FROM public.global_plans WHERE id = $1`, [DEUT])).rows[0];
+      return { before, after, result, source };
     });
-    expect(outcome.result.created).toBe(true);
-    expect(outcome.row).toEqual({ name: `${outcome.src}（大區 A）`, rules_name: `${outcome.src}（大區 A）`, is_hidden: true });
-    expect(outcome.result.name).toBe(`${outcome.src}（大區 A）`);
+    const created = outcome.after.find(row => row.id === outcome.result.planId);
+    expect(outcome.result).toMatchObject({ created: true, sourcePlanId: DEUT, region: "大區 A", isHidden: true });
+    expect(outcome.before.map(row => row.id)).not.toContain(outcome.result.planId);
+    expect(created).toMatchObject({
+      name: `${outcome.source.name}（大區 A）`,
+      start_date: "2027-02-01",
+      target_books: ["申命記"],
+      is_hidden: true,
+      source_plan_id: DEUT
+    });
+    expect(created.rules).toMatchObject({
+      planKind: "church_campaign_stage_cohort",
+      name: `${outcome.source.name}（大區 A）`,
+      stageNo: 2,
+      cohortSourceStageNo: 2,
+      cohortRegion: "大區 A",
+      awardName: "鐵獎",
+      examDate: null,
+      parentCampaignId: outcome.source.rules.parentCampaignId
+    });
+    expect(created.rules.presetKey).toMatch(/^church_r1final_2026_12_cohort_[0-9a-f]{8}$/);
+    expect(created.rules).not.toHaveProperty("stages");
+    expect(created.rules).not.toHaveProperty("segments");
+    // 既有梯次一列都沒動
+    expect(outcome.after.filter(row => row.id !== outcome.result.planId)).toEqual(outcome.before);
   });
 
-  it("同大區同階段再送一次：開放狀態照送出的更新，手動改過的名稱保留", async () => {
+  it("同一大區、同一張來源再送一次：回 cohort_already_exists，不新增也不修改任何計畫", async () => {
     const outcome = await asService(async tx => {
-      const planId = (await createCohort(tx, true)).rows[0].result.planId;
-      await tx.query(
-        `UPDATE public.global_plans SET name = '自訂名稱', rules = rules || '{"name":"自訂名稱"}'::jsonb WHERE id = $1`,
-        [planId]
-      );
-      const result = (await createCohort(tx, false)).rows[0].result;
-      const { rows } = await tx.query(`SELECT name, rules->>'name' AS rules_name, is_hidden FROM public.global_plans WHERE id = $1`, [planId]);
-      return { planId, result, row: rows[0] };
+      await createCohort(tx);
+      const before = await cohortRows(tx);
+      let error = null;
+      await tx.exec(`SAVEPOINT again`);
+      try {
+        await createCohort(tx, { isHidden: false });
+      } catch (caught) {
+        error = String(caught.message);
+        await tx.exec(`ROLLBACK TO SAVEPOINT again`);
+      }
+      return { error, before, after: await cohortRows(tx) };
     });
-    expect(outcome.result).toMatchObject({ planId: outcome.planId, created: false, name: "自訂名稱", isHidden: false });
-    expect(outcome.row).toEqual({ name: "自訂名稱", rules_name: "自訂名稱", is_hidden: false });
+    expect(outcome.error).toMatch(/cohort_already_exists/);
+    expect(outcome.after).toEqual(outcome.before);
+  });
+
+  it("同一大區換一張來源、或不同大區同一張來源，都可以各自新增", async () => {
+    const outcome = await asService(async tx => {
+      await tx.query(`INSERT INTO public.great_regions (id, name) VALUES ('10000000-0000-4000-8000-0000000000b1', '大區 B')`);
+      const first = (await createCohort(tx)).rows[0].result;
+      const otherSource = (await createCohort(tx, { source: STAGE3 })).rows[0].result;
+      const otherRegion = (await createCohort(tx, { region: "大區 B" })).rows[0].result;
+      return { first, otherSource, otherRegion };
+    });
+    const ids3 = new Set([outcome.first.planId, outcome.otherSource.planId, outcome.otherRegion.planId]);
+    expect(ids3.size).toBe(3);
+    expect(outcome.otherSource).toMatchObject({ created: true, sourcePlanId: STAGE3 });
+  });
+
+  it("來源只能是全教會正式階段：梯次或不存在的 id 都回 source_plan_not_found", async () => {
+    await expect(asService(tx => createCohort(tx, { source: TAOYUAN_DEUT }))).rejects.toThrow(/source_plan_not_found/);
+    await expect(asService(tx => createCohort(tx, { source: "70000000-0000-4000-8000-0000000000ff" }))).rejects.toThrow(/source_plan_not_found/);
+  });
+
+  it("只有系統管理員／牧師能建立；authenticated 不能冒用身分；anon 不能執行", async () => {
+    await expect(asService(tx => createCohort(tx, { actor: ids.member }))).rejects.toThrow(/permission_denied/);
+    await expect(as("authenticated", { sub: ids.memberAuth }, tx => createCohort(tx))).rejects.toThrow(/actor_override_forbidden/);
+    await expect(as("anon", {}, tx => createCohort(tx, { actor: null }))).rejects.toThrow(/permission denied/);
+  });
+
+  it("舊的「大區＋階段號碼」簽章已移除，面板沒有更新既有梯次的路徑", async () => {
+    await expect(asService(tx => tx.query(
+      `SELECT public.create_region_stage_cohort('大區 A', 3, '2026-11-01', '2026-11-30', TRUE, $1)`, [ids.admin]
+    ))).rejects.toThrow(/does not exist/);
   });
 });
 

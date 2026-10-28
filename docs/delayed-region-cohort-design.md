@@ -5,6 +5,8 @@
 > 實作（2026-08-30，前端 `20260830_exam_p5j` / `_region_cohort_v1`）：migration **0126–0128**（原文寫 0122–0124，被別人的大測驗練習功能佔用，順延）。
 >
 > 修正（2026-08-31，`_cohort_stage_kind_v1`）：migration **0137** ＋ 前端 sweep。0126–0128 只補了 0056/0098 的階段閘門，**漏掉所有其他以 `plan_kind = 'church_campaign_stage'` 為條件的邏輯**（下方「不用動 → 團隊」那段當初判斷錯誤）。0137 引入兩個述詞把散落的字串比較收斂成唯一定義，詳見下方「述詞模型」。
+>
+> 改版（2026-10-28，#633）：後台面板**只新增**。`create_region_stage_cohort(p_great_region, p_source_plan_id, p_start_date, p_end_date, p_is_hidden, p_actor_id)` 改選「全教會的哪一張計畫」（含 4 張月度期末賽）當來源，每次給新 id，來源記在 `global_plans.source_plan_id`（#639）；同一大區對同一張來源只能有一張（`cohort_already_exists`）。不再用 `(audience_regions, stageNo)` 找梯次、也沒有更新路徑——改日期／名稱用計畫列表的「編輯」，開放狀態用「開放給使用者／暫停開放」。下文 0124 的冪等 UPDATE 描述已不適用。
 
 ## 需求
 

@@ -51,7 +51,7 @@
       "can_send_care_reminder(uuid)",
       "carry_reading_teams_to_stage(uuid,uuid,integer)",
       "create_reading_team(uuid,smallint,text,uuid)",
-      "create_region_stage_cohort(text,integer,date,date,boolean,uuid)",
+      "create_region_stage_cohort(text,uuid,date,date,boolean,uuid)",
       "current_profile_id()",
       "current_role_code()",
       "daily_quiz_get_my_results(uuid,date,date,uuid)",
