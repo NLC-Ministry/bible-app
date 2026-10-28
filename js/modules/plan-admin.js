@@ -7,6 +7,7 @@ import {
   renderJoinedPlansList,
   renderPlanScheduleTracker
 } from "./plan.js";
+import { isCampaignStageKind } from "../data/campaign-stage-kinds.mjs";
 
 function initAdminPlanManagement() {
   const addBtn = document.getElementById("admin-add-plan-btn");
@@ -277,6 +278,9 @@ async function renderAdminPlanManagement() {
       // 的編輯 / 刪除操作，不套用階段列（隱藏刪除、鎖編輯規則）的處理。
       const isCampaignStage = window.isCanonicalCampaignStagePlan(plan);
       const campaignStageNo = Number(plan.stageNo || plan.campaignDefinition && plan.campaignDefinition.stageNo || 0);
+      // #632 延後梯次預設先隱藏、由管理員逐一開放：跟正式階段一樣給開放按鈕，但任何來源階段都可以。
+      const isRegionCohort = isCampaignStageKind(plan) && !isCampaignStage;
+      const canToggleVisibility = isRegionCohort || (isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10);
 
       let timeColHtml = "";
       if (isFixed) {
@@ -305,8 +309,8 @@ async function renderAdminPlanManagement() {
         </td>
         <td style="text-align: center; vertical-align: middle;">
           <div style="display: flex; flex-direction: column; gap: 0.25rem; align-items: center; justify-content: center;">
-            ${isCampaignStage ? `<span class="admin-plan-visibility-state" style="font-size:0.875rem;font-weight:600;color:${hidden ? 'var(--color-warning)' : 'var(--color-success)'};">${hidden ? '尚未開放' : '已開放'}</span>` : ""}
-            ${isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10 ? `<button class="secondary-btn admin-toggle-hidden-plan-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">${hidden ? '開放給使用者' : '暫停開放'}</button>` : ""}
+            ${isCampaignStage || isRegionCohort ? `<span class="admin-plan-visibility-state" style="font-size:0.875rem;font-weight:600;color:${hidden ? 'var(--color-warning)' : 'var(--color-success)'};">${hidden ? '尚未開放' : '已開放'}</span>` : ""}
+            ${canToggleVisibility ? `<button class="secondary-btn admin-toggle-hidden-plan-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">${hidden ? '開放給使用者' : '暫停開放'}</button>` : ""}
             ${isFixed && !isCampaign ? `<button class="secondary-btn admin-plan-grace-days-btn" style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">寬限天數</button>` : ""}
             <button class="primary-btn admin-campaign-rules-btn"style="font-size:0.875rem;padding:0.25rem 0.45rem;height:auto;">編輯規則</button>
             <button class="primary-btn admin-edit-plan-btn" style="font-size: 0.875rem; padding: 0.2rem 0.4rem; min-width: 42px; text-align: center; height: auto; cursor: pointer;">編輯</button>

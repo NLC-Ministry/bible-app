@@ -43,6 +43,14 @@ describe("campaign stage release control", () => {
     expect(db).toContain("Global plan visibility update was not verified");
   });
 
+  it("also shows the release button on region cohorts, from any source stage (#632)", () => {
+    // 延後梯次預設先隱藏，以前列表只給正式階段 2–10 開放按鈕，梯次就沒有地方可以開放
+    expect(planAdminModule).toContain("const isRegionCohort = isCampaignStageKind(plan) && !isCampaignStage;");
+    expect(planAdminModule).toContain("const canToggleVisibility = isRegionCohort || (isCampaignStage && campaignStageNo >= 2 && campaignStageNo <= 10);");
+    expect(planAdminModule).toMatch(/\$\{isCampaignStage \|\| isRegionCohort \? `<span class="admin-plan-visibility-state"/);
+    expect(planAdminModule).toMatch(/\$\{canToggleVisibility \? `<button class="secondary-btn admin-toggle-hidden-plan-btn"/);
+  });
+
   it("keeps locked campaign stages out of the member explore list and without enrollment actions", () => {
     expect(visibilityMigration).toContain("plan_kind = 'church_campaign_stage'");
     expect(edgeFunction).toContain('query.or("is_hidden.eq.false,plan_kind.eq.church_campaign_stage")');
