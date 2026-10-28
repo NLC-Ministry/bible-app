@@ -50,7 +50,6 @@
       "can_manage_quiz_group(uuid,uuid)",
       "can_send_care_reminder(uuid)",
       "carry_reading_teams_to_stage(uuid,uuid,integer)",
-      "cleanup_removed_church_campaign_stages()",
       "create_reading_team(uuid,smallint,text,uuid)",
       "create_region_stage_cohort(text,integer,date,date,boolean,uuid)",
       "current_profile_id()",
