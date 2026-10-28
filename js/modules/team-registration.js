@@ -30,8 +30,10 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
     }
     let stageNo = plan.stageNo;
     if (!stageNo && plan.presetKey) {
-      const m = plan.presetKey.match(/\d+/);
-      if (m) stageNo = Number(m[0]);
+      // 只認正式階段 church_stage_NN（#639）：以前抓 presetKey 裡第一個數字，
+      // church_r1final_2026_09 會抓到 r1 的「1」，誤判成第 1 階段。
+      const m = String(plan.presetKey).match(/^church_stage_(\d{2})$/);
+      if (m) stageNo = Number(m[1]);
     }
     if (!stageNo && plan.name) {
       if (plan.name.includes("第一輪") || plan.name.includes("第1階段") || plan.name.includes("第一階段")) stageNo = 1;
