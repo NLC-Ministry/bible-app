@@ -176,6 +176,7 @@ export const AUDIT_ACTION_LABEL: Readonly<Record<string, string>> = {
   swap_daily_quiz_version: "更換小測驗版本",
   set_daily_quiz_answer_key: "更正小測驗答案",
   remove_daily_quiz_kept_question: "移除小測驗保留題目",
+  publish_daily_quiz_makeup: "補發小測驗",
   exam_upsert_paper: "編輯大測驗試卷",
   exam_upsert_question: "編輯大測驗題目",
   exam_delete_question: "刪除大測驗題目",

@@ -91,7 +91,8 @@ describe("daily church quiz", () => {
 
   it("exposes only assigned quizzes and stores server-scored attempts", () => {
     expect(schema).toContain("public.profile_belongs_to_quiz_group(actor_id, publication_row.small_group_id)");
-    expect(schema).toContain("quiz_questions_for_member(quiz_row.questions, attempt_row.id IS NOT NULL)");
+    // #643：myQuiz／makeupQuizzes 的內容搬進共用的 _daily_quiz_member_view
+    expect(latestFunctionDefinition("_daily_quiz_member_view").text).toContain("quiz_questions_for_member(quiz_row.questions, attempt_row.id IS NOT NULL)");
     expect(schema).toContain("score_value := score_value + 1");
     expect(schema).toContain("UNIQUE (publication_id, user_id)");
   });
@@ -124,16 +125,17 @@ describe("daily church quiz", () => {
     // 發佈／編輯／匯入題目已搬去系統管理後台（admin.js），打卡清單只保留
     // 會友「進入小測驗/作答」的入口，所以 gate 只看 context.myQuiz，且
     // renderPublisherDailyQuiz 這個函式本身已經整個搬走、不在 plan.js 裡了。
-    expect(plan).toContain("if (!context.myQuiz) {");
+    expect(plan).toContain("if (!context.myQuiz && !hasMakeup) {");
     expect(planAll).not.toContain("context.canPublish");
     expect(planAll).not.toContain("renderPublisherDailyQuiz");
     expect(planQuiz).toContain("renderDailyQuizEntry");
-    expect(planQuiz).toContain('id="daily-quiz-entry-button"');
+    expect(planQuiz).toContain("entryButton: `daily-quiz-entry-button${suffix}`");
     expect(planQuiz).toContain("getDailyQuizReadingProgress");
     expect(planQuiz).toContain("if (!progress.isComplete)");
-    expect(planQuiz).toContain("請先閱讀完今天的速讀進度，再進入小測驗");
+    expect(planQuiz).toContain("`請先閱讀完${dayWord}的速讀進度，再進入小測驗");
+    expect(planQuiz).toContain('return item.makeup ? dailyQuizDateLabel(item.quizDate) : "今天";');
     expect(plan).toContain("quizDate !== getDailyQuizTaiwanToday()");
-    expect(planQuiz).toContain("if (options.open === true)");
+    expect(planQuiz).toContain("const wantsOpen = options.open === true");
     expect(planQuiz).toContain("renderAssignedDailyQuiz");
     expect(css).toContain(".daily-quiz-entry-button {");
     expect(css).toContain("font-size: 14px;");
@@ -266,7 +268,7 @@ describe("daily church quiz", () => {
     // 每 5 分鐘的 sweep 留著，改成只跑自動發佈。
     expect(() => latestFunctionDefinition("schedule_daily_quiz_publish")).toThrow(/dropped/);
     expect(() => latestFunctionDefinition("cancel_daily_quiz_schedule")).toThrow(/dropped/);
-    expect(read("supabase/migrations/20260929043341_daily_quiz_drop_legacy_publish.sql")).toContain("DROP TABLE IF EXISTS public.quiz_publication_schedules;");
+    expect(currentMigrationSql("20260929043341_daily_quiz_drop_legacy_publish.sql")).toContain("DROP TABLE IF EXISTS public.quiz_publication_schedules;");
     const sweep = latestFunctionDefinition("run_daily_quiz_schedule_sweep").text;
     expect(sweep).toContain("auto_result := public.run_daily_quiz_auto_publish();");
     expect(sweep).toContain("EXCEPTION WHEN OTHERS THEN");
@@ -287,7 +289,7 @@ describe("daily church quiz", () => {
     expect(latestFunctionDefinition("publish_daily_quiz").text).toMatch(/p_answer_close_at timestamp with time zone DEFAULT NULL/i);
     const answerWindowChecks = scheduledPublish.split("RAISE EXCEPTION 'quiz_answer_window_closed';").length - 1;
     expect(answerWindowChecks).toBe(3); // daily_quiz_submit_answer / daily_quiz_finalize_attempt / submit_daily_quiz
-    expect(scheduledPublish).toContain("'answerCloseAt', publication_row.answer_close_at");
+    expect(latestFunctionDefinition("_daily_quiz_member_view").text).toContain("'answerCloseAt', publication_row.answer_close_at");
 
     // Edge Function + config.toml：跟其他 cron job 同一套 verify_jwt=false + 共用密鑰模式。
     expect(scheduleSweep).toContain('Deno.env.get("DAILY_QUIZ_SCHEDULE_SWEEP_SECRET")');

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { currentMigrationSql } from "./migration-sql.mjs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const sql = currentMigrationSql("0196_daily_quiz_simplify_review_announcement_stats.sql");
@@ -115,7 +115,9 @@ describe("0196: member's own results drop PR, gain their own answer time", () =>
   it("get_daily_quiz_dashboard's myQuiz.attempt also carries timeSeconds for the just-completed quiz", () => {
     const dashboardFn = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.get_daily_quiz_dashboard"),
       sql.indexOf("COMMENT ON FUNCTION public.get_daily_quiz_dashboard"));
-    expect(dashboardFn).toContain("'timeSeconds', CASE WHEN attempt_row.completed_at > attempt_row.started_at");
+    // #643：myQuiz 的內容搬進共用的 _daily_quiz_member_view
+    expect(dashboardFn).toContain("public._daily_quiz_member_view(publication_row.id, actor_id)");
+    expect(latestFunctionDefinition("_daily_quiz_member_view").text).toContain("'timeSeconds', CASE WHEN attempt_row.completed_at > attempt_row.started_at");
   });
 });
 

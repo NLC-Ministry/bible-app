@@ -19,6 +19,7 @@ export const AUDITED_ADMIN_RPCS = new Set([
   "swap_daily_quiz_version",
   "set_daily_quiz_answer_key",
   "remove_daily_quiz_kept_question",
+  "publish_daily_quiz_makeup",
   // 大測驗出題、發布、重設、指派
   "exam_upsert_paper",
   "exam_upsert_question",

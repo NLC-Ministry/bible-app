@@ -7193,6 +7193,11 @@ body.dark-theme .pastoral-race-progress {
   gap: 0.4rem;
 }
 
+/* #643：今天的測驗和補發各一份時，上下隔開 */
+.daily-quiz-item + .daily-quiz-item {
+  margin-top: 12px;
+}
+
 .daily-quiz-entry-button {
   width: 100%;
   min-height: 76px;
