@@ -87,6 +87,8 @@ const state = {
   profileIdentityLoading: false,
   currentUser: initialCachedUser,
   globalPlans: [],
+  // 獎項分組（#639，plan_groups＋members）；null＝還沒讀到，鐵獎退回 js/data/plan-groups.mjs 的內建值
+  planGroups: null,
   orgStructure: {
     regions: [],
     zones: {},  // regionName -> array of zoneNames

@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { isCampaignStageKind } from "../js/data/campaign-stage-kinds.mjs";
+import * as planGroups from "../js/data/plan-groups.mjs";
 
 const utilsSource = readFileSync(new URL("../js/utils.js", import.meta.url), "utf8");
 
@@ -18,10 +19,11 @@ function extractRange(source, fromSig, toSig) {
   return source.slice(start, end);
 }
 
-// getCampaignStageCompletedRounds now leans on 3 helper fns declared just above it.
+// getCampaignStageCompletedRounds now leans on the helper fns declared just above it
+// (鐵獎分組的純函式從 js/data/plan-groups.mjs 注入，#639).
 const getCampaignStageCompletedRoundsSrc = extractRange(
   utilsSource,
-  "function getFirstRoundFinalMonthlyKeys",
+  "function findActivePlanByKey",
   "function getCampaignStageCompletedRounds"
 );
 
@@ -45,13 +47,18 @@ describe("badge unlock state stays synced with the live reading plan", () => {
       "localStorage",
       "isCampaignStageKind",
       "window",
+      "computeIronGroupStatus",
+      "getIronAwardGroups",
+      "pickGoverningIronGroup",
+      "presetKeyForPlanId",
       `${getCampaignStageCompletedRoundsSrc}\nreturn getCampaignStageCompletedRounds;`
     )(state, localStorage, isCampaignStageKind, {
       CHURCH_PLAN_PRESETS: {
         church_r1final_2026_09: {}, church_r1final_2026_10: {},
         church_r1final_2026_11: {}, church_r1final_2026_12: {}
       }
-    });
+    }, planGroups.computeIronGroupStatus, planGroups.getIronAwardGroups,
+    planGroups.pickGoverningIronGroup, planGroups.presetKeyForPlanId);
   });
 
   it("ignores a stale localStorage value when the plan is genuinely still on round 1", () => {

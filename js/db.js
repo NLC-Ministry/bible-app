@@ -74,6 +74,7 @@ import {
   parseTermAliases
 } from './data/passage-commentary.mjs';
 import { createCommentaryRepository } from './data/commentary-repository.mjs';
+import { buildPlanGroups } from './data/plan-groups.mjs';
 import { commentaryReviewErrorMessage, toBellNotification } from './data/commentary-review.mjs';
 
 window.__nlcNetworkMetrics = Object.freeze({
@@ -2036,13 +2037,15 @@ const db = {
         // profiles 這裡是 .eq(id) 單列、reading_plans 是 user-scoped 個位數。
         // highlights（fetchAllRows，重度使用者可能 >200）維持獨立。
         // reading_logs 是第二段（#474）：要先知道哪些計畫還能打卡，才查得出開機要的逐筆紀錄。
+        // 獎項分組（#639）跟著平行查；失敗只會退回內建分組，不影響開機。
         const [[globalPlansResult, profileResult, firstPlansResult], highlightsResult] = await Promise.all([
           this.batchSelect([
             state.supabase.from("global_plans").select("id, name, description, start_date, end_date, grace_days, target_books, is_hidden, is_fixed, plan_kind, rules, rule_version, published_at, audience_regions").order("start_date", { ascending: true }),
             state.supabase.from("profiles").select("id, name, email, avatar_url, great_region, pastoral_zone, small_group, role_id, is_active, managed_regions, managed_zones, managed_groups, member_context_synced_at, member_context_sync_attempted_at, member_context_sync_status, member_context_sync_error, member_context_leadership_display_label, member_context_leadership_primary_assignment_id, member_context_leadership_assignments, role_definition:role_definitions!profiles_role_definition_fkey(id, code, label, sort_order, is_assignable, can_manage_plans, can_manage_permissions, scope_type)").eq("id", user.id).maybeSingle(),
             state.supabase.from("reading_plans").select(`${OWN_READING_PLAN_COLUMNS}, is_personal`).eq("user_id", user.id).order("created_at", { ascending: false })
           ]),
-          skipReadingLogs ? Promise.resolve({ data: [], error: null }) : this.fetchAllHighlights()
+          skipReadingLogs ? Promise.resolve({ data: [], error: null }) : this.fetchAllHighlights(),
+          this.loadPlanGroups()
         ]);
         // #473：is_personal 的 migration 還沒上的環境（前端先部署）查這個欄位會失敗；
         // 退回不含它的查詢，計畫清單照常載入，只是還不會有個人計畫。
@@ -5786,6 +5789,27 @@ const db = {
     return { success: true };
   },
 
+  // 獎項分組（#639）：plan_groups＋plan_group_members，兩張都只有幾列。
+  // 讀不到（nlc-data 還沒放行、migration 還沒套、離線）就維持 null，鐵獎用內建分組。
+  async loadPlanGroups() {
+    if (!state.isSupabaseMode || !state.supabase) return state.planGroups;
+    try {
+      const [groupsResult, membersResult] = await Promise.all([
+        state.supabase.from("plan_groups").select("id, key, kind, name, rules"),
+        state.supabase.from("plan_group_members").select("group_id, plan_id, slot")
+      ]);
+      if (groupsResult.error || membersResult.error) {
+        console.warn("[plan-groups] 讀不到分組表，鐵獎用內建分組：", groupsResult.error || membersResult.error);
+        return state.planGroups;
+      }
+      const groups = buildPlanGroups(groupsResult.data, membersResult.data);
+      if (groups) state.planGroups = groups;
+    } catch (error) {
+      console.warn("[plan-groups] 讀不到分組表，鐵獎用內建分組：", String(error));
+    }
+    return state.planGroups;
+  },
+
   async loadGlobalPlans() {
     state.globalPlans = [];
 
@@ -5820,8 +5844,9 @@ const db = {
     const mergeWithPresets = (loadedList) => {
       const presetKeys = Object.keys(CHURCH_PLAN_PRESETS);
       const presetPlans = Object.entries(CHURCH_PLAN_PRESETS).map(([key, originalPreset]) => {
+        // 用 presetKey 對回同一張（#639）：以前用 stageNo 找，第 2 階段 4 張月度計畫都會被蓋成 9 月那張。
         const overrideStage = localCampaignOverride && originalPreset.planKind === "church_campaign_stage"
-          ? window.getChurchCampaignStageDefinition(originalPreset.stageNo, localCampaignOverride)
+          ? (window.createChurchCampaignStageDefinitions(localCampaignOverride).find(stage => stage.presetKey === key) || null)
           : null;
         const p = overrideStage ? { ...originalPreset, ...overrideStage, campaignDefinition: overrideStage, ruleVersion: localCampaignOverride.version } : originalPreset;
         return ({
@@ -5928,11 +5953,13 @@ const db = {
       const storedStageNumbers = Array.isArray(storedRules.stages)
         ? storedRules.stages.map(stage => Number(stage.stageNo)).sort((a, b) => a - b)
         : [];
-      const materializedStageNumbers = (stageResult.data || []).map(item => ({
+      // 一個階段可能對應好幾張計畫（第 2 階段＝4 張月度期末賽，#639），比對「每個階段都有計畫」，
+      // 不比張數——以前 4 張都算一次，清單永遠對不上，發布後一定報驗證失敗。
+      const materializedStageNumbers = Array.from(new Set((stageResult.data || []).map(item => ({
         item,
         rules: parseStoredRules(item.rules)
       })).filter(entry => String(entry.rules.parentCampaignId || "") === String(campaignId))
-        .map(entry => Number(entry.rules.stageNo))
+        .map(entry => Number(entry.rules.stageNo))))
         .sort((a, b) => a - b);
       const sameStageNumbers = list => list.length === expectedStageNumbers.length
         && list.every((stageNo, index) => stageNo === expectedStageNumbers[index]);
