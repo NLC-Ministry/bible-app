@@ -883,7 +883,7 @@ const db = {
       };
     };
 
-    // 同一瞬間的讀取（select、首頁的唯讀 RPC）併成一支 batch 送出（#631）
+    // 同一瞬間的讀取（select、首頁的唯讀 RPC）併成一支 batch 送出；相同讀取 3 秒內共用結果（#631）
     const readCoalescer = createReadCoalescer({
       sendOne: callEdge,
       sendBatch: queries => callEdge({ action: "batch", queries })
@@ -970,7 +970,16 @@ const db = {
 
     return {
       async saveProfile(payload) {
-        return callEdge({ action: "save_profile", payload });
+        readCoalescer.invalidate();
+        try {
+          return await callEdge({ action: "save_profile", payload });
+        } finally {
+          readCoalescer.invalidate();
+        }
+      },
+      // 繞過這個客戶端的寫入（exam-write、send_care_reminder）完成後呼叫
+      invalidateReads() {
+        readCoalescer.invalidate();
       },
       from(table) {
         return new NlcQueryBuilder(table);
@@ -4361,6 +4370,8 @@ const db = {
       console.warn(`[Exam] exam-write ${request.action} network error: ${String(error)}`);
       return null;
     }
+    // 繞過 nlc-data 的寫入：清掉資料層共用的讀取結果，之後的讀取重新抓（#631）
+    state.supabase?.invalidateReads?.();
     if (response.ok) return { success: true, data: payload?.data };
     // 400＝RPC 的業務錯誤（exam_attempt_locked / exam_time_up …）：跟 nlc-data 回的一樣，照常回報
     if (response.status === 400 && payload && payload.error) {
@@ -6834,6 +6845,8 @@ const db = {
           },
           { action: "send_care_reminder" }
         );
+        // 繞過資料層客戶端的寫入：清掉共用的讀取結果（#631）
+        state.supabase?.invalidateReads?.();
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           if (payload.error === "care_reminder_already_sent" || payload.code === "23505") {

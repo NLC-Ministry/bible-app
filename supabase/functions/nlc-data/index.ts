@@ -543,7 +543,12 @@ const BATCH_RPC_FUNCTIONS = new Set([
   "get_lightning_quiz_week_ranking",
   "exam_home_exams",
   "exam_home_banner",
-  "get_org_structure_tree"
+  "get_org_structure_tree",
+  // 開首頁時就會發的通知鈴鐺
+  "get_quiz_notifications",
+  "get_exam_notifications",
+  "issue_thread_unread_summary",
+  "get_commentary_review_notifications"
 ]);
 
 function jsonResponse(body: unknown, status = 200) {
