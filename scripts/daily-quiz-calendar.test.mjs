@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { gradeDailyQuizTrial, mountDailyQuizTrial } from "../js/modules/daily-quiz-trial.mjs";
 import { normalizeQuestion } from "../js/modules/quiz-question-types.mjs";
-import { currentMigrationSql } from "./migration-sql.mjs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 // #307（小測驗 Q2，屬於 #305）：後台 7 天日曆、每天的設定、前端試作。
 // jsdom 環境的 URL 不是 Node 的 URL，readFileSync 認不得，所以用相對於專案根目錄的路徑
@@ -127,7 +127,25 @@ describe("days outside the plan (#307 補充)", () => {
 
   it("the admin UI labels them and offers no actions", () => {
     expect(admin).toContain("outside_plan: { label: '不在計畫期間', kind: 'neutral' }");
-    expect(admin).toContain("!['open', 'ended', 'outside_plan'].includes(day.status)");
+    expect(admin).toContain("!['open', 'ended', 'outside_plan', 'rest_day'].includes(day.status)");
+  });
+});
+
+// #641：沒排章節的日子（補讀日）不出題；SQL 行為在 db-behavior.test.mjs
+describe("rest days (#641)", () => {
+  const calendarSql = latestFunctionDefinition("get_daily_quiz_calendar").text;
+  const swapSql = latestFunctionDefinition("swap_daily_quiz_version").text;
+
+  it("the calendar checks rest days after outside_plan and before skipped/failed", () => {
+    expect(calendarSql.indexOf("WHEN rest_day THEN 'rest_day'")).toBeGreaterThan(calendarSql.indexOf("THEN 'outside_plan'"));
+    expect(calendarSql.indexOf("WHEN rest_day THEN 'rest_day'")).toBeLessThan(calendarSql.indexOf("THEN 'skipped'"));
+    expect(swapSql).toContain("RAISE EXCEPTION 'quiz_rest_day'");
+  });
+
+  it("the admin UI labels them 補讀日，不出題 with no actions and no red alert", () => {
+    expect(admin).toContain("rest_day: { label: '補讀日，不出題', kind: 'neutral' }");
+    expect(admin).toContain("這一天是補讀日，沒有排讀經章節，不出題也不發佈。");
+    expect(db).toContain("quiz_rest_day:");
   });
 });
 

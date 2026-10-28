@@ -4,7 +4,7 @@ import type { PlanSummary } from "./plans.ts";
 
 export type HomePlan = Pick<PlanSummary, "plan" | "today" | "schedule" | "funnel" | "care" | "teams" | "meta">;
 
-export type QuizDayStatus = "open" | "ended" | "outside_plan" | "skipped" | "not_published" | "scheduled" | "generating" | "failed" | "waiting";
+export type QuizDayStatus = "open" | "ended" | "outside_plan" | "skipped" | "not_published" | "scheduled" | "generating" | "failed" | "waiting" | "rest_day";
 
 export type HomeSummary = {
   /** 預設計畫（和計畫區同一個預設）；沒有任何計畫是 null */
@@ -42,7 +42,9 @@ export const QUIZ_STATUS_LABEL: Readonly<Record<QuizDayStatus, string>> = {
   open: "作答中",
   ended: "已結束",
   not_published: "沒有發佈",
-  outside_plan: "不在計畫期間"
+  outside_plan: "不在計畫期間",
+  // #641：這一天沒排讀經章節
+  rest_day: "補讀日，不出題"
 };
 
 /** 首頁要不要顯示小測驗那一格：功能開著、這個計畫有設定小測驗、明天在計畫期間 */
