@@ -25,7 +25,8 @@ const between = (source, start, end) => {
 };
 
 describe("#474 開機載入", () => {
-  const loadUserData = between(db, "async loadUserData(force", "async loadOrgStructure()");
+  // 套用段在 #630 抽成 _applyLoadedUserData（開機快照共用），緊接在 loadUserData 前面
+  const loadUserData = between(db, "async _applyLoadedUserData(", "async loadOrgStructure()");
 
   it("第一段的 batch 不再平行抓 reading_logs；拿到計畫清單後才查開機範圍", () => {
     const firstPhase = between(loadUserData, "const [[globalPlansResult, profileResult, firstPlansResult], highlightsResult]", "]);");

@@ -20,8 +20,8 @@ describe("nlc-data: batch action (Edge Function)", () => {
     expect(branch).toContain("missing_queries");
     expect(branch).toContain("batch_too_large");
     expect(branch).toMatch(/queries\.length > 25/);
-    // sequential loop through the shared pipeline, results pushed in order
-    expect(branch).toMatch(/for \(const spec of queries\)/);
+    // every slot runs through the shared pipeline at the same time (#631), results kept in request order
+    expect(branch).toMatch(/await Promise\.all\(queries\.map\(/);
     expect(branch).toContain("await runSelectPipeline(spec || {}, profile, supabaseAdmin)");
     expect(branch).toContain("return jsonResponse({ data: results })");
     // resolveProfile / auth verification happens once, before the action dispatch
@@ -33,7 +33,17 @@ describe("nlc-data: batch action (Edge Function)", () => {
     expect(branch).toMatch(/spec\.action && spec\.action !== "select"/);
     expect(branch).toContain("batch_read_only");
     // one throwing query is caught per-slot, never aborts the batch
-    expect(branch).toMatch(/catch \(queryErr\)[\s\S]*results\.push\(\{ error:/);
+    expect(branch).toMatch(/catch \(queryErr\)[\s\S]*return \{ error: message \}/);
+  });
+
+  it("lets only the home page's read-only RPCs into a batch, through the same path as action:'rpc' (#631)", () => {
+    const branch = edge.slice(edge.indexOf('if (action === "batch")'), edge.indexOf('if (action === "send_care_reminder")'));
+    expect(branch).toContain('if (!BATCH_RPC_FUNCTIONS.has(String(spec.function || ""))) return { error: "batch_read_only" }');
+    expect(branch).toContain("await runRpcRequest(spec, profile, supabaseAdmin, requestId)");
+    // the single-request path checks retired plans before dispatch; every batch slot must too
+    expect(branch).toContain("isRetiredPlanRequest(spec || {})");
+    const single = edge.slice(edge.indexOf('    if (action === "rpc") {'), edge.indexOf('if (action === "batch")'));
+    expect(single).toContain("await runRpcRequest(body, profile, supabaseAdmin, requestId)");
   });
 
   it("runSelectPipeline mirrors the single-query select pipeline (allowlist + forced scope + options)", () => {

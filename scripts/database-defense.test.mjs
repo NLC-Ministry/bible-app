@@ -38,7 +38,8 @@ describe("database defense migration", () => {
     expect(edge).toContain('"increment_likes"');
     expect(edge).toContain('"decrement_likes"');
     expect(edge).toContain('if (action === "rpc")');
-    expect(db).toContain('callEdge({ action: "rpc", function: functionName, args })');
+    // #631：RPC 先經過讀取合併器（只讀的可能併進 batch），送出時仍是 nlc-data 的 action:"rpc"
+    expect(db).toContain('readCoalescer.send({ action: "rpc", function: functionName, args })');
   });
 
   it("keeps Member Hub-owned org placement canonical in save_profile", () => {

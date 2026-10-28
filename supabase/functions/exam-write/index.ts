@@ -100,6 +100,8 @@ function corsHeadersFor(req: Request): Record<string, string> {
     ...(allowed ? { "Access-Control-Allow-Origin": allowed } : {}),
     "Access-Control-Allow-Headers": CORS_ALLOW_HEADERS,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    // 預檢結果讓瀏覽器快取 2 小時（Chrome 上限）；沒設只快取 5 秒，每次開 App 都多一趟 OPTIONS（#629）
+    "Access-Control-Max-Age": "7200",
     "Vary": "Origin"
   };
 }
