@@ -7059,8 +7059,9 @@ body.dark-theme .pastoral-race-progress {
   top: var(--reader-toolbar-height, 56px);
   z-index: 34;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.35rem 0.75rem;
   padding: 0.5rem 1rem;
   border-bottom: 1px solid color-mix(in srgb, var(--color-brand) 18%, var(--border-color));
   background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
@@ -7095,6 +7096,44 @@ body.dark-theme .pastoral-race-progress {
   border-radius: inherit;
   background: var(--color-brand);
   transition: width 220ms ease;
+}
+
+/* 真人朗讀（#636）：可拖曳的時間軸，取代逐節進度條 */
+.reader-audio-timeline__seek {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: -0.5rem 0;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+.reader-audio-timeline__notice {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.reader-audio-timeline__switch {
+  min-height: 32px;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--color-brand-border);
+  border-radius: 999px;
+  background: var(--color-brand-subtle);
+  color: var(--color-brand);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.reader-audio-timeline__switch:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
+  outline-offset: 2px;
 }
 
 /* Daily church quiz */
@@ -17672,6 +17711,27 @@ body.dark .glass-card-upgrade {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+/* 朗讀方式（#636）：真人朗讀｜裝置語音 */
+.speech-mode-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.speech-mode-toggle .segment-toggle-btn {
+  min-height: 40px;
+  padding: 0.4rem 0.75rem;
+  border-radius: calc(var(--radius-md) - 2px);
+  font-size: 0.875rem;
+}
+
+.speech-mode-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .speech-voice-row {
