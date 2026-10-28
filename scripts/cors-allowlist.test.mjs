@@ -80,4 +80,10 @@ describe("cors-allowlist block", () => {
     expect(allowed["Access-Control-Allow-Headers"]).toContain("authorization");
     expect(allowed["Access-Control-Allow-Headers"]).toContain("x-request-id");
   });
+
+  it("lets the browser cache the preflight instead of re-sending OPTIONS every few seconds (#629)", () => {
+    const { corsHeadersFor } = load();
+    // 沒設時 Chrome 只快取 5 秒，每次開 App 第一批 nlc-data 都要先多一趟預檢；7200 是 Chrome 的上限。
+    expect(corsHeadersFor(requestFrom("https://bible.newlife.org.tw"))["Access-Control-Max-Age"]).toBe("7200");
+  });
 });
