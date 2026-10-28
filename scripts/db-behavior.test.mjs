@@ -581,3 +581,38 @@ describe("雲柱更正正解（admin_set_lightning_quiz_answer_key，#616）", (
     expect(typeof outcome.list[0].answerCorrectedAt).toBe("string");
   });
 });
+
+describe("大區延後梯次的名稱（create_region_stage_cohort，#632）", () => {
+  const createCohort = (tx, isHidden) => tx.query(
+    `SELECT public.create_region_stage_cohort('大區 A', 3, '2026-11-01', '2026-11-30', $1, $2) AS result`,
+    [isHidden, ids.admin]
+  );
+  const sourceName = async tx =>
+    (await tx.query(`SELECT name FROM public.global_plans WHERE id = '00000000-0000-0000-c026-000000000003'`)).rows[0].name;
+
+  it("新建的梯次名稱只標大區，不加「延後梯次」", async () => {
+    const outcome = await asService(async tx => {
+      const result = (await createCohort(tx, true)).rows[0].result;
+      const { rows } = await tx.query(`SELECT name, rules->>'name' AS rules_name, is_hidden FROM public.global_plans WHERE id = $1`, [result.planId]);
+      return { result, row: rows[0], src: await sourceName(tx) };
+    });
+    expect(outcome.result.created).toBe(true);
+    expect(outcome.row).toEqual({ name: `${outcome.src}（大區 A）`, rules_name: `${outcome.src}（大區 A）`, is_hidden: true });
+    expect(outcome.result.name).toBe(`${outcome.src}（大區 A）`);
+  });
+
+  it("同大區同階段再送一次：開放狀態照送出的更新，手動改過的名稱保留", async () => {
+    const outcome = await asService(async tx => {
+      const planId = (await createCohort(tx, true)).rows[0].result.planId;
+      await tx.query(
+        `UPDATE public.global_plans SET name = '自訂名稱', rules = rules || '{"name":"自訂名稱"}'::jsonb WHERE id = $1`,
+        [planId]
+      );
+      const result = (await createCohort(tx, false)).rows[0].result;
+      const { rows } = await tx.query(`SELECT name, rules->>'name' AS rules_name, is_hidden FROM public.global_plans WHERE id = $1`, [planId]);
+      return { planId, result, row: rows[0] };
+    });
+    expect(outcome.result).toMatchObject({ planId: outcome.planId, created: false, name: "自訂名稱", isHidden: false });
+    expect(outcome.row).toEqual({ name: "自訂名稱", rules_name: "自訂名稱", is_hidden: false });
+  });
+});
