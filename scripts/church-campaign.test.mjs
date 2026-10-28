@@ -338,7 +338,8 @@ describe("admin campaign round editor", () => {
   const editor = readFileSync(join(root, "js", "modules", "campaign-rule-editor.js"), "utf8");
   const css = readFileSync(join(root, "index.css"), "utf8");
   const db = readFileSync(join(root, "js", "db.js"), "utf8");
-  const cleanupMigration = readFileSync(join(root, "supabase", "migrations", "0018_cleanup_removed_campaign_stages.sql"), "utf8");
+  // 函式本體以最新定義為準（#634 改寫），觸發器宣告仍在 0018
+  const cleanupMigration = currentMigrationSql("0018_cleanup_removed_campaign_stages.sql");
 
   it("labels every date purpose and supports adding and removing rounds", () => {
     expect(editor).toContain("閱讀開始日期");
