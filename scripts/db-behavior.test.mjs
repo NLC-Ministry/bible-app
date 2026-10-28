@@ -845,3 +845,63 @@ describe("計畫關聯資料表（plan_groups／source_plan_id，#639）", () =>
     await expect(as("anon", {}, tx => tx.query(`SELECT 1 FROM public.plan_groups`))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("小測驗補讀日（沒排章節的日子不出題，#641）", () => {
+  // 利未記 27 章分給 31 天：取整數 0 章、餘數 27 從第 1 天起每天補 1 章 → 最後 4 天沒有章節。
+  // 用遠在未來的日期，日曆的「今天」不管哪天跑都在這個月之前。
+  const REST_PLAN = "40000000-0000-4000-8000-000000000641";
+  const RULES = {
+    segments: [{ label: "2099年10月", startDate: "2099-10-01", endDate: "2099-10-31", readings: [{ book: "利未記", from: 1, to: 27 }] }]
+  };
+  const withRestPlan = fn => asService(async tx => {
+    await tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books, rules)
+       VALUES ($1, '補讀日測試', '2099-10-01', '2099-10-31', ARRAY['LEV'], $2::jsonb)`,
+      [REST_PLAN, JSON.stringify(RULES)]
+    );
+    return fn(tx);
+  });
+  const calendar = (tx, from, days) => tx.query(
+    `SELECT public.get_daily_quiz_calendar($1, $2::date, $3, $4) AS result`, [REST_PLAN, from, days, ids.admin]
+  ).then(({ rows: [{ result }] }) => result.days);
+
+  it("每天分到幾章和 Edge Function／會友排程同一套算法", async () => {
+    const counts = await withRestPlan(async tx => (await tx.query(
+      `SELECT d::date AS day, public._daily_quiz_reading_chapter_count($1, d::date) AS n
+       FROM generate_series('2099-10-26'::date, '2099-10-31'::date, '1 day') AS d`, [REST_PLAN]
+    )).rows.map(row => row.n));
+    expect(counts).toEqual([1, 1, 0, 0, 0, 0]);
+  });
+
+  it("沒有 segments 的計畫不判定（回 NULL），不會被當成補讀日", async () => {
+    const { rows: [{ n }] } = await asService(tx => tx.query(
+      `SELECT public._daily_quiz_reading_chapter_count($1, '2026-10-01') AS n`, [ids.plan]
+    ));
+    expect(n).toBeNull();
+  });
+
+  it("日曆把沒排章節的日子標成 rest_day，不需要處理、也沒有錯誤", async () => {
+    const days = await withRestPlan(async tx => {
+      // 舊資料：以前按「請 AI 出題」留下的失敗紀錄，也要被補讀日蓋過
+      await tx.query(
+        `INSERT INTO public.daily_quizzes (global_plan_id, quiz_date, variant, generation_status, generation_error)
+         VALUES ($1, '2099-10-28', 'A', 'failed', 'scripture:no_reading_chapters')`, [REST_PLAN]
+      );
+      return calendar(tx, "2099-10-27", 5);
+    });
+    expect(days.map(day => day.status)).toEqual(["waiting", "rest_day", "rest_day", "rest_day", "rest_day"]);
+    expect(days.slice(1).every(day => day.needsAttention === false && day.aiError === null)).toBe(true);
+  });
+
+  it("補讀日按「請 AI 出題」直接擋下，不建紀錄", async () => {
+    await expect(withRestPlan(tx => tx.query(
+      `SELECT public.swap_daily_quiz_version($1, '2099-10-29', $2)`, [REST_PLAN, ids.admin]
+    ))).rejects.toThrow(/quiz_rest_day/);
+  });
+
+  it("輔助函式只給 service_role", async () => {
+    await expect(as("authenticated", { sub: ids.adminAuth }, tx => tx.query(
+      `SELECT public._daily_quiz_reading_chapter_count($1, '2026-10-01')`, [ids.plan]
+    ))).rejects.toThrow(/permission denied/);
+  });
+});

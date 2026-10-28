@@ -4003,6 +4003,7 @@ const db = {
       quiz_approval_locked: "題目已鎖定，不能修改或更換。",
       quiz_publish_admin_only: "只有系統管理員可以發佈小測驗。",
       quiz_date_passed: "已經過去的日子不能再修改。",
+      quiz_rest_day: "這一天是補讀日，沒有排讀經章節，不出題。",
       quiz_generating: "AI 正在出這一天的題目，請稍等一下再試。",
       quiz_generation_secret_missing: "這個環境沒有設定 AI 出題，不能換一版。",
       quiz_assignment_required: "你所屬的小組尚未收到這份小測驗。",
