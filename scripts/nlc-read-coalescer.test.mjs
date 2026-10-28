@@ -80,7 +80,7 @@ describe("createReadCoalescer", () => {
   });
 
   it("re-sends a slot singly when an older server refuses RPCs inside a batch", async () => {
-    const { coalescer, sendOne, flush } = setup({
+    const { coalescer, sendOne, sendBatch, flush } = setup({
       batch: async () => ({ data: [{ data: "batched" }, { error: "batch_read_only" }], error: null })
     });
     const a = coalescer.send(select("verse_likes"));
@@ -89,6 +89,17 @@ describe("createReadCoalescer", () => {
     expect(await a).toEqual({ data: "batched", error: null });
     expect(await b).toEqual({ data: "one:exam_home_banner", error: null });
     expect(sendOne).toHaveBeenCalledTimes(1);
+
+    // 之後的 RPC 不再放進 batch（每次都被退、多繞一趟），select 照樣合併
+    const c = coalescer.send(rpc("exam_home_exams"));
+    expect(await c).toEqual({ data: "one:exam_home_exams", error: null });
+    const d = coalescer.send(select("verse_likes"));
+    const e = coalescer.send(select("app_feature_settings"));
+    flush();
+    // 這個假伺服器每批都退第二格，所以第二格的 select 也單支補送
+    expect(await Promise.all([d, e])).toEqual([{ data: "batched", error: null }, { data: "one:app_feature_settings", error: null }]);
+    expect(sendOne).toHaveBeenCalledTimes(3);
+    expect(sendBatch).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to single requests when the whole batch fails or throws", async () => {

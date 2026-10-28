@@ -46,6 +46,8 @@ export function createReadCoalescer({
   let pending = [];
   let scheduled = false;
   let batchUnsupported = false;
+  // 舊版伺服器的 batch 只收 select：被退一次之後 RPC 就直接單支送，不再每批多繞一趟
+  let rpcBatchUnsupported = false;
 
   const sendEach = (entries) => {
     for (const entry of entries) {
@@ -75,6 +77,7 @@ export function createReadCoalescer({
       const row = rows[index];
       // 舊版伺服器還不收 batch 裡的 RPC：這一格改成單支送
       if (!row || row.error === "batch_read_only") {
+        if (row && entry.request.action === "rpc") rpcBatchUnsupported = true;
         sendEach([entry]);
         return;
       }
@@ -99,6 +102,7 @@ export function createReadCoalescer({
   return {
     send(request) {
       if (batchUnsupported || !isBatchable(request)) return sendOne(request);
+      if (rpcBatchUnsupported && request.action === "rpc") return sendOne(request);
       return new Promise((resolve, reject) => {
         // 先拍下這一刻的請求內容：等到送出時呼叫端就算再改 builder 也不影響
         pending.push({ request: JSON.parse(JSON.stringify(request)), resolve, reject });
