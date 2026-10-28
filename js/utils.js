@@ -4,6 +4,7 @@ import {
 import { isCampaignStageKind, isCanonicalCampaignStageKind } from "./data/campaign-stage-kinds.mjs";
 import { segmentScheduleDaysForRoundCount, toLocalDateKey } from "./data/current-round-progress.mjs";
 import { digestChapterKeys, digestRoundLogs, isPlanReadingLogsLoaded } from "./data/reading-log-scope.mjs";
+import { HUMAN_AUDIO_COPY, SPEECH_MODES, normalizeSpeechMode } from "./modules/reader-human-audio.mjs";
 // 書卷展開與平均分配和伺服器的「教會原始日程」共用（#564）
 import { distributeChaptersAcrossDays, expandPlanBooksToChapters } from "../supabase/functions/_shared/progress/plan-schedule.mjs";
 
@@ -2891,6 +2892,38 @@ export function initSpeechPreferencesControls() {
       playPreviewSpeech();
     });
   }
+
+  // 朗讀方式（#636）：真人朗讀時隱藏發音人、試聽與語音指南（那些只管裝置語音），改顯示出處說明。
+  const speechModeButtons = document.querySelectorAll(".speech-mode-toggle [data-speech-mode]");
+  const speechModeNote = document.getElementById("speech-mode-note");
+  const voiceControl = document.querySelector(".speech-voice-control");
+  const ttsGuideButton = document.getElementById("btn-show-tts-guide");
+
+  function renderSpeechMode(mode) {
+    const isHuman = mode === SPEECH_MODES.HUMAN;
+    speechModeButtons.forEach(btn => {
+      const active = btn.dataset.speechMode === mode;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    voiceControl?.classList.toggle("hidden", isHuman);
+    ttsGuideButton?.classList.toggle("hidden", isHuman);
+    if (speechModeNote) {
+      speechModeNote.textContent = isHuman ? `${HUMAN_AUDIO_COPY.modeNote}${HUMAN_AUDIO_COPY.attribution}` : "";
+      speechModeNote.classList.toggle("hidden", !isHuman);
+    }
+  }
+
+  renderSpeechMode(normalizeSpeechMode(getSpeechSetting("mode", SPEECH_MODES.DEVICE)));
+  speechModeButtons.forEach(btn => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "true";
+    btn.addEventListener("click", () => {
+      const mode = normalizeSpeechMode(btn.dataset.speechMode);
+      setSpeechSetting("mode", mode);
+      renderSpeechMode(mode);
+    });
+  });
 
   // 3. Preview Button Toggle
   let isPreviewSpeaking = false;

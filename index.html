@@ -680,6 +680,13 @@
             aria-valuemin="1" aria-valuemax="1" aria-valuenow="1" id="reader-audio-progress-track">
             <span class="reader-audio-timeline__fill" id="reader-audio-progress-fill"></span>
           </div>
+          <!-- 真人朗讀（#636）：一章一個音檔、沒有逐節進度，改用可拖曳的時間軸 -->
+          <input type="range" class="reader-audio-timeline__seek hidden" id="reader-audio-seek"
+            min="0" max="0" step="1" value="0" aria-label="真人朗讀播放位置">
+          <p class="reader-audio-timeline__notice hidden" id="reader-audio-notice">
+            <span>此版本沒有真人朗讀，改用裝置語音</span>
+            <button type="button" class="reader-audio-timeline__switch" id="reader-audio-switch-cuv">改看和合本聽真人朗讀</button>
+          </p>
         </div>
 
         <!-- Legacy in-reader search panel kept hidden for compatibility -->
@@ -1956,6 +1963,16 @@
           <div style="display: flex; align-items: center; gap: 0.4rem;">
             <span class="nlc-icon nlc-icon--sm" data-icon="volume2" aria-hidden="true" style="color: var(--brand-primary, #04A9D2); flex-shrink: 0;"></span>
             <span style="font-size: 0.875rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em;">聖經語音朗讀設定</span>
+          </div>
+
+          <!-- 朗讀方式（#636）：真人朗讀＝信望愛和合本音檔；裝置語音＝手機內建語音 -->
+          <div class="speech-mode-control">
+            <span id="speech-mode-label" style="font-size: 0.875rem; font-weight: 500; color: var(--text-primary);">朗讀方式</span>
+            <div class="segment-track speech-mode-toggle" role="group" aria-labelledby="speech-mode-label">
+              <button type="button" class="segment-toggle-btn" data-speech-mode="human" aria-pressed="false">真人朗讀</button>
+              <button type="button" class="segment-toggle-btn active" data-speech-mode="device" aria-pressed="true">裝置語音</button>
+            </div>
+            <p class="speech-mode-note hidden" id="speech-mode-note"></p>
           </div>
 
           <!-- 語速滑桿（單行緊湊版） -->

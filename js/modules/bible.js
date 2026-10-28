@@ -2,6 +2,7 @@
 
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
+import { HUMAN_AUDIO_COPY, SPEECH_MODES, createHumanAudioPlayer, formatAudioClock, formatHumanAudioTimelineLabel, resolveReaderSpeechSource } from "./reader-human-audio.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import {
   buildFhlSearchUrl,
@@ -695,6 +696,7 @@ export function initReaderControls() {
       }
     });
   }
+  bindHumanAudioControls();
 
   const searchBtn = document.getElementById("reader-search-btn");
   const searchOverlay = document.getElementById("global-search-overlay");
@@ -2261,6 +2263,31 @@ let verseListForSpeaking = [];
 let currentAudioSessionId = 0;
 let preferredReaderVoice = null;
 let pendingReaderVoicePromise = null;
+// 目前在播的是裝置語音還是真人朗讀（#636）；停止後一律回到 device。
+let readerAudioSource = SPEECH_MODES.DEVICE;
+let humanAudioPlayer = null;
+let humanAudioSeeking = false;
+
+function getReaderSpeechSource() {
+  return resolveReaderSpeechSource({ mode: state.speechSettings?.mode, version: state.readerState?.version });
+}
+
+// 進度條兩種樣式：裝置語音用「第 N 節」進度、真人朗讀用可拖曳的時間軸。
+function setReaderAudioTimelineMode(mode) {
+  const timeline = document.getElementById("reader-audio-timeline");
+  const track = document.getElementById("reader-audio-progress-track");
+  const seek = document.getElementById("reader-audio-seek");
+  if (!timeline) return;
+  const isTime = mode === "time";
+  track?.classList.toggle("hidden", isTime);
+  seek?.classList.toggle("hidden", !isTime);
+  // 時間每秒在變，不要讓螢幕報讀器一直播報；逐節進度照舊播報。
+  timeline.setAttribute("aria-live", isTime ? "off" : "polite");
+}
+
+function showReaderAudioNotice(visible) {
+  document.getElementById("reader-audio-notice")?.classList.toggle("hidden", !visible);
+}
 
 function updateReaderAudioTimeline(verseIndex, totalVerses, status = "speaking", verseNum = null) {
   const timeline = document.getElementById("reader-audio-timeline");
@@ -2268,6 +2295,7 @@ function updateReaderAudioTimeline(verseIndex, totalVerses, status = "speaking",
   const track = document.getElementById("reader-audio-progress-track");
   const fill = document.getElementById("reader-audio-progress-fill");
   if (!timeline || !label || !track || !fill || totalVerses <= 0) return;
+  setReaderAudioTimelineMode("verse");
   const safeIndex = Math.min(Math.max(Number(verseIndex) || 0, 0), totalVerses - 1);
   const currentVerse = verseNum ?? verseListForSpeaking[safeIndex]?.verseNum ?? safeIndex + 1;
   const prefix = status === "paused" ? "已暫停・" : status === "completed" ? "已完成・" : "朗讀中・";
@@ -2282,6 +2310,156 @@ function hideReaderAudioTimeline() {
   document.getElementById("reader-audio-timeline")?.classList.add("hidden");
 }
 
+function updateHumanAudioTimeline(status = "speaking", position = null) {
+  const timeline = document.getElementById("reader-audio-timeline");
+  const label = document.getElementById("reader-audio-progress-label");
+  const seek = document.getElementById("reader-audio-seek");
+  if (!timeline || !label || !seek) return;
+  const { currentTime, duration } = position || humanAudioPlayer?.getPosition() || { currentTime: 0, duration: NaN };
+  setReaderAudioTimelineMode("time");
+  const text = formatHumanAudioTimelineLabel({ status, currentTime, duration });
+  if (label.textContent !== text) label.textContent = text;
+  if (!humanAudioSeeking) {
+    seek.max = String(Number.isFinite(duration) ? Math.floor(duration) : 0);
+    seek.value = String(Math.floor(currentTime));
+  }
+  seek.setAttribute("aria-valuetext", `${formatAudioClock(currentTime)}／${formatAudioClock(duration)}`);
+  timeline.classList.remove("hidden");
+}
+
+function getHumanAudioPlayer() {
+  if (humanAudioPlayer) return humanAudioPlayer;
+  humanAudioPlayer = createHumanAudioPlayer({
+    onTimeUpdate: () => {
+      if (readerAudioSource !== SPEECH_MODES.HUMAN) return;
+      updateHumanAudioTimeline(isSpeaking ? "speaking" : "paused");
+    },
+    onEnded: () => {
+      if (readerAudioSource !== SPEECH_MODES.HUMAN || !isSpeaking) return;
+      void continueReaderAudioToNextChapter(currentAudioSessionId);
+    },
+    onError: () => {
+      if (readerAudioSource !== SPEECH_MODES.HUMAN) return;
+      stopReaderAudio(true);
+      if (typeof showToast === "function") showToast(HUMAN_AUDIO_COPY.unavailable);
+    }
+  });
+  return humanAudioPlayer;
+}
+
+function getHumanAudioRate() {
+  return Number(state.speechSettings?.rate) || 1;
+}
+
+function prefetchNextHumanAudio(bookId, chapter) {
+  const next = resolveAdjacentChapter(BIBLE_BOOKS, bookId, chapter, 1);
+  if (next) getHumanAudioPlayer().prefetch(next.book.id, next.chapter);
+}
+
+// 鎖定畫面／耳機控制（Media Session）：顯示書卷章節，並可播放、暫停、切上一章／下一章。
+let readerMediaSessionBound = false;
+
+function updateReaderAudioMediaSession(bookId, chapter, playbackState = "playing") {
+  const session = typeof navigator !== "undefined" ? navigator.mediaSession : null;
+  if (!session || typeof MediaMetadata === "undefined") return;
+  const book = BIBLE_BOOKS.find(b => b.id === Number(bookId));
+  try {
+    session.metadata = new MediaMetadata({
+      title: `${book?.name || ""} ${chapter}`.trim(),
+      artist: HUMAN_AUDIO_COPY.mediaArtist,
+      album: HUMAN_AUDIO_COPY.mediaAlbum
+    });
+    session.playbackState = playbackState;
+  } catch (_e) {}
+  if (readerMediaSessionBound) return;
+  readerMediaSessionBound = true;
+  const bind = (action, handler) => {
+    try { session.setActionHandler(action, handler); } catch (_e) {}
+  };
+  bind("play", () => { if (!isSpeaking) void window.toggleReaderAudio(); });
+  bind("pause", () => { if (isSpeaking) void window.toggleReaderAudio(); });
+  bind("previoustrack", () => { void skipHumanAudioChapter(-1); });
+  bind("nexttrack", () => { void skipHumanAudioChapter(1); });
+}
+
+function setReaderAudioMediaSessionState(playbackState) {
+  const session = typeof navigator !== "undefined" ? navigator.mediaSession : null;
+  if (!session) return;
+  try {
+    session.playbackState = playbackState;
+    if (playbackState === "none") session.metadata = null;
+  } catch (_e) {}
+}
+
+async function skipHumanAudioChapter(direction) {
+  const moved = await navigateToChapter(direction);
+  if (moved && getReaderSpeechSource().source === SPEECH_MODES.HUMAN) await startHumanReaderAudio();
+}
+
+async function startHumanReaderAudio(startVerseNum = null) {
+  const player = getHumanAudioPlayer();
+  const { bookId, chapter } = state.readerState;
+  const resuming = isReaderAudioPaused && readerAudioSource === SPEECH_MODES.HUMAN && player.isLoaded(bookId, chapter);
+  if (!resuming) {
+    stopReaderAudio(true);
+    resetReaderAudioState();
+  }
+  currentAudioSessionId++;
+  const sessionId = currentAudioSessionId;
+  readerAudioSource = SPEECH_MODES.HUMAN;
+  isSpeaking = true;
+  isReaderAudioPaused = false;
+  updateReaderAudioButton(true);
+  showReaderAudioNotice(false);
+  updateHumanAudioTimeline(resuming ? "speaking" : "loading", resuming ? null : { currentTime: 0, duration: NaN });
+  updateReaderAudioMediaSession(bookId, chapter);
+  try {
+    if (resuming) await player.resume({ rate: getHumanAudioRate() });
+    else await player.start({ bookId, chapter, rate: getHumanAudioRate() });
+  } catch (error) {
+    if (sessionId !== currentAudioSessionId) return;
+    console.warn("[ReaderAudio] Human audio failed", error);
+    stopReaderAudio(true);
+    if (typeof showToast === "function") showToast(HUMAN_AUDIO_COPY.unavailable);
+    return;
+  }
+  if (sessionId !== currentAudioSessionId) return;
+  if (!resuming && typeof showToast === "function") {
+    const selectedVerseNum = Number(startVerseNum ?? state.readerState?.selectedVerseNum ?? 1);
+    showToast(selectedVerseNum > 1 ? HUMAN_AUDIO_COPY.startsAtChapterStart : HUMAN_AUDIO_COPY.started);
+  }
+  prefetchNextHumanAudio(bookId, chapter);
+}
+
+// 沒有音檔的版本：停掉裝置語音、切到官話和合本、播真人朗讀。音檔不用等經文畫好。
+async function switchToHumanAudioVersion() {
+  stopReaderAudio(true);
+  window.selectBibleVersion("CUV");
+  await startHumanReaderAudio();
+}
+
+function bindHumanAudioControls() {
+  const seek = document.getElementById("reader-audio-seek");
+  if (seek && seek.dataset.bound !== "true") {
+    seek.dataset.bound = "true";
+    // 拖曳中只更新時間文字，放開才真的跳（避免拖一下就發一堆分段讀取）。
+    seek.addEventListener("input", () => {
+      humanAudioSeeking = true;
+      const { duration } = humanAudioPlayer?.getPosition() || { duration: NaN };
+      updateHumanAudioTimeline(isSpeaking ? "speaking" : "paused", { currentTime: Number(seek.value), duration });
+    });
+    seek.addEventListener("change", () => {
+      humanAudioSeeking = false;
+      humanAudioPlayer?.seek(Number(seek.value));
+    });
+  }
+  const switchBtn = document.getElementById("reader-audio-switch-cuv");
+  if (switchBtn && switchBtn.dataset.bound !== "true") {
+    switchBtn.dataset.bound = "true";
+    switchBtn.addEventListener("click", () => { void switchToHumanAudioVersion(); });
+  }
+}
+
 function setReaderAudioStartMarker(verseNum = 1) {
   clearSpeakingHighlight();
   clearReaderStartSelection();
@@ -2294,7 +2472,8 @@ function setReaderAudioStartMarker(verseNum = 1) {
 
 function resetReaderAudioAfterManualChapterChange(showTimeline) {
   setReaderAudioStartMarker(1);
-  if (!showTimeline) return;
+  // 真人朗讀沒有逐節進度，換章後不留「已暫停・第 1 節」的進度條。
+  if (!showTimeline || getReaderSpeechSource().source === SPEECH_MODES.HUMAN) return;
   const totalVerses = document.querySelectorAll("#bible-content .bible-verse").length;
   if (totalVerses > 0) updateReaderAudioTimeline(0, totalVerses, "paused", 1);
 }
@@ -2327,17 +2506,24 @@ function stopReaderAudio(quiet = false, options = {}) {
   const lastVerseIndex = currentSpeakingVerseIndex;
   const lastVerseTotal = verseListForSpeaking.length;
   const lastVerse = verseListForSpeaking[lastVerseIndex]?.verseNum || lastVerseIndex + 1;
+  const humanPosition = readerAudioSource === SPEECH_MODES.HUMAN && humanAudioPlayer ? humanAudioPlayer.getPosition() : null;
   currentAudioSessionId++;
   if (typeof window.speechSynthesis !== "undefined") {
     try { window.speechSynthesis.cancel(); } catch (_e) {}
   }
+  humanAudioPlayer?.stop();
+  humanAudioSeeking = false;
+  readerAudioSource = SPEECH_MODES.DEVICE;
+  setReaderAudioMediaSessionState("none");
   isSpeaking = false;
   isReaderAudioPaused = false;
   currentSpeakingVerseIndex = -1;
   verseListForSpeaking = [];
   speechUtterance = null;
   clearSpeakingHighlight();
-  if (options.preservePosition && lastVerseIndex >= 0 && lastVerseTotal > 0) {
+  if (options.preservePosition && humanPosition) {
+    updateHumanAudioTimeline(options.status || "paused", humanPosition);
+  } else if (options.preservePosition && lastVerseIndex >= 0 && lastVerseTotal > 0) {
     const verseEl = document.getElementById(`reader-verse-${lastVerse}`);
     verseEl?.classList.add("speaking-highlight");
     updateReaderAudioTimeline(lastVerseIndex, lastVerseTotal, options.status || "paused", lastVerse);
@@ -2356,6 +2542,7 @@ function resetReaderAudioState() {
   speechUtterance = null;
   clearSpeakingHighlight();
   hideReaderAudioTimeline();
+  showReaderAudioNotice(false);
   updateReaderAudioButton(false);
 }
 
@@ -2371,6 +2558,18 @@ window.clearReaderAudioOnPageExit = function () {
 // so the next 朗讀 press below always restarts from that verse's beginning —
 // whichever verse ends up marked, including one the user taps while paused.
 function pauseReaderAudio() {
+  // 真人朗讀是真的暫停 <audio>，再按就從暫停的位置續播（沒有逐節可以標記）。
+  if (isSpeaking && readerAudioSource === SPEECH_MODES.HUMAN) {
+    currentAudioSessionId++;
+    humanAudioPlayer?.pause();
+    isSpeaking = false;
+    isReaderAudioPaused = true;
+    updateHumanAudioTimeline("paused");
+    setReaderAudioMediaSessionState("paused");
+    updateReaderAudioButton(false);
+    if (typeof showToast === "function") showToast(HUMAN_AUDIO_COPY.paused);
+    return true;
+  }
   if (!isSpeaking || typeof window.speechSynthesis === "undefined") return false;
   const currentItem = verseListForSpeaking[currentSpeakingVerseIndex];
   currentAudioSessionId++;
@@ -2500,6 +2699,10 @@ async function continueReaderAudioToNextChapter(sessionId) {
   if (sessionId !== currentAudioSessionId || !isSpeaking) return;
   // 朗讀把最後一節唸完＝這章讀完（即使頁面沒捲到底；最後一章沒有下一章也一樣）。
   recordLeavingReaderChapter({ force: true });
+  if (readerAudioSource === SPEECH_MODES.HUMAN) {
+    await continueHumanAudioToNextChapter(sessionId);
+    return;
+  }
   const moved = await navigateToChapter(1, { autoContinue: true });
   if (!moved || sessionId !== currentAudioSessionId || !isSpeaking) {
     if (verseListForSpeaking.length > 0) {
@@ -2523,14 +2726,52 @@ async function continueReaderAudioToNextChapter(sessionId) {
   speakNextVerseInQueue(sessionId);
 }
 
-window.toggleReaderAudio = async function(startVerseNum = null) {
-  if (typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
-    if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
+// 真人朗讀播完一章：先用同一個 <audio> 開始播下一章，再換經文畫面。
+// 螢幕鎖定時畫面那邊（requestAnimationFrame）會停住，聲音不能等它。
+async function continueHumanAudioToNextChapter(sessionId) {
+  const player = getHumanAudioPlayer();
+  const next = resolveAdjacentChapter(BIBLE_BOOKS, state.readerState.bookId, state.readerState.chapter, 1);
+  if (!next) {
+    stopReaderAudio(true, { preservePosition: true, status: "completed" });
     return;
   }
+  const playing = player.start({ bookId: next.book.id, chapter: next.chapter, rate: getHumanAudioRate() });
+  playing.catch(() => {});
+  updateReaderAudioMediaSession(next.book.id, next.chapter);
+  updateHumanAudioTimeline("loading", { currentTime: 0, duration: NaN });
+  const moved = await navigateToChapter(1, { autoContinue: true });
+  if (sessionId !== currentAudioSessionId || !isSpeaking) return;
+  if (!moved) {
+    stopReaderAudio(true);
+    return;
+  }
+  try {
+    await playing;
+  } catch (error) {
+    if (sessionId !== currentAudioSessionId) return;
+    console.warn("[ReaderAudio] Human audio failed on next chapter", error);
+    stopReaderAudio(true);
+    if (typeof showToast === "function") showToast(HUMAN_AUDIO_COPY.unavailable);
+    return;
+  }
+  if (sessionId !== currentAudioSessionId || !isSpeaking) return;
+  prefetchNextHumanAudio(next.book.id, next.chapter);
+  await resetReaderScrollAfterChapterRender(sessionId);
+}
+
+window.toggleReaderAudio = async function(startVerseNum = null) {
   if (isSpeaking) {
     if (pauseReaderAudio()) return;
     stopReaderAudio(false, { preservePosition: true });
+    return;
+  }
+  const speechSource = getReaderSpeechSource();
+  if (speechSource.source === SPEECH_MODES.HUMAN) {
+    await startHumanReaderAudio(startVerseNum);
+    return;
+  }
+  if (typeof window.speechSynthesis === "undefined" || typeof SpeechSynthesisUtterance === "undefined") {
+    if (typeof showToast === "function") showToast("您的瀏覽器不支援語音朗讀功能");
     return;
   }
   // Paused (or genuinely idle): always (re)start fresh from whichever verse
@@ -2575,6 +2816,8 @@ window.toggleReaderAudio = async function(startVerseNum = null) {
     lang: preferredReaderVoice?.lang || "zh-TW"
   });
   if (typeof showToast === "function") showToast(`從第 ${startVerse?.verseNum || 1} 節開始朗讀`);
+  // 選了真人朗讀但這個版本沒有音檔：照常用裝置語音，進度條下方提供改看和合本（#636）。
+  showReaderAudioNotice(speechSource.fallback);
   speakNextVerseInQueue(sessionId);
 };
 function escapeRegExp(string) {
