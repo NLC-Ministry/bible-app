@@ -940,6 +940,8 @@ const auth = {
     localStorage.removeItem("bible_highlights");
     localStorage.removeItem("bible_highlight_timestamps");
     localStorage.removeItem("bible_highlights_owner");
+    // 開機快照（#630）：下一個登入的人不能先看到這個人的首頁
+    try { await window.db?.clearBootSnapshot?.(); } catch (_) {}
     try { sessionStorage.removeItem("plan_elig_hub_verified"); } catch (_) {}
     try { localStorage.removeItem("plan_elig_hub_verified"); } catch (_) {}
 

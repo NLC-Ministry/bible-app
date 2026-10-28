@@ -2,6 +2,13 @@ import { getResponsePayloadBytes, networkMetrics } from './performance/network-m
 import { fetchNlcTracked } from './diagnostics/report-diagnostics.mjs';
 import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
 import { createReadCoalescer } from './data/nlc-read-coalescer.mjs';
+import {
+  BOOT_SNAPSHOT_KEY,
+  BOOT_SNAPSHOT_STORE,
+  bootSnapshotToLoadResults,
+  buildBootSnapshot,
+  isUsableBootSnapshot
+} from './data/boot-snapshot.mjs';
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
@@ -1660,6 +1667,342 @@ const db = {
   // exists there anyway (it's only created by app.js, which those pages
   // deliberately don't load) to make it safe/paginated. See exam-entry.js /
   // grade-entry.js's loadUserData call sites.
+  // ── 開機快照（#630）：快取先畫、背景更新 ──────────────────────────────────
+  _liveUserDataApplied: false,
+  saveBootSnapshot(user, { globalPlans, profile, plans }) {
+    const store = window.pwaDataStore;
+    const snapshot = buildBootSnapshot({
+      userId: user && user.id,
+      globalPlans,
+      profile,
+      plans,
+      roleDefinitions: state.roleDefinitions
+    });
+    if (!store || !snapshot) return;
+    store.put(BOOT_SNAPSHOT_STORE, snapshot).catch(error => {
+      console.warn("[BootSnapshot] save failed:", error && error.message);
+    });
+  },
+
+  clearBootSnapshot() {
+    const store = window.pwaDataStore;
+    if (!store) return Promise.resolve();
+    return store.delete(BOOT_SNAPSHOT_STORE, BOOT_SNAPSHOT_KEY).catch(() => {});
+  },
+
+  // 用上次的快照把開機資料先套上，讓首頁不用等網路就能畫。回傳有沒有套用。
+  // 任何一個條件不成立、或套用途中出錯，都回 false，呼叫端照舊等網路資料。
+  async applyBootSnapshot() {
+    try {
+      const store = window.pwaDataStore;
+      const userId = state.currentProfileId;
+      const loggedIn = typeof auth !== "undefined" && typeof auth.isLoggedIn === "function" && auth.isLoggedIn();
+      if (!store || !userId || !loggedIn || state.offlineMode || !state.isSupabaseMode || this._liveUserDataApplied) return false;
+      const snapshot = await store.get(BOOT_SNAPSHOT_STORE, BOOT_SNAPSHOT_KEY);
+      if (!isUsableBootSnapshot(snapshot, { userId })) return false;
+      let logs = [];
+      try { logs = JSON.parse(localStorage.getItem("reading_logs") || "[]"); } catch (_) {}
+      const { digest, scope } = this.restoreReadingLogOfflineSnapshot();
+      const results = bootSnapshotToLoadResults(snapshot, { logs, scope, digest });
+      // 讀 IndexedDB 的這段時間網路資料可能已經先到了
+      if (!results || this._liveUserDataApplied || state.currentProfileId !== userId) return false;
+      if (!(state.roleDefinitions || []).length && snapshot.roleDefinitions.length) {
+        state.roleDefinitions = snapshot.roleDefinitions;
+      }
+      await this._applyLoadedUserData({ id: userId, oidc: true }, results, { fromSnapshot: true });
+      return true;
+    } catch (error) {
+      console.warn("[BootSnapshot] apply failed, waiting for live data:", error && error.message);
+      return false;
+    }
+  },
+
+  // loadUserData 抓完資料之後的套用段。開機快照（#630）也走這裡，畫面用的計畫／進度
+  // 組法只有一份。fromSnapshot：資料來自本機上次的快照，不寫回任何快取、不算獎章——
+  // 那些等背景這次的網路資料回來、再跑一次這裡時才做。
+  async _applyLoadedUserData(user, { globalPlansResult, profileResult, plansResult, highlightsResult, bootLogs }, { skipReadingLogs = false, fromSnapshot = false } = {}) {
+    // 網路資料一旦套用過，就不再讓開機快照蓋上去（快照讀得比網路慢的極端情況）
+    if (!fromSnapshot) this._liveUserDataApplied = true;
+    const logsResult = bootLogs ? bootLogs.logsResult : { data: [], error: null };
+    const logsLoaded = Boolean(bootLogs && !logsResult.error);
+
+    // Only message/code — never the raw error object. A PostgrestError
+    // can echo back query/row context that shouldn't reach the browser
+    // console in production.
+    const summarizeLoadError = (error) => error ? { message: error.message, code: error.code } : null;
+    if (globalPlansResult.error) console.error("❌ global_plans load failed:", summarizeLoadError(globalPlansResult.error));
+    if (profileResult.error) console.error("❌ profile load failed:", summarizeLoadError(profileResult.error));
+    if (logsResult.error) console.error("❌ reading_logs load failed:", summarizeLoadError(logsResult.error));
+    if (plansResult.error) console.error("❌ reading_plans load failed:", summarizeLoadError(plansResult.error));
+    const initialDataLoadSucceeded = ![
+      globalPlansResult,
+      profileResult,
+      logsResult,
+      plansResult
+    ].some(result => result.error);
+
+    // 處理 global_plans
+    // ⚠️ 只有在這次查詢真的成功時才覆蓋既有資料。閒置一段時間後 session
+    // 過期、edge function 暫時降級等暫時性失敗，都不該把畫面砍成空白
+    // 「未選擇計畫」——寧可暫時顯示上一次成功載入的舊資料，也不要用一次
+    // 失敗的查詢結果洗掉使用者原本看得到的內容。
+    if (!globalPlansResult.error) {
+      state.globalPlans = globalPlansResult.data ? globalPlansResult.data.map(mapGlobalPlanRecord) : [];
+    }
+
+    // 同一台裝置換過使用者（登出後換人登入、共用平板、忘記登出）時，
+    // localStorage 裡的 bible_highlights 是上一位留下來的——本機優先的合併
+    // 邏輯會把它當成「我自己剛存的、還沒同步成功」保留下來，導致畫面出現
+    // 不是自己的螢光紀錄，甚至之後編輯到那一筆時還會用目前這個帳號把它
+    // 寫回伺服器。用一個「這份本機快取屬於誰」的標記比對，對不上就整包
+    // 丟掉，只信任伺服器這份。logout() 也會清，這裡是清不乾淨時的最後防線。
+    const highlightsOwnerKey = "bible_highlights_owner";
+    let cachedHighlightsOwner = null;
+    try { cachedHighlightsOwner = localStorage.getItem(highlightsOwnerKey); } catch (_) {}
+    if (cachedHighlightsOwner && cachedHighlightsOwner !== user.id) {
+      state.highlights = {};
+      state.highlightTimestamps = {};
+    }
+    try { localStorage.setItem(highlightsOwnerKey, user.id); } catch (_) {}
+
+    // 螢光筆雲端合併：伺服器資料補齊本機沒有的（換裝置/清資料的情況），
+    // 但本機既有的 key 維持不變——避免一筆剛按完、還沒同步成功的螢光筆
+    // 被稍慢抵達的舊伺服器回應蓋掉。
+    if (!highlightsResult.error && Array.isArray(highlightsResult.data)) {
+      const serverHighlights = {};
+      const serverHighlightTimestamps = {};
+      highlightsResult.data.forEach(row => {
+        const key = `${row.book}_${row.chapter}_${row.verse}`;
+        serverHighlights[key] = row.color;
+        serverHighlightTimestamps[key] = row.updated_at;
+      });
+      state.highlights = { ...serverHighlights, ...state.highlights };
+      state.highlightTimestamps = { ...serverHighlightTimestamps, ...state.highlightTimestamps };
+      try {
+        localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
+        localStorage.setItem("bible_highlight_timestamps", JSON.stringify(state.highlightTimestamps));
+      } catch (_) {}
+    }
+
+    // 1. Load / sync profile
+    if (!user.oidc) {
+      // Standard Supabase auth: load profile from our profiles table
+      const profile = profileResult.data;
+      if (profile) {
+        state.currentUser.name = profile.name;
+        state.currentUser.great_region = profile.great_region;
+        state.currentUser.pastoral_zone = profile.pastoral_zone;
+        state.currentUser.small_group = profile.small_group;
+        state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
+        state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
+
+      } else {
+        // First-time login: create profile without local org placement (Hub-owned).
+        state.currentUser.name = (typeof getDisplayName === "function"
+          ? getDisplayName(user.user_metadata && user.user_metadata.full_name)
+          : String((user.user_metadata && user.user_metadata.full_name) || "").trim()) || "";
+        state.currentUser.great_region = "";
+        state.currentUser.pastoral_zone = "";
+        state.currentUser.small_group = "";
+        state.currentUser.role_id = "10000000-0000-4000-8000-000000000001";
+        state.currentUser.role_definition = getRoleDefinition(state.currentUser.role_id);
+
+
+        try {
+          await state.supabase.from("profiles").insert({
+            id: user.id,
+            name: state.currentUser.name || null,
+            great_region: "",
+            pastoral_zone: "",
+            small_group: "",
+            role_id: state.currentUser.role_id
+          });
+        } catch (dbErr) {
+          console.error("Failed to auto-create user profile in Supabase:", dbErr);
+        }
+      }
+    } else {
+      // OIDC profiles are created and updated by the nlc-session Edge Function.
+      const profile = profileResult.data;
+      const localSyncedAt = state.currentUser.member_context_synced_at || "";
+      const remoteSyncedAt = profile?.member_context_synced_at || "";
+      if (profile && (!localSyncedAt || (remoteSyncedAt && remoteSyncedAt >= localSyncedAt))) {
+        this.applyNlcProfile(profile);
+      }
+    }
+
+    // 2. Load Reading Logs
+    // ⚠️ 查詢失敗時保留既有的 state.readingLogs，不要用空陣列洗掉打卡紀錄。
+    // skipReadingLogs：logsResult 是空 stub，不是「查了、剛好沒有」，所以
+    // 不要呼叫 applyReadingLogsSnapshot（會把 state.readingLogs/chapters_read
+    // 洗成空/0）——直接維持呼叫前的既有值，跟完全沒查過一樣。
+    // #474：按需載入過、而且還是已關閉的計畫，逐筆紀錄留著（重新整理不必再抓）。
+    // 只留「真的按需載入過」的（不在上一次 open 範圍裡）——上次還能打卡、這次關閉的
+    // 計畫，逐筆紀錄不一定在記憶體裡（例如從離線快照接手），一律改看摘要。
+    if (logsLoaded) {
+      const nextScope = bootLogs.scope.mode === "open"
+        ? createReadingLogScope({
+          mode: "open",
+          openPlanIds: bootLogs.scope.openPlanIds,
+          loadedPlanIds: getLazilyLoadedPlanIds(state.readingLogScope)
+            .filter(id => bootLogs.closedPlanIds.includes(id))
+        })
+        : bootLogs.scope;
+      state.readingLogScope = nextScope;
+      state.readingLogDigest = bootLogs.digest;
+      this.applyReadingLogsSnapshot(logsResult.data || [], { scope: nextScope });
+      // #474 之前整包紀錄的 IndexedDB 快取用不到了，順手清掉。
+      if (!fromSnapshot) window.readingLogRepository?.deleteCache(legacyReadingLogCacheKey(user.id)).catch(() => {});
+    }
+
+    // 3. Load Active Reading Plans
+    // ⚠️ 同理：查詢失敗（例如背景 session 過期）時保留既有的
+    // state.activePlans / state.activePlan，避免畫面短暫變成「未選擇計畫」，
+    // 誤導使用者以為計畫真的不見了。只有真的拿到新資料時才重建整個列表。
+    if (!plansResult.error) {
+      const plans = plansResult.data || [];
+      state.activePlans = [];
+      if (plans && plans.length > 0) {
+        const visibleGlobalPlanKeys = new Set((state.globalPlans || []).flatMap(plan =>
+          [plan.id, plan.globalPlanId, plan.presetKey].filter(Boolean).map(String)
+        ));
+        const canViewHiddenStages = typeof canManageHiddenPlans === "function" && canManageHiddenPlans();
+
+        plans.forEach(dbPlan => {
+          try {
+            const globalPlanId = dbPlan.global_plan_id || null;
+            // 個人計畫（#473）只看 is_personal 標記：不掛教會計畫，名字是使用者自己取的，
+            // 不能拿名字去對應教會計畫（同名就會被當成那個計畫）。key 用自己的 id。
+            const isPersonal = dbPlan.is_personal === true;
+            const key = isPersonal
+              ? dbPlan.id
+              : (dbPlan.preset_key
+                || (globalPlanId ? globalPlanId : null)
+                || getPresetKeyByName(dbPlan.name));
+            const presetStageMatch = String(dbPlan.preset_key || "").match(/^church_stage_(\d{2})$/);
+            const idStageMatch = String(globalPlanId || "").match(/^00000000-0000-0000-c026-(\d{12})$/);
+            const campaignStageNo = Number(presetStageMatch && presetStageMatch[1]
+              || idStageMatch && idStageMatch[1]
+              || 0);
+            const enrollmentKeys = [globalPlanId, dbPlan.preset_key].filter(Boolean).map(String);
+            const hasVisibleStageDefinition = enrollmentKeys.some(item => visibleGlobalPlanKeys.has(item));
+            if (!canViewHiddenStages
+              && campaignStageNo >= 2
+              && campaignStageNo <= 10
+              && !hasVisibleStageDefinition) {
+              return;
+            }
+
+            const isFixed = dbPlan.is_fixed !== false;
+            const storedRound = Number(dbPlan.current_round || 1);
+            // 逐筆紀錄還沒載入的已關閉計畫（#474）：用摘要裡的遍數確認。
+            const planLogs = isPlanReadingLogsLoaded(state.readingLogScope, dbPlan.id)
+              ? (state.readingLogs || []).filter(log => log.plan_id === dbPlan.id)
+              : digestRoundLogs(state.readingLogDigest, dbPlan.id);
+            const confirmedRound = getConfirmedReadingRound({
+              currentRound: storedRound,
+              upgradePromptHandled: dbPlan.upgrade_prompt_handled,
+              logs: planLogs
+            });
+            const linkedGlobalPlan = isPersonal
+              ? null
+              : (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
+            // 延後大區梯次是普通固定日期計畫：排程靠 target_books。enrollment 自己
+            // 沒帶書卷時，退回對應 global_plan 的 books（來源正式階段的經卷）。
+            const effectiveBooks = (Array.isArray(dbPlan.target_books) && dbPlan.target_books.length > 0)
+              ? dbPlan.target_books
+              : (linkedGlobalPlan && Array.isArray(linkedGlobalPlan.books) && linkedGlobalPlan.books.length
+                ? linkedGlobalPlan.books
+                : dbPlan.target_books);
+            const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, effectiveBooks, key, isFixed, {
+              readingDaysPerWeek: dbPlan.reading_days_per_week,
+              restWeekdays: dbPlan.rest_weekdays,
+              planId: dbPlan.id,
+              presetKey: key,
+              currentRound: confirmedRound,
+              currentRoundStartedAt: dbPlan.current_round_started_at || null
+            });
+            planObj.id = dbPlan.id;
+            planObj.currentRoundStartedAt = dbPlan.current_round_started_at || null;
+            planObj.globalPlanId = globalPlanId;  // ⚠️ UUID 關聯
+            planObj.isPersonal = isPersonal;
+            planObj.isFixed = isFixed;
+            planObj.is_fixed = isFixed;
+            planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
+            planObj.graceDays = normalizeGraceDays(linkedGlobalPlan?.graceDays);
+            planObj.planKind = linkedGlobalPlan?.planKind || (campaignStageNo >= 1 ? "church_campaign_stage" : "standard");
+            planObj.stageNo = linkedGlobalPlan?.stageNo || campaignStageNo || null;
+            // cohort：獎名 / 輪次 / 母 campaign 沿用來源正式階段（發獎 + 詳情頁獎章用）。
+            if (linkedGlobalPlan) {
+              if (linkedGlobalPlan.awardName) planObj.awardName = linkedGlobalPlan.awardName;
+              if (linkedGlobalPlan.roundNo) planObj.roundNo = linkedGlobalPlan.roundNo;
+              if (linkedGlobalPlan.parentCampaignId) planObj.parentCampaignId = linkedGlobalPlan.parentCampaignId;
+            }
+            planObj.currentRound = confirmedRound;
+            planObj.upgradePromptHandled = !!dbPlan.upgrade_prompt_handled;
+            state.activePlans.push(planObj);
+          } catch (err) {
+            console.error("Failed to parse dbPlan:", dbPlan, err);
+          }
+        });
+
+        state.activePlan = selectMostRecentActivePlan(state.activePlans);
+        calculateAllPlansProgress();
+      } else {
+        state.activePlan = null;
+        state.activePlans = [];
+      }
+    }
+
+    // Keep a small offline-reading snapshot in sync on every fully
+    // successful load. tryRestoreOfflineSession()/loadOfflineSnapshot()
+    // fall back to exactly these keys when the network is genuinely
+    // unreachable — without writing them here, that fallback used to
+    // always show empty plans for real NLC/Supabase-mode users, since
+    // nothing in this success path ever touched them.
+    // skipReadingLogs loads never reach this point with real reading-log
+    // data (logsResult.data is the empty stub above), so never let a
+    // lite load overwrite a real cached snapshot with that emptiness.
+    if (logsLoaded && !fromSnapshot) {
+      safeStorageSet("active_reading_plans", state.activePlans, 300);
+      this.saveReadingLogOfflineSnapshot();
+      localStorage.setItem("offline_snapshot_synced_at", new Date().toISOString());
+      if (user.oidc && initialDataLoadSucceeded) {
+        this.saveBootSnapshot(user, {
+          globalPlans: globalPlansResult.data,
+          profile: profileResult.data,
+          plans: plansResult.data
+        });
+      }
+    }
+
+    this.calculateStreak();
+    if (!fromSnapshot && typeof checkAchievements !== 'undefined') {
+      await checkAchievements(true);
+    }
+    if (typeof updateAdminNavVisibility === 'function') {
+      updateAdminNavVisibility();
+    }
+
+    // 💡 0秒秒開效能優化：儲存首屏 Profiles 本地快照
+    try {
+      if (state.currentUser && state.currentUser.name) {
+        localStorage.setItem("cached_user_profile", JSON.stringify({
+          name: state.currentUser.name,
+          great_region: state.currentUser.great_region,
+          pastoral_zone: state.currentUser.pastoral_zone,
+          small_group: state.currentUser.small_group,
+          role_id: state.currentUser.role_id,
+          role_definition: state.currentUser.role_definition
+        }));
+      }
+    } catch (e) {
+      console.warn("Failed to write fast startup cache:", e);
+    }
+
+    return initialDataLoadSucceeded;
+  },
+
   async loadUserData(force = false, { skipReadingLogs = false } = {}) {
     if (force) {
       this._userDataPromise = null;
@@ -1723,277 +2066,9 @@ const db = {
             plansResult.data || [],
             globalPlansResult.error ? [] : (globalPlansResult.data || [])
           );
-        const logsResult = bootLogs ? bootLogs.logsResult : { data: [], error: null };
-        const logsLoaded = Boolean(bootLogs && !logsResult.error);
-
-        // Only message/code — never the raw error object. A PostgrestError
-        // can echo back query/row context that shouldn't reach the browser
-        // console in production.
-        const summarizeLoadError = (error) => error ? { message: error.message, code: error.code } : null;
-        if (globalPlansResult.error) console.error("❌ global_plans load failed:", summarizeLoadError(globalPlansResult.error));
-        if (profileResult.error) console.error("❌ profile load failed:", summarizeLoadError(profileResult.error));
-        if (logsResult.error) console.error("❌ reading_logs load failed:", summarizeLoadError(logsResult.error));
-        if (plansResult.error) console.error("❌ reading_plans load failed:", summarizeLoadError(plansResult.error));
-        const initialDataLoadSucceeded = ![
-          globalPlansResult,
-          profileResult,
-          logsResult,
-          plansResult
-        ].some(result => result.error);
-
-        // 處理 global_plans
-        // ⚠️ 只有在這次查詢真的成功時才覆蓋既有資料。閒置一段時間後 session
-        // 過期、edge function 暫時降級等暫時性失敗，都不該把畫面砍成空白
-        // 「未選擇計畫」——寧可暫時顯示上一次成功載入的舊資料，也不要用一次
-        // 失敗的查詢結果洗掉使用者原本看得到的內容。
-        if (!globalPlansResult.error) {
-          state.globalPlans = globalPlansResult.data ? globalPlansResult.data.map(mapGlobalPlanRecord) : [];
-        }
-
-        // 同一台裝置換過使用者（登出後換人登入、共用平板、忘記登出）時，
-        // localStorage 裡的 bible_highlights 是上一位留下來的——本機優先的合併
-        // 邏輯會把它當成「我自己剛存的、還沒同步成功」保留下來，導致畫面出現
-        // 不是自己的螢光紀錄，甚至之後編輯到那一筆時還會用目前這個帳號把它
-        // 寫回伺服器。用一個「這份本機快取屬於誰」的標記比對，對不上就整包
-        // 丟掉，只信任伺服器這份。logout() 也會清，這裡是清不乾淨時的最後防線。
-        const highlightsOwnerKey = "bible_highlights_owner";
-        let cachedHighlightsOwner = null;
-        try { cachedHighlightsOwner = localStorage.getItem(highlightsOwnerKey); } catch (_) {}
-        if (cachedHighlightsOwner && cachedHighlightsOwner !== user.id) {
-          state.highlights = {};
-          state.highlightTimestamps = {};
-        }
-        try { localStorage.setItem(highlightsOwnerKey, user.id); } catch (_) {}
-
-        // 螢光筆雲端合併：伺服器資料補齊本機沒有的（換裝置/清資料的情況），
-        // 但本機既有的 key 維持不變——避免一筆剛按完、還沒同步成功的螢光筆
-        // 被稍慢抵達的舊伺服器回應蓋掉。
-        if (!highlightsResult.error && Array.isArray(highlightsResult.data)) {
-          const serverHighlights = {};
-          const serverHighlightTimestamps = {};
-          highlightsResult.data.forEach(row => {
-            const key = `${row.book}_${row.chapter}_${row.verse}`;
-            serverHighlights[key] = row.color;
-            serverHighlightTimestamps[key] = row.updated_at;
-          });
-          state.highlights = { ...serverHighlights, ...state.highlights };
-          state.highlightTimestamps = { ...serverHighlightTimestamps, ...state.highlightTimestamps };
-          try {
-            localStorage.setItem("bible_highlights", JSON.stringify(state.highlights));
-            localStorage.setItem("bible_highlight_timestamps", JSON.stringify(state.highlightTimestamps));
-          } catch (_) {}
-        }
-
-        // 1. Load / sync profile
-        if (!user.oidc) {
-          // Standard Supabase auth: load profile from our profiles table
-          const profile = profileResult.data;
-          if (profile) {
-            state.currentUser.name = profile.name;
-            state.currentUser.great_region = profile.great_region;
-            state.currentUser.pastoral_zone = profile.pastoral_zone;
-            state.currentUser.small_group = profile.small_group;
-            state.currentUser.role_id = profile.role_id || "10000000-0000-4000-8000-000000000001";
-            state.currentUser.role_definition = profile.role_definition || getRoleDefinition(state.currentUser.role_id);
-
-          } else {
-            // First-time login: create profile without local org placement (Hub-owned).
-            state.currentUser.name = (typeof getDisplayName === "function"
-              ? getDisplayName(user.user_metadata && user.user_metadata.full_name)
-              : String((user.user_metadata && user.user_metadata.full_name) || "").trim()) || "";
-            state.currentUser.great_region = "";
-            state.currentUser.pastoral_zone = "";
-            state.currentUser.small_group = "";
-            state.currentUser.role_id = "10000000-0000-4000-8000-000000000001";
-            state.currentUser.role_definition = getRoleDefinition(state.currentUser.role_id);
-
-
-            try {
-              await state.supabase.from("profiles").insert({
-                id: user.id,
-                name: state.currentUser.name || null,
-                great_region: "",
-                pastoral_zone: "",
-                small_group: "",
-                role_id: state.currentUser.role_id
-              });
-            } catch (dbErr) {
-              console.error("Failed to auto-create user profile in Supabase:", dbErr);
-            }
-          }
-        } else {
-          // OIDC profiles are created and updated by the nlc-session Edge Function.
-          const profile = profileResult.data;
-          const localSyncedAt = state.currentUser.member_context_synced_at || "";
-          const remoteSyncedAt = profile?.member_context_synced_at || "";
-          if (profile && (!localSyncedAt || (remoteSyncedAt && remoteSyncedAt >= localSyncedAt))) {
-            this.applyNlcProfile(profile);
-          }
-        }
-
-        // 2. Load Reading Logs
-        // ⚠️ 查詢失敗時保留既有的 state.readingLogs，不要用空陣列洗掉打卡紀錄。
-        // skipReadingLogs：logsResult 是空 stub，不是「查了、剛好沒有」，所以
-        // 不要呼叫 applyReadingLogsSnapshot（會把 state.readingLogs/chapters_read
-        // 洗成空/0）——直接維持呼叫前的既有值，跟完全沒查過一樣。
-        // #474：按需載入過、而且還是已關閉的計畫，逐筆紀錄留著（重新整理不必再抓）。
-        // 只留「真的按需載入過」的（不在上一次 open 範圍裡）——上次還能打卡、這次關閉的
-        // 計畫，逐筆紀錄不一定在記憶體裡（例如從離線快照接手），一律改看摘要。
-        if (logsLoaded) {
-          const nextScope = bootLogs.scope.mode === "open"
-            ? createReadingLogScope({
-              mode: "open",
-              openPlanIds: bootLogs.scope.openPlanIds,
-              loadedPlanIds: getLazilyLoadedPlanIds(state.readingLogScope)
-                .filter(id => bootLogs.closedPlanIds.includes(id))
-            })
-            : bootLogs.scope;
-          state.readingLogScope = nextScope;
-          state.readingLogDigest = bootLogs.digest;
-          this.applyReadingLogsSnapshot(logsResult.data || [], { scope: nextScope });
-          // #474 之前整包紀錄的 IndexedDB 快取用不到了，順手清掉。
-          window.readingLogRepository?.deleteCache(legacyReadingLogCacheKey(user.id)).catch(() => {});
-        }
-
-        // 3. Load Active Reading Plans
-        // ⚠️ 同理：查詢失敗（例如背景 session 過期）時保留既有的
-        // state.activePlans / state.activePlan，避免畫面短暫變成「未選擇計畫」，
-        // 誤導使用者以為計畫真的不見了。只有真的拿到新資料時才重建整個列表。
-        if (!plansResult.error) {
-          const plans = plansResult.data || [];
-          state.activePlans = [];
-          if (plans && plans.length > 0) {
-            const visibleGlobalPlanKeys = new Set((state.globalPlans || []).flatMap(plan =>
-              [plan.id, plan.globalPlanId, plan.presetKey].filter(Boolean).map(String)
-            ));
-            const canViewHiddenStages = typeof canManageHiddenPlans === "function" && canManageHiddenPlans();
-
-            plans.forEach(dbPlan => {
-              try {
-                const globalPlanId = dbPlan.global_plan_id || null;
-                // 個人計畫（#473）只看 is_personal 標記：不掛教會計畫，名字是使用者自己取的，
-                // 不能拿名字去對應教會計畫（同名就會被當成那個計畫）。key 用自己的 id。
-                const isPersonal = dbPlan.is_personal === true;
-                const key = isPersonal
-                  ? dbPlan.id
-                  : (dbPlan.preset_key
-                    || (globalPlanId ? globalPlanId : null)
-                    || getPresetKeyByName(dbPlan.name));
-                const presetStageMatch = String(dbPlan.preset_key || "").match(/^church_stage_(\d{2})$/);
-                const idStageMatch = String(globalPlanId || "").match(/^00000000-0000-0000-c026-(\d{12})$/);
-                const campaignStageNo = Number(presetStageMatch && presetStageMatch[1]
-                  || idStageMatch && idStageMatch[1]
-                  || 0);
-                const enrollmentKeys = [globalPlanId, dbPlan.preset_key].filter(Boolean).map(String);
-                const hasVisibleStageDefinition = enrollmentKeys.some(item => visibleGlobalPlanKeys.has(item));
-                if (!canViewHiddenStages
-                  && campaignStageNo >= 2
-                  && campaignStageNo <= 10
-                  && !hasVisibleStageDefinition) {
-                  return;
-                }
-
-                const isFixed = dbPlan.is_fixed !== false;
-                const storedRound = Number(dbPlan.current_round || 1);
-                // 逐筆紀錄還沒載入的已關閉計畫（#474）：用摘要裡的遍數確認。
-                const planLogs = isPlanReadingLogsLoaded(state.readingLogScope, dbPlan.id)
-                  ? (state.readingLogs || []).filter(log => log.plan_id === dbPlan.id)
-                  : digestRoundLogs(state.readingLogDigest, dbPlan.id);
-                const confirmedRound = getConfirmedReadingRound({
-                  currentRound: storedRound,
-                  upgradePromptHandled: dbPlan.upgrade_prompt_handled,
-                  logs: planLogs
-                });
-                const linkedGlobalPlan = isPersonal
-                  ? null
-                  : (state.globalPlans || []).find(p => p.id === globalPlanId || p.presetKey === key || p.name === dbPlan.name);
-                // 延後大區梯次是普通固定日期計畫：排程靠 target_books。enrollment 自己
-                // 沒帶書卷時，退回對應 global_plan 的 books（來源正式階段的經卷）。
-                const effectiveBooks = (Array.isArray(dbPlan.target_books) && dbPlan.target_books.length > 0)
-                  ? dbPlan.target_books
-                  : (linkedGlobalPlan && Array.isArray(linkedGlobalPlan.books) && linkedGlobalPlan.books.length
-                    ? linkedGlobalPlan.books
-                    : dbPlan.target_books);
-                const planObj = generatePlanObject(dbPlan.name, dbPlan.start_date, dbPlan.end_date, effectiveBooks, key, isFixed, {
-                  readingDaysPerWeek: dbPlan.reading_days_per_week,
-                  restWeekdays: dbPlan.rest_weekdays,
-                  planId: dbPlan.id,
-                  presetKey: key,
-                  currentRound: confirmedRound,
-                  currentRoundStartedAt: dbPlan.current_round_started_at || null
-                });
-                planObj.id = dbPlan.id;
-                planObj.currentRoundStartedAt = dbPlan.current_round_started_at || null;
-                planObj.globalPlanId = globalPlanId;  // ⚠️ UUID 關聯
-                planObj.isPersonal = isPersonal;
-                planObj.isFixed = isFixed;
-                planObj.is_fixed = isFixed;
-                planObj.isHidden = Boolean(linkedGlobalPlan && (linkedGlobalPlan.isHidden || linkedGlobalPlan.is_hidden));
-                planObj.graceDays = normalizeGraceDays(linkedGlobalPlan?.graceDays);
-                planObj.planKind = linkedGlobalPlan?.planKind || (campaignStageNo >= 1 ? "church_campaign_stage" : "standard");
-                planObj.stageNo = linkedGlobalPlan?.stageNo || campaignStageNo || null;
-                // cohort：獎名 / 輪次 / 母 campaign 沿用來源正式階段（發獎 + 詳情頁獎章用）。
-                if (linkedGlobalPlan) {
-                  if (linkedGlobalPlan.awardName) planObj.awardName = linkedGlobalPlan.awardName;
-                  if (linkedGlobalPlan.roundNo) planObj.roundNo = linkedGlobalPlan.roundNo;
-                  if (linkedGlobalPlan.parentCampaignId) planObj.parentCampaignId = linkedGlobalPlan.parentCampaignId;
-                }
-                planObj.currentRound = confirmedRound;
-                planObj.upgradePromptHandled = !!dbPlan.upgrade_prompt_handled;
-                state.activePlans.push(planObj);
-              } catch (err) {
-                console.error("Failed to parse dbPlan:", dbPlan, err);
-              }
-            });
-
-            state.activePlan = selectMostRecentActivePlan(state.activePlans);
-            calculateAllPlansProgress();
-          } else {
-            state.activePlan = null;
-            state.activePlans = [];
-          }
-        }
-
-        // Keep a small offline-reading snapshot in sync on every fully
-        // successful load. tryRestoreOfflineSession()/loadOfflineSnapshot()
-        // fall back to exactly these keys when the network is genuinely
-        // unreachable — without writing them here, that fallback used to
-        // always show empty plans for real NLC/Supabase-mode users, since
-        // nothing in this success path ever touched them.
-        // skipReadingLogs loads never reach this point with real reading-log
-        // data (logsResult.data is the empty stub above), so never let a
-        // lite load overwrite a real cached snapshot with that emptiness.
-        if (logsLoaded) {
-          safeStorageSet("active_reading_plans", state.activePlans, 300);
-          this.saveReadingLogOfflineSnapshot();
-          localStorage.setItem("offline_snapshot_synced_at", new Date().toISOString());
-        }
-
-        this.calculateStreak();
-        if (typeof checkAchievements !== 'undefined') {
-          await checkAchievements(true);
-        }
-        if (typeof updateAdminNavVisibility === 'function') {
-          updateAdminNavVisibility();
-        }
-
-        // 💡 0秒秒開效能優化：儲存首屏 Profiles 本地快照
-        try {
-          if (state.currentUser && state.currentUser.name) {
-            localStorage.setItem("cached_user_profile", JSON.stringify({
-              name: state.currentUser.name,
-              great_region: state.currentUser.great_region,
-              pastoral_zone: state.currentUser.pastoral_zone,
-              small_group: state.currentUser.small_group,
-              role_id: state.currentUser.role_id,
-              role_definition: state.currentUser.role_definition
-            }));
-          }
-        } catch (e) {
-          console.warn("Failed to write fast startup cache:", e);
-        }
-
-        return initialDataLoadSucceeded;
+        return this._applyLoadedUserData(user, {
+          globalPlansResult, profileResult, plansResult, highlightsResult, bootLogs
+        }, { skipReadingLogs });
       } else {
         // Online mode but not logged in: clear state and return early
         state.currentUser = {
