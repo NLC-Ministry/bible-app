@@ -695,3 +695,91 @@ describe("大區延後梯次的名稱（create_region_stage_cohort，#632）", (
     expect(outcome.row).toEqual({ name: "自訂名稱", rules_name: "自訂名稱", is_hidden: false });
   });
 });
+
+describe("計畫關聯資料表（plan_groups／source_plan_id，#639）", () => {
+  const CHURCH = month => `00000000-0000-0000-c126-0000002026${month}`;
+  const TAOYUAN = {
+    出埃及記: "00000000-0000-0000-c326-000000202610",
+    利未記: "00000000-0000-0000-c326-000000202611",
+    民數記: "00000000-0000-0000-c326-000000202612",
+    申命記: "00000000-0000-0000-c326-000000202701"
+  };
+
+  const groupMembers = async (tx, key) => (await tx.query(
+    `SELECT m.plan_id::text AS plan_id, m.slot FROM public.plan_group_members m
+     JOIN public.plan_groups g ON g.id = m.group_id WHERE g.key = $1 ORDER BY m.plan_id`,
+    [key]
+  )).rows;
+
+  it("回填兩組鐵獎：全教會 4 張月度期末賽、桃園 4 張梯次，不互相混用", async () => {
+    const outcome = await asService(async tx => ({
+      church: await groupMembers(tx, "r1final_church"),
+      taoyuan: await groupMembers(tx, "r1final_taoyuan"),
+      groups: (await tx.query(`SELECT key, kind, rules->'slots' AS slots FROM public.plan_groups ORDER BY key`)).rows
+    }));
+    expect(outcome.church).toEqual([
+      { plan_id: CHURCH("09"), slot: "出埃及記" },
+      { plan_id: CHURCH("10"), slot: "利未記" },
+      { plan_id: CHURCH("11"), slot: "民數記" },
+      { plan_id: CHURCH("12"), slot: "申命記" }
+    ]);
+    expect(outcome.taoyuan).toEqual(Object.entries(TAOYUAN).map(([slot, plan_id]) => ({ plan_id, slot })));
+    const slots = ["出埃及記", "利未記", "民數記", "申命記"];
+    expect(outcome.groups).toEqual([
+      { key: "r1final_church", kind: "award", slots },
+      { key: "r1final_taoyuan", kind: "award", slots }
+    ]);
+  });
+
+  it("桃園梯次各自記錄全教會同經卷那張為複製來源；全教會月度計畫沒有來源", async () => {
+    const rows = await asService(async tx => (await tx.query(
+      `SELECT id::text AS id, source_plan_id::text AS source FROM public.global_plans
+       WHERE id::text LIKE '00000000-0000-0000-c126-%' OR id::text LIKE '00000000-0000-0000-c326-%' ORDER BY id`
+    )).rows);
+    expect(rows).toEqual([
+      { id: CHURCH("09"), source: null },
+      { id: CHURCH("10"), source: null },
+      { id: CHURCH("11"), source: null },
+      { id: CHURCH("12"), source: null },
+      { id: TAOYUAN.出埃及記, source: CHURCH("09") },
+      { id: TAOYUAN.利未記, source: CHURCH("10") },
+      { id: TAOYUAN.民數記, source: CHURCH("11") },
+      { id: TAOYUAN.申命記, source: CHURCH("12") }
+    ]);
+  });
+
+  it("同一大區對同一張來源只能有一張；不同大區可以；不能以自己為來源", async () => {
+    const insertCopy = (tx, id, region) => tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books, audience_regions, source_plan_id)
+       VALUES ($1, '複製', '2026-10-01', '2026-10-31', ARRAY['利未記'], ARRAY[$2], $3)`,
+      [id, region, CHURCH("10")]
+    );
+    await expect(asService(tx => insertCopy(tx, "70000000-0000-4000-8000-000000000001", "桃園")))
+      .rejects.toThrow(/global_plans_source_region_key/);
+    await expect(asService(tx => insertCopy(tx, "70000000-0000-4000-8000-000000000001", "大區 A"))).resolves.toBeDefined();
+    await expect(asService(tx => tx.query(`UPDATE public.global_plans SET source_plan_id = id WHERE id = $1`, [CHURCH("09")])))
+      .rejects.toThrow(/global_plans_source_not_self/);
+  });
+
+  it("刪掉來源時梯次留著、來源設回 NULL；刪掉計畫時分組成員跟著刪", async () => {
+    const outcome = await asService(async tx => {
+      await tx.query(`DELETE FROM public.global_plans WHERE id = $1`, [CHURCH("10")]);
+      return {
+        cohort: (await tx.query(`SELECT source_plan_id FROM public.global_plans WHERE id = $1`, [TAOYUAN.利未記])).rows,
+        church: await groupMembers(tx, "r1final_church")
+      };
+    });
+    expect(outcome.cohort).toEqual([{ source_plan_id: null }]);
+    expect(outcome.church.map(m => m.slot)).toEqual(["出埃及記", "民數記", "申命記"]);
+  });
+
+  it("登入者只能讀、不能寫；anon 完全不能讀", async () => {
+    const read = await as("authenticated", { sub: ids.memberAuth }, async tx =>
+      (await tx.query(`SELECT count(*)::int AS n FROM public.plan_group_members`)).rows[0].n);
+    expect(read).toBe(8);
+    await expect(as("authenticated", { sub: ids.memberAuth }, tx =>
+      tx.query(`INSERT INTO public.plan_groups (key, kind, name) VALUES ('x', 'award', 'x')`)))
+      .rejects.toThrow(/permission denied/);
+    await expect(as("anon", {}, tx => tx.query(`SELECT 1 FROM public.plan_groups`))).rejects.toThrow(/permission denied/);
+  });
+});
