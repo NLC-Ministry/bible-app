@@ -537,6 +537,21 @@ const RPC_FUNCTIONS = new Set([
   ADMIN_USER_DIRECTORY_RPC,
   ...ISSUE_RPC_FUNCTIONS
 ]);
+// 可以放進 action:"batch" 的 RPC（#631）：只收首頁會用到、只讀不寫的。要加新的先確認
+// 函式本身沒有 INSERT/UPDATE/DELETE，且不在管理／稽核清單裡；前端 js/data/nlc-read-coalescer.mjs
+// 的 BATCHABLE_RPC_FUNCTIONS 要同步（scripts/nlc-read-coalescer.test.mjs 會比對）。
+const BATCH_RPC_FUNCTIONS = new Set([
+  "get_todays_lightning_quiz",
+  "get_lightning_quiz_week_ranking",
+  "exam_home_exams",
+  "exam_home_banner",
+  "get_org_structure_tree",
+  // 開首頁時就會發的通知鈴鐺
+  "get_quiz_notifications",
+  "get_exam_notifications",
+  "issue_thread_unread_summary",
+  "get_commentary_review_notifications"
+]);
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders });
@@ -1009,6 +1024,142 @@ async function runSelectPipeline(
   return { data };
 }
 
+// 單支 action:"rpc" 的完整流程（白名單、權限、功能開關、參數注入、稽核）。batch 裡的唯讀
+// RPC（BATCH_RPC_FUNCTIONS，#631）也走這裡，兩條路不會分岔。回傳 { status, body }，
+// 由呼叫端決定包成 HTTP 回應還是 batch 的一格。
+const rpcResult = (body: unknown, status = 200) => ({ status, body: body as any });
+async function runRpcRequest(
+  body: any,
+  profile: any,
+  supabaseAdmin: any,
+  requestId: string,
+): Promise<{ status: number; body: any }> {
+  const functionName = typeof body.function === "string" ? body.function : "";
+  if (!RPC_FUNCTIONS.has(functionName)) return rpcResult({ error: "forbidden_rpc" }, 403);
+  // 權限不足的管理 RPC 記為 denied（#549），供異常偵測
+  const denyAdminRpc = async () => {
+    await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
+      fn: functionName, args: body.args, actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied"
+    }));
+    return rpcResult({ error: "forbidden_rpc" }, 403);
+  };
+  if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
+    return await denyAdminRpc();
+  }
+  if (PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)) {
+    return await denyAdminRpc();
+  }
+  if (ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
+    return await denyAdminRpc();
+  }
+  if (ISSUE_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
+    return await denyAdminRpc();
+  }
+  if (functionName === ADMIN_USER_DIRECTORY_RPC && !hasWholeChurchPlanScope(profile)) {
+    return await denyAdminRpc();
+  }
+  if (QUIZ_RPC_FUNCTIONS.has(functionName)) {
+    const { data: quizFeature, error: quizFeatureError } = await supabaseAdmin
+      .from("app_feature_settings")
+      .select("enabled")
+      .eq("key", "daily_quiz")
+      .maybeSingle();
+    if (quizFeatureError || quizFeature?.enabled !== true) {
+      return rpcResult({ error: "daily_quiz_feature_disabled" }, 403);
+    }
+  }
+  if (EXAM_RPC_FUNCTIONS.has(functionName)) {
+    if (EXAM_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
+      return await denyAdminRpc();
+    }
+    const { data: examFeature, error: examFeatureError } = await supabaseAdmin
+      .from("app_feature_settings")
+      .select("enabled")
+      .eq("key", "speed_reading_exam")
+      .maybeSingle();
+    if (examFeatureError || examFeature?.enabled !== true) {
+      return rpcResult({ error: "speed_reading_exam_feature_disabled" }, 403);
+    }
+  }
+  const rpcName = functionName;
+  // get_admin_member_team_placements(p_global_plan_id, p_actor_id) calls
+  // resolve_reading_team_actor(p_actor_id) just like every other
+  // TEAM_RPC_FUNCTIONS entry (migration 0064) — it must get p_actor_id
+  // injected too, or resolve_reading_team_actor falls back to
+  // current_profile_id() (NULL under the service-role key nlc-data
+  // runs on) and raises "profile_required".
+  let rpcArgs: Record<string, unknown>;
+  if (functionName === "get_org_structure_tree") {
+    // Pass the caller's role + managed scope resolved the SAME way
+    // applyForcedScope resolves it for profiles selects, so the RPC only
+    // filters and the two paths can never diverge.
+    rpcArgs = {
+      p_actor_id: profile.id,
+      p_role_code: getProfileRoleCode(profile),
+      p_scope_regions: splitScope(profile.managed_regions || profile.great_region),
+      p_scope_zones: splitScope(profile.managed_zones || profile.pastoral_zone),
+      p_scope_groups: splitScope(profile.managed_groups || profile.small_group),
+    };
+  } else if (functionName === PLAN_READING_LOG_DIGEST_RPC) {
+    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    rpcArgs = buildPlanReadingLogDigestArgs(body.args, visibleIds, profile.id);
+  } else if (functionName === PLAN_STATS_ROSTER_RPC) {
+    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    rpcArgs = buildPlanStatsRosterArgs(body.args, visibleIds, profile.id);
+  } else if (functionName === PASTORAL_OVERVIEW_RPC) {
+    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    rpcArgs = buildPastoralOverviewArgs(body.args, visibleIds, profile.id);
+  } else if (functionName === ADMIN_USER_DIRECTORY_RPC) {
+    rpcArgs = { p_include_plan_details: isAdmin(profile), p_actor_id: profile.id };
+  } else if (functionName === "publish_global_plan_rules"
+    || TEAM_RPC_FUNCTIONS.has(functionName)
+    || QUIZ_RPC_FUNCTIONS.has(functionName)
+    || EXAM_RPC_FUNCTIONS.has(functionName)
+    || ISSUE_RPC_FUNCTIONS.has(functionName)
+    || LIGHTNING_QUIZ_RPC_FUNCTIONS.has(functionName)
+    || READING_STATS_RPC_FUNCTIONS.has(functionName)
+    || READING_ACTIVITY_RPC_FUNCTIONS.has(functionName)
+    || COMMENTARY_REVIEW_RPC_FUNCTIONS.has(functionName)
+    || functionName === "get_admin_registration_statistics"
+    || functionName === "create_region_stage_cohort") {
+    rpcArgs = { ...(body.args || {}), p_actor_id: profile.id };
+  } else {
+    rpcArgs = (body.args || {});
+  }
+  // 管理範圍：補記修改前後的值（只有這支，其他管理 RPC 記參數就夠）
+  const auditRpc = AUDITED_ADMIN_RPCS.has(functionName);
+  const scopeTargetId = auditRpc && functionName === "set_profile_managed_scopes" ? String((rpcArgs as any).p_profile_id || "") : "";
+  const scopeBefore = scopeTargetId ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
+  const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
+  if (auditRpc) {
+    const scopeAfter = scopeTargetId && !error ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
+    await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
+      fn: functionName,
+      args: rpcArgs,
+      actor: profile,
+      roleCode: getProfileRoleCode(profile),
+      requestId,
+      result: error ? classifyFailure(error) : "ok",
+      error,
+      changes: scopeAfter ? diffFields(scopeBefore, scopeAfter) : (error ? null : rpcResultChanges(functionName, data))
+    }));
+  }
+  if (error) return rpcResult({ error: error.message, code: error.code }, 400);
+  // 作答中的 attempt 附上「這份作答專用」寫入憑證：之後的暫存 / 送出走 exam-write，
+  // 不再依賴這張會過期的登入 token。只簽給 attempt 主人本人（staff 查別人的卷不簽）；
+  // 沒設 EXAM_WRITE_SECRET 就不簽，前端自動沿用 nlc-data。
+  if (functionName === "exam_get_for_attempt") {
+    const attempt = (data as any)?.attempt;
+    const writeSecret = Deno.env.get("EXAM_WRITE_SECRET");
+    if (writeSecret && attempt?.id && attempt.status === "in_progress") {
+      const { data: owned } = await supabaseAdmin
+        .from("exam_attempts").select("id").eq("id", attempt.id).eq("user_id", profile.id).maybeSingle();
+      if (owned) attempt.writeToken = await signExamWriteToken(writeSecret, attempt.id, profile.id);
+    }
+  }
+  return rpcResult({ data });
+}
+
 Deno.serve(async (req: Request) => {
   const localCorsHeaders = {
     ...corsHeaders,
@@ -1094,130 +1245,8 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "rpc") {
-      const functionName = typeof body.function === "string" ? body.function : "";
-      if (!RPC_FUNCTIONS.has(functionName)) return jsonResponse({ error: "forbidden_rpc" }, 403);
-      // 權限不足的管理 RPC 記為 denied（#549），供異常偵測
-      const denyAdminRpc = async () => {
-        await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
-          fn: functionName, args: body.args, actor: profile, roleCode: getProfileRoleCode(profile), requestId, result: "denied"
-        }));
-        return jsonResponse({ error: "forbidden_rpc" }, 403);
-      };
-      if (functionName === "publish_global_plan_rules" && !isAdmin(profile)) {
-        return await denyAdminRpc();
-      }
-      if (PLAN_MANAGEMENT_RPC_FUNCTIONS.has(functionName) && !canManagePlans(profile)) {
-        return await denyAdminRpc();
-      }
-      if (ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-        return await denyAdminRpc();
-      }
-      if (ISSUE_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-        return await denyAdminRpc();
-      }
-      if (functionName === ADMIN_USER_DIRECTORY_RPC && !hasWholeChurchPlanScope(profile)) {
-        return await denyAdminRpc();
-      }
-      if (QUIZ_RPC_FUNCTIONS.has(functionName)) {
-        const { data: quizFeature, error: quizFeatureError } = await supabaseAdmin
-          .from("app_feature_settings")
-          .select("enabled")
-          .eq("key", "daily_quiz")
-          .maybeSingle();
-        if (quizFeatureError || quizFeature?.enabled !== true) {
-          return jsonResponse({ error: "daily_quiz_feature_disabled" }, 403);
-        }
-      }
-      if (EXAM_RPC_FUNCTIONS.has(functionName)) {
-        if (EXAM_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
-          return await denyAdminRpc();
-        }
-        const { data: examFeature, error: examFeatureError } = await supabaseAdmin
-          .from("app_feature_settings")
-          .select("enabled")
-          .eq("key", "speed_reading_exam")
-          .maybeSingle();
-        if (examFeatureError || examFeature?.enabled !== true) {
-          return jsonResponse({ error: "speed_reading_exam_feature_disabled" }, 403);
-        }
-      }
-      const rpcName = functionName;
-      // get_admin_member_team_placements(p_global_plan_id, p_actor_id) calls
-      // resolve_reading_team_actor(p_actor_id) just like every other
-      // TEAM_RPC_FUNCTIONS entry (migration 0064) — it must get p_actor_id
-      // injected too, or resolve_reading_team_actor falls back to
-      // current_profile_id() (NULL under the service-role key nlc-data
-      // runs on) and raises "profile_required".
-      let rpcArgs: Record<string, unknown>;
-      if (functionName === "get_org_structure_tree") {
-        // Pass the caller's role + managed scope resolved the SAME way
-        // applyForcedScope resolves it for profiles selects, so the RPC only
-        // filters and the two paths can never diverge.
-        rpcArgs = {
-          p_actor_id: profile.id,
-          p_role_code: getProfileRoleCode(profile),
-          p_scope_regions: splitScope(profile.managed_regions || profile.great_region),
-          p_scope_zones: splitScope(profile.managed_zones || profile.pastoral_zone),
-          p_scope_groups: splitScope(profile.managed_groups || profile.small_group),
-        };
-      } else if (functionName === PLAN_READING_LOG_DIGEST_RPC) {
-        const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
-        rpcArgs = buildPlanReadingLogDigestArgs(body.args, visibleIds, profile.id);
-      } else if (functionName === PLAN_STATS_ROSTER_RPC) {
-        const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
-        rpcArgs = buildPlanStatsRosterArgs(body.args, visibleIds, profile.id);
-      } else if (functionName === PASTORAL_OVERVIEW_RPC) {
-        const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
-        rpcArgs = buildPastoralOverviewArgs(body.args, visibleIds, profile.id);
-      } else if (functionName === ADMIN_USER_DIRECTORY_RPC) {
-        rpcArgs = { p_include_plan_details: isAdmin(profile), p_actor_id: profile.id };
-      } else if (functionName === "publish_global_plan_rules"
-        || TEAM_RPC_FUNCTIONS.has(functionName)
-        || QUIZ_RPC_FUNCTIONS.has(functionName)
-        || EXAM_RPC_FUNCTIONS.has(functionName)
-        || ISSUE_RPC_FUNCTIONS.has(functionName)
-        || LIGHTNING_QUIZ_RPC_FUNCTIONS.has(functionName)
-        || READING_STATS_RPC_FUNCTIONS.has(functionName)
-        || READING_ACTIVITY_RPC_FUNCTIONS.has(functionName)
-        || COMMENTARY_REVIEW_RPC_FUNCTIONS.has(functionName)
-        || functionName === "get_admin_registration_statistics"
-        || functionName === "create_region_stage_cohort") {
-        rpcArgs = { ...(body.args || {}), p_actor_id: profile.id };
-      } else {
-        rpcArgs = (body.args || {});
-      }
-      // 管理範圍：補記修改前後的值（只有這支，其他管理 RPC 記參數就夠）
-      const auditRpc = AUDITED_ADMIN_RPCS.has(functionName);
-      const scopeTargetId = auditRpc && functionName === "set_profile_managed_scopes" ? String((rpcArgs as any).p_profile_id || "") : "";
-      const scopeBefore = scopeTargetId ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
-      const { data, error } = await supabaseAdmin.rpc(rpcName, rpcArgs);
-      if (auditRpc) {
-        const scopeAfter = scopeTargetId && !error ? await fetchManagedScopes(supabaseAdmin, scopeTargetId) : null;
-        await recordAdminAudit(supabaseAdmin, buildRpcAuditEvent({
-          fn: functionName,
-          args: rpcArgs,
-          actor: profile,
-          roleCode: getProfileRoleCode(profile),
-          requestId,
-          result: error ? classifyFailure(error) : "ok",
-          error,
-          changes: scopeAfter ? diffFields(scopeBefore, scopeAfter) : (error ? null : rpcResultChanges(functionName, data))
-        }));
-      }
-      if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
-      // 作答中的 attempt 附上「這份作答專用」寫入憑證：之後的暫存 / 送出走 exam-write，
-      // 不再依賴這張會過期的登入 token。只簽給 attempt 主人本人（staff 查別人的卷不簽）；
-      // 沒設 EXAM_WRITE_SECRET 就不簽，前端自動沿用 nlc-data。
-      if (functionName === "exam_get_for_attempt") {
-        const attempt = (data as any)?.attempt;
-        const writeSecret = Deno.env.get("EXAM_WRITE_SECRET");
-        if (writeSecret && attempt?.id && attempt.status === "in_progress") {
-          const { data: owned } = await supabaseAdmin
-            .from("exam_attempts").select("id").eq("id", attempt.id).eq("user_id", profile.id).maybeSingle();
-          if (owned) attempt.writeToken = await signExamWriteToken(writeSecret, attempt.id, profile.id);
-        }
-      }
-      return jsonResponse({ data });
+      const result = await runRpcRequest(body, profile, supabaseAdmin, requestId);
+      return jsonResponse(result.body, result.status);
     }
 
     // ── batch: many read-only selects, one Logto verification, one HTTP round
@@ -1225,26 +1254,32 @@ Deno.serve(async (req: Request) => {
     //    returning }, ...]. Each runs through runSelectPipeline (same allowlist +
     //    forced scope as the single-query path). Response: { data: [{data}|{error,code}, ...] }
     //    in request order — one bad query never fails the others. Read-only:
-    //    any non-select spec is rejected in its slot. ──
+    //    any non-select spec is rejected in its slot, except the read-only RPCs in
+    //    BATCH_RPC_FUNCTIONS (#631), which run through runRpcRequest like action:"rpc". ──
     if (action === "batch") {
       const queries = Array.isArray(body.queries) ? body.queries : null;
       if (!queries) return jsonResponse({ error: "missing_queries" }, 400);
       if (queries.length === 0) return jsonResponse({ data: [] });
       if (queries.length > 25) return jsonResponse({ error: "batch_too_large" }, 400);
 
-      const results: Array<{ data?: any; error?: string; code?: string }> = [];
-      for (const spec of queries) {
-        if (spec && spec.action && spec.action !== "select") {
-          results.push({ error: "batch_read_only" });
-          continue;
-        }
+      // 每一格各自跑、同時跑（#631）：前端會把同一瞬間發出的讀取併成一支 batch，
+      // 依序跑會讓整支等到所有查詢加總完。
+      const results = await Promise.all(queries.map(async (spec: any): Promise<{ data?: any; error?: string; code?: string }> => {
         try {
-          results.push(await runSelectPipeline(spec || {}, profile, supabaseAdmin));
+          // 跟單支請求一樣擋退役計畫（單支路徑在進到各 action 之前檢查）
+          if (isRetiredPlanRequest(spec || {})) return { error: "resource_not_found", resource: "reading_plan" } as any;
+          if (spec && spec.action === "rpc") {
+            if (!BATCH_RPC_FUNCTIONS.has(String(spec.function || ""))) return { error: "batch_read_only" };
+            const result = await runRpcRequest(spec, profile, supabaseAdmin, requestId);
+            return result.status === 200 ? { data: result.body?.data } : { ...(result.body || { error: "rpc_failed" }) };
+          }
+          if (spec && spec.action && spec.action !== "select") return { error: "batch_read_only" };
+          return await runSelectPipeline(spec || {}, profile, supabaseAdmin);
         } catch (queryErr) {
           const message = queryErr instanceof Error ? queryErr.message : String(queryErr);
-          results.push({ error: message });
+          return { error: message };
         }
-      }
+      }));
       return jsonResponse({ data: results });
     }
 
