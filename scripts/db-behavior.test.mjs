@@ -845,3 +845,172 @@ describe("計畫關聯資料表（plan_groups／source_plan_id，#639）", () =>
     await expect(as("anon", {}, tx => tx.query(`SELECT 1 FROM public.plan_groups`))).rejects.toThrow(/permission denied/);
   });
 });
+
+describe("小測驗補讀日（沒排章節的日子不出題，#641）", () => {
+  // 利未記 27 章分給 31 天：取整數 0 章、餘數 27 從第 1 天起每天補 1 章 → 最後 4 天沒有章節。
+  // 用遠在未來的日期，日曆的「今天」不管哪天跑都在這個月之前。
+  const REST_PLAN = "40000000-0000-4000-8000-000000000641";
+  const RULES = {
+    segments: [{ label: "2099年10月", startDate: "2099-10-01", endDate: "2099-10-31", readings: [{ book: "利未記", from: 1, to: 27 }] }]
+  };
+  const withRestPlan = fn => asService(async tx => {
+    await tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books, rules)
+       VALUES ($1, '補讀日測試', '2099-10-01', '2099-10-31', ARRAY['LEV'], $2::jsonb)`,
+      [REST_PLAN, JSON.stringify(RULES)]
+    );
+    return fn(tx);
+  });
+  const calendar = (tx, from, days) => tx.query(
+    `SELECT public.get_daily_quiz_calendar($1, $2::date, $3, $4) AS result`, [REST_PLAN, from, days, ids.admin]
+  ).then(({ rows: [{ result }] }) => result.days);
+
+  it("每天分到幾章和 Edge Function／會友排程同一套算法", async () => {
+    const counts = await withRestPlan(async tx => (await tx.query(
+      `SELECT d::date AS day, public._daily_quiz_reading_chapter_count($1, d::date) AS n
+       FROM generate_series('2099-10-26'::date, '2099-10-31'::date, '1 day') AS d`, [REST_PLAN]
+    )).rows.map(row => row.n));
+    expect(counts).toEqual([1, 1, 0, 0, 0, 0]);
+  });
+
+  it("沒有 segments 的計畫不判定（回 NULL），不會被當成補讀日", async () => {
+    const { rows: [{ n }] } = await asService(tx => tx.query(
+      `SELECT public._daily_quiz_reading_chapter_count($1, '2026-10-01') AS n`, [ids.plan]
+    ));
+    expect(n).toBeNull();
+  });
+
+  it("日曆把沒排章節的日子標成 rest_day，不需要處理、也沒有錯誤", async () => {
+    const days = await withRestPlan(async tx => {
+      // 舊資料：以前按「請 AI 出題」留下的失敗紀錄，也要被補讀日蓋過
+      await tx.query(
+        `INSERT INTO public.daily_quizzes (global_plan_id, quiz_date, variant, generation_status, generation_error)
+         VALUES ($1, '2099-10-28', 'A', 'failed', 'scripture:no_reading_chapters')`, [REST_PLAN]
+      );
+      return calendar(tx, "2099-10-27", 5);
+    });
+    expect(days.map(day => day.status)).toEqual(["waiting", "rest_day", "rest_day", "rest_day", "rest_day"]);
+    expect(days.slice(1).every(day => day.needsAttention === false && day.aiError === null)).toBe(true);
+  });
+
+  it("補讀日按「請 AI 出題」直接擋下，不建紀錄", async () => {
+    await expect(withRestPlan(tx => tx.query(
+      `SELECT public.swap_daily_quiz_version($1, '2099-10-29', $2)`, [REST_PLAN, ids.admin]
+    ))).rejects.toThrow(/quiz_rest_day/);
+  });
+
+  it("輔助函式只給 service_role", async () => {
+    await expect(as("authenticated", { sub: ids.adminAuth }, tx => tx.query(
+      `SELECT public._daily_quiz_reading_chapter_count($1, '2026-10-01')`, [ids.plan]
+    ))).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("小測驗補發過去沒發出去的日子（publish_daily_quiz_makeup，#643）", () => {
+  // 日期都相對於「台北的今天」，任何一天跑結果都一樣
+  const taipeiToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  const shift = (iso, days) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+  };
+  const TODAY = taipeiToday();
+  const PAST = shift(TODAY, -2);
+  const SKIPPED = shift(TODAY, -3);
+  const NO_QUIZ = shift(TODAY, -4);
+  const LIVE_PLAN = "40000000-0000-4000-8000-000000000643";
+  const ENDED_PLAN = "40000000-0000-4000-8000-000000000644";
+  const segments = (start, end, to) => ({ segments: [{ startDate: start, endDate: end, readings: [{ book: "創世記", from: 1, to }] }] });
+
+  const withPlans = fn => asService(async tx => {
+    const plan = (id, start, end, to) => tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books, rules)
+       VALUES ($1, '補發測試', $2, $3, ARRAY['GEN'], $4::jsonb)`,
+      [id, start, end, JSON.stringify(segments(start, end, to))]
+    );
+    // 進行中的計畫：前後各 5 天、每天 1 章；已結束的計畫：昨天結束
+    await plan(LIVE_PLAN, shift(TODAY, -5), shift(TODAY, 5), 11);
+    await plan(ENDED_PLAN, shift(TODAY, -10), shift(TODAY, -1), 10);
+    const readyQuiz = (planId, date) => tx.query(
+      `INSERT INTO public.daily_quizzes (global_plan_id, quiz_date, variant, questions, generation_status, review_status)
+       VALUES ($1, $2, 'A', $3, 'ready', 'approved')`, [planId, date, JSON.stringify(QUESTIONS)]
+    );
+    await readyQuiz(LIVE_PLAN, PAST);
+    await readyQuiz(LIVE_PLAN, SKIPPED);
+    await readyQuiz(ENDED_PLAN, shift(TODAY, -3));
+    await tx.query(`INSERT INTO public.quiz_daily_overrides (global_plan_id, quiz_date, skip) VALUES ($1, $2, TRUE)`, [LIVE_PLAN, SKIPPED]);
+    return fn(tx);
+  });
+  const makeup = (tx, planId, date, actor = ids.admin) => tx.query(
+    `SELECT public.publish_daily_quiz_makeup($1, $2::date, $3) AS result`, [planId, date, actor]
+  ).then(({ rows: [{ result }] }) => result);
+  const calendarDay = async (tx, date) => (await tx.query(
+    `SELECT public.get_daily_quiz_calendar($1, $2::date, 1, $3) AS result`, [LIVE_PLAN, date, ids.admin]
+  )).rows[0].result.days[0];
+
+  it("補發發給全部小組，作答到今天 23:59（台北）；會友今天的畫面看得到", async () => {
+    const outcome = await withPlans(async tx => {
+      const before = await calendarDay(tx, PAST);
+      const result = await makeup(tx, LIVE_PLAN, PAST);
+      const { rows: pubs } = await tx.query(
+        `SELECT small_group_id,
+           answer_close_at = ((((now() AT TIME ZONE 'Asia/Taipei')::date) + TIME '23:59:59') AT TIME ZONE 'Asia/Taipei') AS closes_tonight
+         FROM public.quiz_publications WHERE global_plan_id = $1 AND quiz_date = $2`, [LIVE_PLAN, PAST]
+      );
+      const groups = (await tx.query(`SELECT count(*)::int AS n FROM public.small_groups`)).rows[0].n;
+      const { rows: [{ dashboard }] } = await tx.query(
+        `SELECT public.get_daily_quiz_dashboard($1, $2::date, $3) AS dashboard`, [LIVE_PLAN, TODAY, ids.member]
+      );
+      const after = await calendarDay(tx, PAST);
+      return { before, result, pubs, groups, dashboard, after };
+    });
+    expect(outcome.before).toMatchObject({ status: "scheduled", canMakeup: true, needsAttention: false });
+    expect(outcome.result).toMatchObject({ source: "ai", publishedCount: outcome.groups });
+    expect(outcome.pubs).toHaveLength(outcome.groups);
+    expect(outcome.pubs.every(pub => pub.closes_tonight)).toBe(true);
+    expect(outcome.dashboard.myQuiz).toBeNull();
+    expect(outcome.dashboard.makeupQuizzes).toHaveLength(1);
+    expect(outcome.dashboard.makeupQuizzes[0]).toMatchObject({ quizDate: PAST, attempt: null });
+    expect(outcome.dashboard.makeupQuizzes[0].questions).toHaveLength(QUESTIONS.length);
+    expect(outcome.after).toMatchObject({ status: "open", canMakeup: false });
+  });
+
+  it("截止後就不再出現在會友的補發清單", async () => {
+    const dashboard = await withPlans(async tx => {
+      await makeup(tx, LIVE_PLAN, PAST);
+      await tx.query(`UPDATE public.quiz_publications SET answer_close_at = now() - INTERVAL '1 minute' WHERE quiz_date = $1`, [PAST]);
+      return (await tx.query(`SELECT public.get_daily_quiz_dashboard($1, $2::date, $3) AS d`, [LIVE_PLAN, TODAY, ids.member])).rows[0].d;
+    });
+    expect(dashboard.makeupQuizzes).toEqual([]);
+  });
+
+  it("只有系統管理員能補發，而且只限符合條件的過去日子", async () => {
+    await expect(withPlans(tx => makeup(tx, LIVE_PLAN, PAST, ids.member))).rejects.toThrow(/quiz_publish_admin_only/);
+    await expect(withPlans(tx => makeup(tx, LIVE_PLAN, TODAY))).rejects.toThrow(/quiz_makeup_not_past/);
+    await expect(withPlans(tx => makeup(tx, LIVE_PLAN, SKIPPED))).rejects.toThrow(/quiz_day_skipped/);
+    await expect(withPlans(tx => makeup(tx, LIVE_PLAN, NO_QUIZ))).rejects.toThrow(/quiz_not_ready/);
+    await expect(withPlans(tx => makeup(tx, ENDED_PLAN, shift(TODAY, -3)))).rejects.toThrow(/quiz_makeup_plan_ended/);
+    await expect(withPlans(async tx => {
+      await makeup(tx, LIVE_PLAN, PAST);
+      return makeup(tx, LIVE_PLAN, PAST);
+    })).rejects.toThrow(/quiz_already_published/);
+  });
+
+  const CUSTOM = [
+    { id: "c1", type: "truefalse", payload: { stem: "自訂一" }, answerKey: true, explanation: "" },
+    { id: "c2", type: "truefalse", payload: { stem: "自訂二" }, answerKey: false, explanation: "" }
+  ];
+
+  it("可補發的過去日子能請 AI 出題、改成自訂題目；計畫結束後照舊擋下", async () => {
+    // 通過日期檢查後才會去讀 Vault；測試環境沒有密鑰，所以停在這一步就代表沒被日期擋
+    await expect(withPlans(tx => tx.query(`SELECT public.swap_daily_quiz_version($1, $2::date, $3)`, [LIVE_PLAN, NO_QUIZ, ids.admin])))
+      .rejects.toThrow(/quiz_generation_secret_missing/);
+    await expect(withPlans(tx => tx.query(`SELECT public.swap_daily_quiz_version($1, $2::date, $3)`, [ENDED_PLAN, shift(TODAY, -3), ids.admin])))
+      .rejects.toThrow(/quiz_date_passed/);
+
+    const result = await withPlans(async tx => {
+      await tx.query(`SELECT public.set_daily_quiz_day_custom($1, $2::date, $3::jsonb, $4)`, [LIVE_PLAN, NO_QUIZ, JSON.stringify(CUSTOM), ids.admin]);
+      return makeup(tx, LIVE_PLAN, NO_QUIZ);
+    });
+    expect(result).toMatchObject({ source: "custom" });
+  });
+});

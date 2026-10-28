@@ -183,8 +183,8 @@ describe("migration: progress and stuck generations (#465)", () => {
     for (const name of ["_daily_quiz_generation_stale", "reserve_daily_quiz_generation", "reserve_daily_quiz_regeneration",
       "set_daily_quiz_generation_stage", "complete_daily_quiz_generation", "fail_daily_quiz_generation",
       "get_daily_quiz_calendar", "swap_daily_quiz_version"]) {
-      // #589 之後再改寫過的（保留已通過的題目），斷言照樣驗最新版本
-      expect([MIGRATION, "20261019035001_daily_quiz_keep_passed_questions.sql"], name).toContain(latestFunctionDefinition(name).file);
+      // 之後再改寫過的（#589 保留已通過的題目、#641 補讀日），斷言照樣驗最新版本
+      expect(latestFunctionDefinition(name).file >= MIGRATION, name).toBe(true);
     }
   });
 
@@ -206,7 +206,7 @@ describe("migration: progress and stuck generations (#465)", () => {
     const cal = fn("get_daily_quiz_calendar");
     expect(cal).toContain("WHEN ai.generation_status = 'generating' AND NOT ai_stale THEN 'generating'");
     expect(cal).toContain("WHEN ai.generation_status = 'failed' OR ai_stale THEN 'failed'");
-    expect(cal).toContain("'aiError', CASE WHEN ai_stale THEN 'generation_timeout' ELSE ai.generation_error END");
+    expect(cal).toContain("WHEN ai_stale THEN 'generation_timeout' ELSE ai.generation_error END");
     expect(cal).toContain("'aiStage', CASE WHEN ai_stale THEN NULL ELSE ai.generation_stage END");
     expect(cal).toContain("'aiStartedAt', ai.generation_started_at");
     expect(cal).toContain("'serverNow', NOW()");

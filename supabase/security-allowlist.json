@@ -163,6 +163,7 @@
       "protect_profile_privileged_fields()",
       "prune_orphaned_church_org_nodes(interval)",
       "publish_approved_commentary(uuid[],text,uuid)",
+      "publish_daily_quiz_makeup(uuid,date,uuid)",
       "publish_global_plan_rules(uuid,integer,jsonb,uuid)",
       "redeem_my_lightning_quiz_voucher(uuid,uuid)",
       "remove_daily_quiz_kept_question(uuid,date,text,uuid)",

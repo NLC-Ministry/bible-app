@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { gradeDailyQuizTrial, mountDailyQuizTrial } from "../js/modules/daily-quiz-trial.mjs";
 import { normalizeQuestion } from "../js/modules/quiz-question-types.mjs";
-import { currentMigrationSql } from "./migration-sql.mjs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 // #307（小測驗 Q2，屬於 #305）：後台 7 天日曆、每天的設定、前端試作。
 // jsdom 環境的 URL 不是 Node 的 URL，readFileSync 認不得，所以用相對於專案根目錄的路徑
@@ -121,13 +121,31 @@ describe("days outside the plan (#307 補充)", () => {
 
   it("the calendar marks days outside the plan's dates instead of 等待出題", () => {
     expect(outside).toContain("WHEN plan_start IS NOT NULL AND (d < plan_start OR d > plan_end) THEN 'outside_plan'");
-    expect(outside.indexOf("'outside_plan'")).toBeLessThan(outside.indexOf("WHEN d < today THEN 'not_published'"));
+    expect(outside.indexOf("'outside_plan'")).toBeLessThan(outside.indexOf("THEN 'not_published'"));
     expect(outside).toContain("GRANT EXECUTE ON FUNCTION public.get_daily_quiz_calendar(uuid, date, integer, uuid) TO authenticated, service_role;");
   });
 
   it("the admin UI labels them and offers no actions", () => {
     expect(admin).toContain("outside_plan: { label: '不在計畫期間', kind: 'neutral' }");
-    expect(admin).toContain("!['open', 'ended', 'outside_plan'].includes(day.status)");
+    expect(admin).toContain("!['open', 'ended', 'outside_plan', 'rest_day'].includes(day.status)");
+  });
+});
+
+// #641：沒排章節的日子（補讀日）不出題；SQL 行為在 db-behavior.test.mjs
+describe("rest days (#641)", () => {
+  const calendarSql = latestFunctionDefinition("get_daily_quiz_calendar").text;
+  const swapSql = latestFunctionDefinition("swap_daily_quiz_version").text;
+
+  it("the calendar checks rest days after outside_plan and before skipped/failed", () => {
+    expect(calendarSql.indexOf("WHEN rest_day THEN 'rest_day'")).toBeGreaterThan(calendarSql.indexOf("THEN 'outside_plan'"));
+    expect(calendarSql.indexOf("WHEN rest_day THEN 'rest_day'")).toBeLessThan(calendarSql.indexOf("THEN 'skipped'"));
+    expect(swapSql).toContain("RAISE EXCEPTION 'quiz_rest_day'");
+  });
+
+  it("the admin UI labels them 補讀日，不出題 with no actions and no red alert", () => {
+    expect(admin).toContain("rest_day: { label: '補讀日，不出題', kind: 'neutral' }");
+    expect(admin).toContain("這一天是補讀日，沒有排讀經章節，不出題也不發佈。");
+    expect(db).toContain("quiz_rest_day:");
   });
 });
 
@@ -166,5 +184,22 @@ describe("admin UI (#307)", () => {
       expect(db, rpc).toContain(`this._callQuizRpc("${rpc}"`);
       expect(nlcData, rpc).toContain(`"${rpc}"`);
     }
+  });
+});
+
+// #643：過去沒發出去的日子可以補發；SQL 行為在 db-behavior.test.mjs
+describe("make-up publishing (#643)", () => {
+  it("the admin UI edits make-up days, hides 這天不發 for past days and offers 補發 once questions are ready", () => {
+    expect(admin).toContain("return (day.date >= today || day.canMakeup === true) && ");
+    expect(admin).toContain("if (canMakeup && day.status === 'scheduled') actions.push('<button type=\"button\" class=\"primary-btn\" data-quiz-day-act=\"makeup\">補發</button>');");
+    expect(admin).toContain("if (day.date >= today) actions.push(day.skip");
+    expect(admin).toContain("db.publishDailyQuizMakeup(plan, day.date)");
+    expect(admin).toContain("if (day.canMakeup === true && day.status === 'scheduled') return { label: '可以補發', kind: 'brand' };");
+  });
+
+  it("db and nlc-data expose the make-up RPC", () => {
+    expect(db).toContain('this._callQuizRpc("publish_daily_quiz_makeup", { p_global_plan_id: planId, p_quiz_date: quizDate })');
+    expect(nlcData).toContain('"publish_daily_quiz_makeup"');
+    for (const code of ["quiz_makeup_not_past:", "quiz_makeup_plan_ended:", "quiz_day_skipped:", "quiz_not_ready:"]) expect(db).toContain(code);
   });
 });

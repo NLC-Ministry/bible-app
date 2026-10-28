@@ -3524,7 +3524,9 @@ async function renderDailyQuizSection(plan, selectedDay, trackerRequestId, optio
   const result = await db.getDailyQuizDashboard(plan, quizDate);
   if (isStale()) return;
   const context = (result.success && result.context) || {};
-  if (!context.myQuiz) {
+  // #643：今天沒有自己的測驗，但有還在作答期間的補發，也要顯示
+  const hasMakeup = Array.isArray(context.makeupQuizzes) && context.makeupQuizzes.length > 0;
+  if (!context.myQuiz && !hasMakeup) {
     hideDailyQuizSection();
     return;
   }

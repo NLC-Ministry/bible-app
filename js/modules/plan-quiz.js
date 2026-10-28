@@ -1,6 +1,6 @@
 // 計畫頁「今日小測驗」的入口與作答畫面（#370 從 plan.js 拆出的 lazy chunk）。
 // plan.js 的 renderDailyQuizSection 先確認功能開關、日期，並向伺服器確認今天真的有指派給
-// 自己的測驗，才下載這個檔並呼叫 showDailyQuiz；沒有測驗的人不會載入。
+// 自己的測驗（或還在作答期間的補發，#643），才下載這個檔並呼叫 showDailyQuiz；沒有測驗的人不會載入。
 
 import {
   normalizeQuestion,
@@ -48,15 +48,49 @@ function getDailyQuizReadingProgress(plan, quizDate) {
   };
 }
 
-function openDailyQuizContent(content, context, plan, quizDate) {
-  if (!context.myQuiz) return;
-  renderAssignedDailyQuiz(content, context.myQuiz, plan, quizDate);
-  if (typeof hydrateIcons === "function") hydrateIcons(content);
+// #643：今天的測驗（myQuiz）之外，還在作答期間的補發（makeupQuizzes）也各畫一份。
+// 每一份都是 { quiz, quizDate, makeup, ids }；quizDate 是那份測驗原本的日期（進度檢查、選項順序都照它）。
+// 只有一份時 id 和以前一樣；多份時第 2 份起加後綴，同一頁不會有重複的 id。
+function dailyQuizIds(index) {
+  const suffix = index === 0 ? "" : `-${index + 1}`;
+  return {
+    entryButton: `daily-quiz-entry-button${suffix}`,
+    entryDescription: `daily-quiz-entry-description${suffix}`,
+    title: `daily-quiz-title${suffix}`,
+    form: `daily-quiz-form${suffix}`
+  };
+}
+
+function dailyQuizItems(context, quizDate) {
+  const items = [];
+  if (context.myQuiz) items.push({ quiz: context.myQuiz, quizDate, makeup: false });
+  (Array.isArray(context.makeupQuizzes) ? context.makeupQuizzes : []).forEach(quiz => {
+    if (quiz?.publicationId) items.push({ quiz, quizDate: String(quiz.quizDate || ""), makeup: true });
+  });
+  return items.map((item, index) => ({ ...item, ids: dailyQuizIds(index) }));
+}
+
+function dailyQuizDateLabel(iso) {
+  const [, month, day] = String(iso || "").split("-").map(Number);
+  return month && day ? `${month}/${day}` : String(iso || "");
+}
+
+function dailyQuizName(item) {
+  return item.makeup ? `補發：${dailyQuizDateLabel(item.quizDate)} 小測驗` : "小測驗";
+}
+
+function dailyQuizDayWord(item) {
+  return item.makeup ? dailyQuizDateLabel(item.quizDate) : "今天";
+}
+
+function openDailyQuizContent(host, item, plan, sectionDate) {
+  renderAssignedDailyQuiz(host, item, plan, sectionDate);
+  if (typeof hydrateIcons === "function") hydrateIcons(host);
 }
 
 // 發佈／編輯／匯入題目已搬去系統管理後台（admin.js 的「小測驗」分頁），
 // 打卡清單這裡只保留會友「進入小測驗/作答」的入口，所以只在有指派給自己
-// 的測驗（context.myQuiz）時才會被呼叫——見 renderDailyQuizSection 的 gate。
+// 的測驗時才會被呼叫——見 renderDailyQuizSection 的 gate。
 function formatDailyQuizTaiwanClock(iso) {
   if (!iso) return "";
   try {
@@ -68,60 +102,68 @@ function formatDailyQuizTaiwanClock(iso) {
   }
 }
 
-function renderDailyQuizEntry(content, context, plan, quizDate) {
-  const assignedQuiz = context.myQuiz;
-  if (!assignedQuiz) return;
+function isDailyQuizClosed(quiz) {
+  return Boolean(quiz.answerCloseAt) && new Date(quiz.answerCloseAt).getTime() < Date.now();
+}
+
+function renderDailyQuizEntry(host, item, plan, sectionDate) {
+  const assignedQuiz = item.quiz;
+  const ids = item.ids;
+  const dayWord = dailyQuizDayWord(item);
   const isCompleted = Boolean(assignedQuiz.attempt);
-  // answerCloseAt（migration 0189）是排程發佈才會有的可選作答截止時間；立即
-  // 發佈的測驗沒有這個欄位，isClosed 一律是 false，行為跟以前完全一樣。
-  const isClosed = !isCompleted && Boolean(assignedQuiz.answerCloseAt)
-    && new Date(assignedQuiz.answerCloseAt).getTime() < Date.now();
+  // answerCloseAt（migration 0189）是作答截止時間；00:00 自動發佈是當天 23:59，補發是補發當天 23:59。
+  const isClosed = !isCompleted && isDailyQuizClosed(assignedQuiz);
   const buttonLabel = isCompleted ? "查看測驗結果" : isClosed ? "作答已截止" : "進入小測驗";
   const description = isCompleted
-    ? "今天的小測驗已完成，可查看答案與解說"
+    ? `${dayWord}的小測驗已完成，可查看答案與解說`
     : isClosed
       ? `作答時間已於 ${formatDailyQuizTaiwanClock(assignedQuiz.answerCloseAt)} 截止`
       : hasCompletedDailyQuizFirstRound(plan)
         ? "你已讀完一遍，可以直接作答"
-        : "完成今天的速讀進度後即可作答";
+        : `完成${dayWord}的速讀進度後即可作答`;
 
-  content.innerHTML = `
-    <button type="button" class="daily-quiz-entry-button" id="daily-quiz-entry-button" aria-describedby="daily-quiz-entry-description" ${isClosed ? "disabled" : ""}>
+  host.innerHTML = `
+    <button type="button" class="daily-quiz-entry-button" id="${ids.entryButton}" aria-describedby="${ids.entryDescription}" ${isClosed ? "disabled" : ""}>
       <span class="daily-quiz-entry-icon" aria-hidden="true"><span class="nlc-icon" data-icon="checkOne"></span></span>
       <span class="daily-quiz-entry-copy">
-        <strong>小測驗</strong>
-        <small id="daily-quiz-entry-description">${description}</small>
+        <strong>${dailyQuizName(item)}</strong>
+        <small id="${ids.entryDescription}">${description}</small>
       </span>
       <span class="daily-quiz-entry-action">${buttonLabel}<span class="nlc-icon nlc-icon--sm" data-icon="chevronRight" aria-hidden="true"></span></span>
     </button>`;
 
   if (isClosed) return;
 
-  content.querySelector("#daily-quiz-entry-button")?.addEventListener("click", () => {
+  host.querySelector(`#${ids.entryButton}`)?.addEventListener("click", () => {
     if (!isCompleted) {
-      const progress = getDailyQuizReadingProgress(plan, quizDate);
+      const progress = getDailyQuizReadingProgress(plan, item.quizDate);
       if (!progress.isComplete) {
         const message = progress.total > 0
-          ? `請先閱讀完今天的速讀進度，再進入小測驗（尚有 ${progress.remaining} 章）。`
-          : "請先完成今天的速讀進度，再進入小測驗。";
+          ? `請先閱讀完${dayWord}的速讀進度，再進入小測驗（尚有 ${progress.remaining} 章）。`
+          : `請先完成${dayWord}的速讀進度，再進入小測驗。`;
         if (typeof showToast === "function") showToast(message);
         return;
       }
     }
-    openDailyQuizContent(content, context, plan, quizDate);
+    openDailyQuizContent(host, item, plan, sectionDate);
   });
 }
 
-function renderCompletedDailyQuiz(content, quiz) {
+function dailyQuizEyebrow(item) {
+  return item.makeup ? dailyQuizName(item) : "今日小測驗";
+}
+
+function renderCompletedDailyQuiz(host, item) {
+  const quiz = item.quiz;
   const attempt = quiz.attempt;
   const questions = (quiz.questions || []).map(normalizeQuestion);
-  content.innerHTML = `
+  host.innerHTML = `
     <div class="daily-quiz-heading">
-      <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">完成作答</h3></div>
+      <div><p class="daily-quiz-eyebrow">${dailyQuizEyebrow(item)}</p><h3 id="${item.ids.title}">完成作答</h3></div>
       <span class="daily-quiz-score">${Number(attempt.score ?? 0)}／${Number(attempt.total ?? questions.length)}</span>
     </div>
     ${renderDailyQuizReviewHtml(attempt, questions)}`;
-  drawMatchReviewLines(content);
+  drawMatchReviewLines(host);
 }
 
 // 逐題送出＋最後結算，取代整份一次送出：每題一填完就各自小寫入一次
@@ -129,8 +171,9 @@ function renderCompletedDailyQuiz(content, quiz) {
 // 「送出答案」按下去時再把每題目前的作答值保險地全部重送一次
 // （排除競態/漏送風險），確認每題都成功後才呼叫 finalize 結算分數——
 // 全程沒有「整份題目一次送出」這個動作，結構上排除大 payload 被截斷的風險。
-function bindDailyQuizAnswering(content, quiz, questions, plan, quizDate) {
-  const form = content.querySelector("#daily-quiz-form");
+function bindDailyQuizAnswering(host, item, questions, plan, sectionDate) {
+  const quiz = item.quiz;
+  const form = host.querySelector(`#${item.ids.form}`);
   if (!form) return;
 
   const fieldsetsByQuestionId = new Map(
@@ -196,46 +239,61 @@ function bindDailyQuizAnswering(content, quiz, questions, plan, quizDate) {
       return;
     }
     if (typeof showToast === "function") showToast(`作答完成：${result.data.score}／${result.data.total}`);
-    void renderDailyQuizSection(plan, { isoDate: quizDate }, getLastTrackerRequestId(), { open: true });
+    // 重畫的是「今天」這一區（補發也顯示在今天），並展開剛交卷的這一份
+    void renderDailyQuizSection(plan, { isoDate: sectionDate }, getLastTrackerRequestId(), { open: true, openPublicationId: quiz.publicationId });
   });
 }
 
-function renderAssignedDailyQuiz(content, quiz, plan, quizDate) {
+function renderAssignedDailyQuiz(host, item, plan, sectionDate) {
+  const quiz = item.quiz;
   if (quiz.attempt) {
-    renderCompletedDailyQuiz(content, quiz);
+    renderCompletedDailyQuiz(host, item);
     return;
   }
   const questions = (quiz.questions || []).map(normalizeQuestion);
   // 同一位會友同一天重畫時選項順序不變（自訂題 id 如 c1 每天重複，所以帶計畫＋日期）。
-  const shuffleSeed = `${state.currentUser?.id || ""}:${plan?.id || ""}:${quizDate}`;
-  content.innerHTML = `
+  const shuffleSeed = `${state.currentUser?.id || ""}:${plan?.id || ""}:${item.quizDate}`;
+  host.innerHTML = `
     <div class="daily-quiz-heading">
-      <div><p class="daily-quiz-eyebrow">今日小測驗</p><h3 id="daily-quiz-title">${questions.length} 題</h3></div>
+      <div><p class="daily-quiz-eyebrow">${dailyQuizEyebrow(item)}</p><h3 id="${item.ids.title}">${questions.length} 題</h3></div>
       <span class="daily-quiz-status">已由${quizPublisherLabel(quiz.publisherRole)}發佈</span>
     </div>
-    <form id="daily-quiz-form" class="daily-quiz-form">
+    <form id="${item.ids.form}" class="daily-quiz-form">
       ${questions.map((question, index) => renderQuestionFieldsetHtml(question, index, { shuffleSeed })).join("")}
       <button type="submit" class="primary-btn daily-quiz-submit">送出答案</button>
     </form>`;
-  bindDailyQuizAnswering(content, quiz, questions, plan, quizDate);
+  bindDailyQuizAnswering(host, item, questions, plan, sectionDate);
 }
 
-
-// plan.js 已經把 section 顯示出來、確認 context.myQuiz 存在，這裡只負責畫入口或題目。
-export function showDailyQuiz(section, content, context, plan, quizDate, options = {}) {
-  if (options.open === true) {
-    if (context.myQuiz && !context.myQuiz.attempt) {
-      const progress = getDailyQuizReadingProgress(plan, quizDate);
-      const isClosed = Boolean(context.myQuiz.answerCloseAt)
-        && new Date(context.myQuiz.answerCloseAt).getTime() < Date.now();
-      if (!progress.isComplete || isClosed) {
-        renderDailyQuizEntry(content, context, plan, quizDate);
-        return;
-      }
+// options.open：直接展開（交卷後重畫時用）；有 openPublicationId 就只展開那一份，否則展開第一份。
+// 還沒讀完那天的進度、或已截止的，照樣只畫入口。
+function renderDailyQuizItem(host, item, plan, sectionDate, options, isFirst) {
+  const wantsOpen = options.open === true
+    && (options.openPublicationId ? options.openPublicationId === item.quiz.publicationId : isFirst);
+  if (!wantsOpen) {
+    renderDailyQuizEntry(host, item, plan, sectionDate);
+    return;
+  }
+  if (!item.quiz.attempt) {
+    const progress = getDailyQuizReadingProgress(plan, item.quizDate);
+    if (!progress.isComplete || isDailyQuizClosed(item.quiz)) {
+      renderDailyQuizEntry(host, item, plan, sectionDate);
+      return;
     }
-    openDailyQuizContent(content, context, plan, quizDate);
+  }
+  openDailyQuizContent(host, item, plan, sectionDate);
+}
+
+// plan.js 已經把 section 顯示出來、確認至少有一份指派給自己的測驗，這裡只負責畫入口或題目。
+export function showDailyQuiz(section, content, context, plan, quizDate, options = {}) {
+  const items = dailyQuizItems(context, quizDate);
+  if (items.length <= 1) {
+    if (items[0]) renderDailyQuizItem(content, items[0], plan, quizDate, options, true);
   } else {
-    renderDailyQuizEntry(content, context, plan, quizDate);
+    content.innerHTML = items.map((_, index) => `<div class="daily-quiz-item" data-daily-quiz-item="${index}"></div>`).join("");
+    items.forEach((item, index) => {
+      renderDailyQuizItem(content.querySelector(`[data-daily-quiz-item="${index}"]`), item, plan, quizDate, options, index === 0);
+    });
   }
   if (typeof hydrateIcons === "function") hydrateIcons(section);
 }
