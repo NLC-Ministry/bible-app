@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // #308（小測驗 Q3，屬於 #305）：清掉排程發佈、A／B 審核與手動發佈的舊東西。
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const migration = read("supabase/migrations/20260929043341_daily_quiz_drop_legacy_publish.sql");
+// 函式驗最新定義（get_daily_quiz_dashboard 在 #643 又改寫過）
+const migration = currentMigrationSql("20260929043341_daily_quiz_drop_legacy_publish.sql");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const db = read("js/db.js");
 const admin = read("js/modules/admin.js");

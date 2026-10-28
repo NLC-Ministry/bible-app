@@ -35,7 +35,7 @@ describe("plan-quiz lazy chunk", () => {
       "await isDailyQuizFeatureEnabled()",
       "quizDate !== getDailyQuizTaiwanToday()",
       "await db.getDailyQuizDashboard(plan, quizDate)",
-      "if (!context.myQuiz) {",
+      "if (!context.myQuiz && !hasMakeup) {",
       'await loadPlanChunk("plan-quiz")',
       "quizView.showDailyQuiz(section, content, context, plan, quizDate, options);"
     ].map(needle => gate.indexOf(needle));
@@ -51,7 +51,7 @@ describe("plan-quiz lazy chunk", () => {
   it("plan-quiz.js 有作答畫面，送出後用最新的 tracker 序號重畫", () => {
     expect(planQuiz).toContain('import { getLastTrackerRequestId, renderDailyQuizSection } from "./plan.js";');
     expect(planQuiz).toMatch(/^export function showDailyQuiz\(section, content, context, plan, quizDate, options = \{\}\) \{/m);
-    expect(planQuiz).toContain("void renderDailyQuizSection(plan, { isoDate: quizDate }, getLastTrackerRequestId(), { open: true });");
+    expect(planQuiz).toContain("void renderDailyQuizSection(plan, { isoDate: sectionDate }, getLastTrackerRequestId(), { open: true, openPublicationId: quiz.publicationId });");
     expect(planQuiz).not.toMatch(/\blastTrackerRequestId\b/);
     expect(planQuiz).toMatch(/^function bindDailyQuizAnswering\(/m);
   });

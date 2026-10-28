@@ -4004,6 +4004,10 @@ const db = {
       quiz_publish_admin_only: "只有系統管理員可以發佈小測驗。",
       quiz_date_passed: "已經過去的日子不能再修改。",
       quiz_rest_day: "這一天是補讀日，沒有排讀經章節，不出題。",
+      quiz_not_ready: "這一天的題目還沒準備好，請先請 AI 出題或改成自訂題目。",
+      quiz_makeup_not_past: "今天以後的日子會自動發佈，不需要補發。",
+      quiz_makeup_plan_ended: "這個計畫已經結束，不能再補發。",
+      quiz_day_skipped: "這一天設成不發，不能補發。",
       quiz_generating: "AI 正在出這一天的題目，請稍等一下再試。",
       quiz_generation_secret_missing: "這個環境沒有設定 AI 出題，不能換一版。",
       quiz_assignment_required: "你所屬的小組尚未收到這份小測驗。",
@@ -4125,6 +4129,13 @@ const db = {
     return this._callQuizRpc("remove_daily_quiz_kept_question", {
       p_global_plan_id: planId, p_quiz_date: quizDate, p_question_id: questionId
     });
+  },
+
+  // #643：補發過去沒發出去的日子（發給全部小組，作答到今天 23:59）
+  async publishDailyQuizMakeup(plan, quizDate) {
+    const planId = this._quizPlanId(plan);
+    if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };
+    return this._callQuizRpc("publish_daily_quiz_makeup", { p_global_plan_id: planId, p_quiz_date: quizDate });
   },
 
   async swapDailyQuizVersion(plan, quizDate) {

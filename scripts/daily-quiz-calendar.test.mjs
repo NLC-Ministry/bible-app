@@ -121,7 +121,7 @@ describe("days outside the plan (#307 補充)", () => {
 
   it("the calendar marks days outside the plan's dates instead of 等待出題", () => {
     expect(outside).toContain("WHEN plan_start IS NOT NULL AND (d < plan_start OR d > plan_end) THEN 'outside_plan'");
-    expect(outside.indexOf("'outside_plan'")).toBeLessThan(outside.indexOf("WHEN d < today THEN 'not_published'"));
+    expect(outside.indexOf("'outside_plan'")).toBeLessThan(outside.indexOf("THEN 'not_published'"));
     expect(outside).toContain("GRANT EXECUTE ON FUNCTION public.get_daily_quiz_calendar(uuid, date, integer, uuid) TO authenticated, service_role;");
   });
 
@@ -184,5 +184,22 @@ describe("admin UI (#307)", () => {
       expect(db, rpc).toContain(`this._callQuizRpc("${rpc}"`);
       expect(nlcData, rpc).toContain(`"${rpc}"`);
     }
+  });
+});
+
+// #643：過去沒發出去的日子可以補發；SQL 行為在 db-behavior.test.mjs
+describe("make-up publishing (#643)", () => {
+  it("the admin UI edits make-up days, hides 這天不發 for past days and offers 補發 once questions are ready", () => {
+    expect(admin).toContain("return (day.date >= today || day.canMakeup === true) && ");
+    expect(admin).toContain("if (canMakeup && day.status === 'scheduled') actions.push('<button type=\"button\" class=\"primary-btn\" data-quiz-day-act=\"makeup\">補發</button>');");
+    expect(admin).toContain("if (day.date >= today) actions.push(day.skip");
+    expect(admin).toContain("db.publishDailyQuizMakeup(plan, day.date)");
+    expect(admin).toContain("if (day.canMakeup === true && day.status === 'scheduled') return { label: '可以補發', kind: 'brand' };");
+  });
+
+  it("db and nlc-data expose the make-up RPC", () => {
+    expect(db).toContain('this._callQuizRpc("publish_daily_quiz_makeup", { p_global_plan_id: planId, p_quiz_date: quizDate })');
+    expect(nlcData).toContain('"publish_daily_quiz_makeup"');
+    for (const code of ["quiz_makeup_not_past:", "quiz_makeup_plan_ended:", "quiz_day_skipped:", "quiz_not_ready:"]) expect(db).toContain(code);
   });
 });
