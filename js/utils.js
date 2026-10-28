@@ -5,6 +5,7 @@ import { isCampaignStageKind, isCanonicalCampaignStageKind } from "./data/campai
 import { segmentScheduleDaysForRoundCount, toLocalDateKey } from "./data/current-round-progress.mjs";
 import { digestChapterKeys, digestRoundLogs, isPlanReadingLogsLoaded } from "./data/reading-log-scope.mjs";
 import { HUMAN_AUDIO_COPY, SPEECH_MODES, normalizeSpeechMode } from "./modules/reader-human-audio.mjs";
+import { computeIronGroupStatus, getIronAwardGroups, pickGoverningIronGroup, presetKeyForPlanId } from "./data/plan-groups.mjs";
 // 書卷展開與平均分配和伺服器的「教會原始日程」共用（#564）
 import { distributeChaptersAcrossDays, expandPlanBooksToChapters } from "../supabase/functions/_shared/progress/plan-schedule.mjs";
 
@@ -533,25 +534,6 @@ function buildHeatmapGrid(containerId, logsByDate, teamSize = 1, label = "章", 
   container.appendChild(wrapper);
 }
 
-// 第一輪期末賽（stageNo 2）＝ 9–12 月四個月度計畫。preset key 一律 church_r1final_*。
-// 大區梯次（例：桃園 church_r1final_taoyuan_*，#327）讀同樣四卷，也算進鐵獎——見
-// CHURCH_CAMPAIGN.firstRoundFinalCohorts。
-function getFirstRoundFinalMonthlyKeys() {
-  const presets = (typeof window !== "undefined" && window.CHURCH_PLAN_PRESETS) || {};
-  const churchKeys = Object.keys(presets).filter(key => key.startsWith("church_r1final_"));
-  const cohortKeys = getFirstRoundFinalCohorts().flatMap(c => c.presetKeys || []);
-  return Array.from(new Set([...churchKeys, ...cohortKeys]));
-}
-
-// 大區梯次設定（CHURCH_CAMPAIGN.firstRoundFinalCohorts）。CHURCH_CAMPAIGN 可能被管理員存的
-// 舊版規則整個換掉（沒有這個欄位），所以退回 church_campaign.js 另外掛的那份。
-function getFirstRoundFinalCohorts() {
-  if (typeof window === "undefined") return [];
-  const fromCampaign = window.CHURCH_CAMPAIGN && window.CHURCH_CAMPAIGN.firstRoundFinalCohorts;
-  const list = Array.isArray(fromCampaign) ? fromCampaign : window.FIRST_ROUND_FINAL_COHORTS;
-  return Array.isArray(list) ? list.filter(c => c && Array.isArray(c.presetKeys)) : [];
-}
-
 function findActivePlanByKey(key) {
   const wanted = String(key);
   const direct = (state.activePlans || []).find(plan => plan
@@ -606,10 +588,14 @@ function getFirstRoundFinalSpec() {
     .map(d => ({ key: d.presetKey, book: (d.books && d.books[0]) || "", badgeId: d.finalBookBadgeId, endDate: d.endDate || null }));
 }
 
-// 一張月度計畫（全教會版或大區梯次版）目前完成幾遍：有 live 計畫就用 live 並回寫快取，
-// 否則用上次記住的值（計畫輪替出 activePlans 後，已拿到的小徽章不會熄掉）。
-function readFirstRoundFinalSource(key) {
-  const plan = findActivePlanByKey(key);
+// 鐵獎分組裡的一張計畫目前完成幾遍：有 live 計畫就用 live 並回寫快取，否則用上次記住的值
+// （計畫輪替出 activePlans 後，已拿到的小徽章不會熄掉）。快取以 presetKey 為鍵（舊資料都是），
+// 查不到 presetKey 才用計畫 id。
+function readFirstRoundFinalSource(member) {
+  const planId = String(member && member.planId || "");
+  const presetKey = (member && member.presetKey) || presetKeyForPlanId(planId, state.globalPlans);
+  const key = presetKey || planId;
+  const plan = (planId && findActivePlanByKey(planId)) || (presetKey && findActivePlanByKey(presetKey)) || null;
   const live = plan ? planCompletedRounds(plan) : null;
   const cacheKey = FIRST_ROUND_FINAL_STORAGE.bookRoundsPrefix + key;
   if (live !== null) {
@@ -619,7 +605,7 @@ function readFirstRoundFinalSource(key) {
   if (completedRounds === null) {
     try { completedRounds = Number(localStorage.getItem(cacheKey) || 0) || 0; } catch (_e) { completedRounds = 0; }
   }
-  return { key, plan, joined: Boolean(plan), completedRounds };
+  return { key, planId, plan, joined: Boolean(plan), completedRounds };
 }
 
 function formatMonthDayLabel(dateStr) {
@@ -627,82 +613,47 @@ function formatMonthDayLabel(dateStr) {
   return m ? `${Number(m[1])}/${Number(m[2])}` : "";
 }
 
-// 鐵獎進度。每一卷（出／利／民／申）可能來自全教會版或大區梯次版（桃園，#327）：
-//   · 一卷只算一次：各版本取完成遍數最多的那張（不相加）。
-//   · 合成日：每一卷取「已讀完這卷的版本中最早的合成日」（都還沒讀完 → 已加入的版本；
-//     都沒加入 → 全教會），四卷裡最晚的那天就是這個人的合成日。所以四卷都在全教會版讀完
-//     → 全教會合成日；只要有一卷只在桃園版讀完 → 桃園合成日（2027-02-02）。
+// 鐵獎進度（#639）：成員讀分組表（state.planGroups，讀不到用內建分組）。
+//   · 每組各自算：四卷要在同一組裡湊齊，讀另一組的計畫不算進這一組。
+//   · 同一格有好幾張計畫時取完成遍數最多的那張（不相加）。
+//   · 畫面（四卷進度、合成日、賽季結束日）跟著最接近完成的那組，見 pickGoverningIronGroup。
+//   · 徽章只有一個鐵獎：任一組湊齊就能合成；合成後等級取各組裡最高的預覽等級，只升不降。
 function getFirstRoundFinalStatus() {
   const spec = getFirstRoundFinalSpec();
-  const churchSynthDate = (typeof window !== "undefined" && window.CHURCH_CAMPAIGN
+  const defaultSynthesisDate = (typeof window !== "undefined" && window.CHURCH_CAMPAIGN
     && window.CHURCH_CAMPAIGN.finalSynthesisDate) || "2027-01-02";
-  const churchSeasonEnd = (spec.length && spec[spec.length - 1].endDate) || "2026-12-31";
-  const cohorts = getFirstRoundFinalCohorts();
+  const defaultSeasonEndDate = (spec.length && spec[spec.length - 1].endDate) || "2026-12-31";
+  const options = {
+    spec, now: new Date(), defaultSynthesisDate, defaultSeasonEndDate, ironTierFromSum,
+    readSource: readFirstRoundFinalSource
+  };
+  const groupStatuses = getIronAwardGroups(state.planGroups).map(group => computeIronGroupStatus(group, options));
+  const governing = pickGoverningIronGroup(groupStatuses)
+    || computeIronGroupStatus({ key: null, members: [], rules: {} }, options);
 
-  const months = spec.map((s, index) => {
-    const sources = [
-      { source: "church", region: null, synthesisDate: churchSynthDate, seasonEndDate: churchSeasonEnd, ...readFirstRoundFinalSource(s.key) },
-      ...cohorts
-        .filter(c => c.presetKeys[index])
-        .map(c => ({
-          source: "cohort",
-          region: c.region || null,
-          synthesisDate: c.finalSynthesisDate || churchSynthDate,
-          seasonEndDate: c.seasonEndDate || churchSeasonEnd,
-          ...readFirstRoundFinalSource(c.presetKeys[index])
-        }))
-    ];
-    const completedRounds = Math.max(0, ...sources.map(x => x.completedRounds));
-    const completedSources = sources.filter(x => x.completedRounds >= 1);
-    const joinedSources = sources.filter(x => x.joined);
-    const dateSources = completedSources.length ? completedSources
-      : (joinedSources.length ? joinedSources : [sources[0]]);
-    const governing = dateSources.slice().sort((a, b) => String(a.synthesisDate).localeCompare(String(b.synthesisDate)))[0];
-    // 顯示用（進度 / 目前第幾遍）：遍數最多的那張；平手取有加入、進度較高的。
-    const primary = sources.filter(x => x.joined)
-      .sort((a, b) => (b.completedRounds - a.completedRounds) || (Number(b.plan.progress || 0) - Number(a.plan.progress || 0)))[0] || null;
-    const { endDate: _endDate, ...rest } = s;
-    return {
-      ...rest,
-      keys: sources.map(x => x.key),
-      sources: sources.map(({ plan: _plan, ...x }) => x),
-      joined: joinedSources.length > 0,
-      progress: primary ? Number(primary.plan.progress || 0) : 0,
-      currentRound: primary ? Math.max(1, Number(primary.plan.currentRound || 1)) : 1,
-      completedRounds,
-      synthesisDate: governing.synthesisDate,
-      seasonEndDate: governing.seasonEndDate
-    };
-  });
-  const perRounds = months.map(m => m.completedRounds);
-  const collected = months.filter(m => m.completedRounds >= 1).length;
-  const starSum = perRounds.reduce((n, v) => n + v, 0);
-  const minRounds = perRounds.length ? Math.min(...perRounds) : 0;
-
-  const governingMonth = months.slice()
-    .sort((a, b) => String(b.synthesisDate).localeCompare(String(a.synthesisDate)))[0] || null;
-  const synthDateStr = governingMonth ? governingMonth.synthesisDate : churchSynthDate;
-  const seasonEndDate = governingMonth ? governingMonth.seasonEndDate : churchSeasonEnd;
-  const seasonEnded = new Date() >= new Date(synthDateStr + "T00:00:00");
   const synthesized = (() => { try { return localStorage.getItem(FIRST_ROUND_FINAL_STORAGE.synthesized) === "1"; } catch (_e) { return false; } })();
-  const thresholdMet = months.length === 4 && minRounds >= 1;
   const frozenTier = (() => { try { return Number(localStorage.getItem(FIRST_ROUND_FINAL_STORAGE.ironTier)) || 0; } catch (_e) { return 0; } })();
-  const previewTier = thresholdMet ? ironTierFromSum(starSum) : 0;
-  // 合成後取「合成時記下的等級」和「目前四卷算出的等級」較高者（#327）：全教會版 1/2 就能
-  // 合成，桃園版 1 月還在讀，之後多讀的遍數也要算進去。只升不降：計畫輪替出 activePlans
-  // 後也不會掉；升上去就寫回，之後從這個等級起算。
-  const ironTier = synthesized ? Math.max(frozenTier, previewTier) : 0;
+  const bestPreviewTier = Math.max(0, ...groupStatuses.map(status => status.previewTier));
+  // 合成後取「合成時記下的等級」和「目前算出的等級」較高者（#327）：合成之後在同一組多讀的遍數
+  // 也要算進去。只升不降：計畫輪替出 activePlans 後也不會掉；升上去就寫回。
+  const ironTier = synthesized ? Math.max(frozenTier, bestPreviewTier) : 0;
   if (synthesized && ironTier > frozenTier) {
     try { localStorage.setItem(FIRST_ROUND_FINAL_STORAGE.ironTier, String(ironTier)); } catch (_e) {}
   }
 
+  const { months, collected, starSum, minRounds, thresholdMet, synthesisDate, seasonEndDate, seasonEnded } = governing;
   return {
     months, total: months.length || 4,
     collected, starSum, minRounds,
-    synthesisDate: synthDateStr,                                 // 這個人適用的合成日
+    groupKey: governing.groupKey,                               // 畫面跟著的那組（r1final_church／r1final_taoyuan）
+    groups: groupStatuses.map(status => ({
+      key: status.groupKey, collected: status.collected, starSum: status.starSum,
+      thresholdMet: status.thresholdMet, synthesisDate: status.synthesisDate
+    })),
+    synthesisDate,                                              // 這個人適用的合成日
     seasonEndDate, seasonEndLabel: formatMonthDayLabel(seasonEndDate),
     seasonEnded, synthesized, thresholdMet,
-    previewTier,                                                // 按鈕上顯示的預覽
+    previewTier: governing.previewTier,                         // 按鈕上顯示的預覽
     ironTier,                                                   // 徽章實際等級（合成後只升不降）
     canSynthesize: seasonEnded && thresholdMet && !synthesized,
     ironAwardEarned: synthesized && thresholdMet

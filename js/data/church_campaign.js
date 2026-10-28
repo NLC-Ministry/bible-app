@@ -30,8 +30,6 @@ window.getChurchCampaignStageId = getChurchCampaignStageId;
 window.getChurchCampaignStagePresetKey = getChurchCampaignStagePresetKey;
 window.createChurchCampaignStageDefinitions = createChurchCampaignStageDefinitions;
 window.FIRST_ROUND_FINAL_BOOK_BADGE_IDS = FIRST_ROUND_FINAL_BOOK_BADGE_IDS;
-// 另外掛一份：window.CHURCH_CAMPAIGN 可能被管理員存的舊版規則（沒有這個欄位）整個換掉。
-window.FIRST_ROUND_FINAL_COHORTS = cloneChurchCampaign(CHURCH_CAMPAIGN.firstRoundFinalCohorts || []);
 window.getChurchCampaignStageDefinition = getChurchCampaignStageDefinition;
 window.cloneChurchCampaign = cloneChurchCampaign;
 window.validateChurchCampaign = validateChurchCampaign;

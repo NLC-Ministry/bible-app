@@ -744,19 +744,13 @@
               <details id="admin-region-cohort" style="margin-bottom: 0.75rem; border: 1px solid var(--border-card); border-radius: 6px; padding: 0.5rem 0.75rem;">
                 <summary style="cursor: pointer; font-size: 0.9375rem;">大區延後梯次</summary>
                 <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0.5rem 0;">
-                  某個大區整條計畫延後開跑時，為他們建立某階段的平行梯次計畫（只有該大區看得到、加得到）。同一大區同一階段重複送出＝更新日期／開放狀態。
+                  某個大區延後開跑時，從一張全教會計畫複製出他們的梯次（只有該大區看得到、加得到）。每次送出都新增一張；要改日期、名稱或開放狀態，請到下方列表用「編輯」或「開放給使用者」。
                 </p>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 0.5rem; font-size: 0.875rem;">
                   <label style="display: flex; flex-direction: column; gap: 0.2rem;">大區
                     <select id="cohort-region" class="form-control"></select></label>
-                  <label style="display: flex; flex-direction: column; gap: 0.2rem;">來源階段
-                    <select id="cohort-stage" class="form-control">
-                      <option value="1">第 1 階段</option><option value="2">第 2 階段</option>
-                      <option value="3">第 3 階段</option><option value="4">第 4 階段</option>
-                      <option value="5">第 5 階段</option><option value="6">第 6 階段</option>
-                      <option value="7">第 7 階段</option><option value="8">第 8 階段</option>
-                      <option value="9">第 9 階段</option><option value="10">第 10 階段</option>
-                    </select></label>
+                  <label style="display: flex; flex-direction: column; gap: 0.2rem;">來源計畫
+                    <select id="cohort-source" class="form-control"></select></label>
                   <label style="display: flex; flex-direction: column; gap: 0.2rem;">起始日
                     <input type="date" id="cohort-start" class="form-control"></label>
                   <label style="display: flex; flex-direction: column; gap: 0.2rem;">結束日
@@ -766,7 +760,7 @@
                 </div>
                 <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
                   <button type="button" class="primary-btn" id="cohort-create-btn"
-                    style="font-size: 0.875rem; padding: 0.35rem 0.75rem;">建立 / 更新梯次</button>
+                    style="font-size: 0.875rem; padding: 0.35rem 0.75rem;">建立梯次</button>
                 </div>
               </details>
 

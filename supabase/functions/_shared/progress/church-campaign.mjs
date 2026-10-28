@@ -32,24 +32,8 @@ export const CHURCH_CAMPAIGN = {
   version: 1,
   // 第一輪期末賽（9–12 月四卷）→ 這天之後，使用者可在徽章牆手動「合成鐵獎」。
   finalSynthesisDate: "2027-01-02",
-  // 第一輪期末賽的大區梯次（#321 / #326 / #327）：讀同樣四卷、同樣算進四卷小徽章與鐵獎，
-  // 只是晚開跑，所以合成日也跟著晚。presetKeys 依 monthlyFinals 的書卷順序（出／利／民／申）。
-  // 一卷書只算一次：同一卷全教會版、梯次版都讀了，取遍數較多的那張。
-  // 合成日：每一卷取「讀完這卷的版本中最早的合成日」，四卷裡最晚的那天就是這個人的合成日
-  // ——也就是只要有一卷只在桃園版讀完，就要等桃園的合成日。見 utils.js getFirstRoundFinalStatus()。
-  firstRoundFinalCohorts: [
-    {
-      region: "桃園",
-      seasonEndDate: "2027-01-31",
-      finalSynthesisDate: "2027-02-02",
-      presetKeys: [
-        "church_r1final_taoyuan_2026_10",
-        "church_r1final_taoyuan_2026_11",
-        "church_r1final_taoyuan_2026_12",
-        "church_r1final_taoyuan_2027_01"
-      ]
-    }
-  ],
+  // 鐵獎由哪幾張計畫組成（全教會、桃園各一組）改記在 plan_groups／plan_group_members（#639），
+  // 內建備援見 js/data/plan-groups.mjs。
   rules: {
     allowMidJoin: true,
     sequentialAwards: true,

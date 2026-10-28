@@ -35,6 +35,7 @@ import {
 import { computePlanScopedStreak } from "./team-progress-metrics.mjs";
 import { logMatchesPlan as logMatchesPlanScope } from "../data/plan-stats-rules.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
+import { isAwardedThroughGroup } from "../data/plan-groups.mjs";
 import {
   countDayReadingRecordsByDate,
   formatChapterList,
@@ -3831,8 +3832,10 @@ window.triggerPlanUpgradeFlow = async function() {
   planUpgradeInFlight = true;
   setPlanUpgradeOverlayBusy(true, upgradeAvailability.nextRoundLabel);
 
-  // 記錄此類別完成的遍數，並觸發勳章解鎖檢查（cohort 階段與正式階段拿同一個獎）
-  if (window.isCampaignStagePlan(plan)) {
+  // 記錄此類別完成的遍數，並觸發勳章解鎖檢查（cohort 階段與正式階段拿同一個獎）。
+  // 獎項分組裡的計畫（鐵獎四卷，#639）不在這裡發獎：各卷遍數由 getFirstRoundFinalStatus 讀，
+  // 鐵獎只能在徽章牆合成。以前任一張月度計畫升遍就直接把 church_stage_award_2 寫進已解鎖。
+  if (window.isCampaignStagePlan(plan) && !isAwardedThroughGroup(plan, state.planGroups)) {
     const stageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || 0);
     if (stageNo > 0) {
       const completedRoundsKey = `church_stage_completed_rounds_${stageNo}`;

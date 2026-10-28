@@ -224,6 +224,9 @@ const READ_TABLES = new Set([
   "pastoral_zones",
   "small_groups",
   "global_plans",
+  // 獎項分組（#639）：只有分組名稱、規則和成員計畫 id，沒有個資，不需 forced scope。
+  "plan_groups",
+  "plan_group_members",
   "church_announcements",
   "profiles",
   "reading_plans",

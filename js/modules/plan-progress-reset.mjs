@@ -1,3 +1,8 @@
+import { isAwardedThroughGroup, presetKeyForPlanId } from "../data/plan-groups.mjs";
+
+// 鐵獎四卷各自的遍數快取（utils.js FIRST_ROUND_FINAL_STORAGE.bookRoundsPrefix）
+const IRON_BOOK_ROUNDS_PREFIX = "church_r1final_rounds_";
+
 function chapterKey(book, chapter) {
   return `${book || ""}_${Number(chapter) || 0}`;
 }
@@ -29,16 +34,29 @@ export function removePlanReadingLogs(logs, plan) {
   );
 }
 
-export function cleanPlanAssociatedBadges(plan) {
+export function cleanPlanAssociatedBadges(plan, planGroups = (typeof window !== "undefined" && window.state && window.state.planGroups) || null) {
   if (!plan) return;
   const storage = (typeof localStorage !== "undefined" && localStorage) || (typeof window !== "undefined" && window.localStorage) || null;
   if (!storage) return;
 
   const targetBadgeIds = new Set();
 
-  // 1. Church Campaign Stage Badges
+  // 1a. 獎項分組裡的計畫（鐵獎四卷，#639）：只清這一卷的遍數快取。鐵獎是整組合成的，
+  //     重設其中一張不收回鐵獎、也不清其他卷（以前會依 stageNo 2 清掉整個鐵獎）。
+  const awardedThroughGroup = isAwardedThroughGroup(plan, planGroups);
+  if (awardedThroughGroup) {
+    const globalPlans = (typeof window !== "undefined" && window.state && window.state.globalPlans) || [];
+    const planId = plan.globalPlanId || plan.global_plan_id || plan.id;
+    [plan.presetKey, presetKeyForPlanId(planId, globalPlans), planId]
+      .filter(Boolean)
+      .forEach(key => storage.removeItem(IRON_BOOK_ROUNDS_PREFIX + key));
+  }
+
+  // 1b. Church Campaign Stage Badges（分組裡的計畫不在這裡發獎，也就不清）
   const presetMatch = String(plan.presetKey || plan.id || "").match(/(?:stage_?|award_?|campaign-stage-?)(\d+)/i);
-  const stageNo = Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || (presetMatch && presetMatch[1]) || 0);
+  const stageNo = awardedThroughGroup
+    ? 0
+    : Number(plan.stageNo || (plan.campaignDefinition && plan.campaignDefinition.stageNo) || (presetMatch && presetMatch[1]) || 0);
   if (stageNo > 0) {
     targetBadgeIds.add(`church_stage_award_${stageNo}`);
     storage.removeItem(`church_stage_completed_rounds_${stageNo}`);
