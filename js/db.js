@@ -6064,17 +6064,17 @@ const db = {
     return { success: true, graceDays: days };
   },
 
-  // 延後大區梯次：為某大區建立 / 更新某階段的平行梯次計畫（migration 0128 + 0140）。
-  // 梯次是「普通固定日期計畫 + 沿用獎勵」：後端只需複製來源階段的 target_books、
-  // 帶上 rules.stageNo / cohortSourceStageNo（發獎用），排程由前端一般路徑處理。
-  async createRegionStageCohort({ greatRegion, sourceStageNo, startDate, endDate, isHidden = true }) {
+  // 延後大區梯次：從一張全教會正式階段計畫複製出某大區的梯次（#633：只新增，每次新 id）。
+  // 梯次是「普通固定日期計畫 + 沿用獎勵」：後端複製來源的 target_books／規則、
+  // 把來源記在 source_plan_id，排程由前端一般路徑處理。修改一律從計畫列表用 id 進去。
+  async createRegionStageCohort({ greatRegion, sourcePlanId, startDate, endDate, isHidden = true }) {
     if (!state.isSupabaseMode || !state.supabase) {
       return { success: false, message: "此功能需要登入正式帳號。" };
     }
     try {
       const { data, error } = await state.supabase.rpc("create_region_stage_cohort", {
         p_great_region: greatRegion,
-        p_source_stage_no: Number(sourceStageNo),
+        p_source_plan_id: sourcePlanId,
         p_start_date: startDate,
         p_end_date: endDate,
         p_is_hidden: isHidden !== false
@@ -6082,9 +6082,9 @@ const db = {
       if (error) {
         const raw = String(error.message || error);
         const msg = raw.includes("great_region_not_found") ? "找不到這個大區名稱。"
-          : raw.includes("source_stage_not_found") ? "找不到來源階段（正式階段計畫可能尚未建立）。"
+          : raw.includes("source_plan_not_found") ? "找不到來源計畫（只能選全教會正式階段）。"
+          : raw.includes("cohort_already_exists") ? "這個大區已經有這張計畫的梯次，請到列表用「編輯」修改。"
           : raw.includes("invalid_date_range") ? "起訖日期不正確（結束要晚於開始）。"
-          : raw.includes("invalid_stage_no") ? "階段序號要在 1～10。"
           : raw.includes("permission_denied") ? "只有系統管理員可以建立延後梯次。"
           : "建立失敗，請稍後再試。";
         console.warn("[cohort] create_region_stage_cohort failed:", raw);

@@ -91,7 +91,7 @@ const SCOPED_TO_CHURCH_PLAN = [
   "get_reading_team_leaderboards",
   "get_reading_team_statistics",
   "carry_reading_teams_to_stage",
-  "create_region_stage_cohort",
+  // create_region_stage_cohort：#633 起只新增計畫列、不再更新報名（reading_plans），不在這份清單
   "sync_church_campaign_stage_plans",
   "cleanup_removed_church_campaign_stages",
   "publish_global_plan_rules",
