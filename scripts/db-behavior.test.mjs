@@ -178,6 +178,85 @@ describe("小測驗更正答案（set_daily_quiz_answer_key，#590）", () => {
   });
 });
 
+describe("總表規則更新時的階段清理（cleanup_removed_church_campaign_stages，#634）", () => {
+  const MASTER = "00000000-0000-0000-c026-000000002029";
+  const stages = numbers => JSON.stringify(numbers.map(stageNo => ({ stageNo })));
+  const count = async (tx, sql) => (await tx.query(sql)).rows[0].n;
+  const monthlyPlans = tx => count(tx, `SELECT count(*)::int AS n FROM public.global_plans WHERE rules->>'presetKey' LIKE 'church_r1final_2026%'`);
+  const stagePlans = tx => count(tx, `SELECT count(*)::int AS n FROM public.global_plans WHERE id::text LIKE '00000000-0000-0000-c026-0000000000%'`);
+
+  /** 以資料庫擁有者身分執行，結束後一律 rollback。 */
+  async function inRollback(fn) {
+    let result;
+    let failure;
+    try {
+      await db.transaction(async tx => {
+        try {
+          // 只看清理觸發器：最小的 stages 不夠 sync 觸發器實體化階段
+          await tx.exec(`ALTER TABLE public.global_plans DISABLE TRIGGER trg_sync_church_campaign_stage_plans`);
+          // 10 月利未記（月度期末賽）放一筆報名＋打卡；略過「階段未開放」的檢查
+          await tx.exec(`SET LOCAL session_replication_role = replica`);
+          const { rows } = await tx.query(
+            `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+             SELECT $1, id, name, start_date, end_date, target_books FROM public.global_plans
+             WHERE rules->>'presetKey' = 'church_r1final_2026_10' RETURNING id`,
+            [ids.member]
+          );
+          await tx.query(`INSERT INTO public.reading_logs (user_id, plan_id, book, chapter) VALUES ($1, $2, '利未記', 1)`, [ids.member, rows[0].id]);
+          await tx.exec(`SET LOCAL session_replication_role = DEFAULT`);
+          result = await fn(tx, rows[0].id);
+        } catch (error) {
+          failure = error;
+        }
+        await tx.rollback();
+      });
+    } catch (error) {
+      if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+    }
+    if (failure) throw failure;
+    return result;
+  }
+
+  it("重新發布（stages 1～10）不會刪掉全教會月度期末賽和會友的報名、打卡", async () => {
+    const outcome = await inRollback(async (tx, enrollmentId) => {
+      const before = { monthly: await monthlyPlans(tx), stages: await stagePlans(tx) };
+      await tx.query(`UPDATE public.global_plans SET rules = rules || jsonb_build_object('stages', $1::jsonb) WHERE id = $2`, [stages([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), MASTER]);
+      return {
+        before,
+        monthly: await monthlyPlans(tx),
+        stages: await stagePlans(tx),
+        enrollments: await count(tx, `SELECT count(*)::int AS n FROM public.reading_plans WHERE id = '${enrollmentId}'`),
+        logs: await count(tx, `SELECT count(*)::int AS n FROM public.reading_logs WHERE plan_id = '${enrollmentId}'`)
+      };
+    });
+    expect(outcome.before.monthly).toBe(4);
+    expect(outcome).toMatchObject({ monthly: 4, stages: outcome.before.stages, enrollments: 1, logs: 1 });
+  });
+
+  it("總表真的移除某個階段時，照舊刪掉那個階段的計畫；月度期末賽不受影響", async () => {
+    const outcome = await inRollback(async tx => {
+      await tx.query(`UPDATE public.global_plans SET rules = rules || jsonb_build_object('stages', $1::jsonb) WHERE id = $2`, [stages([1, 2, 3, 4, 5, 6, 7, 8, 9]), MASTER]);
+      return {
+        stage10: await count(tx, `SELECT count(*)::int AS n FROM public.global_plans WHERE id = '00000000-0000-0000-c026-000000000010'`),
+        stage9: await count(tx, `SELECT count(*)::int AS n FROM public.global_plans WHERE id = '00000000-0000-0000-c026-000000000009'`),
+        monthly: await monthlyPlans(tx)
+      };
+    });
+    expect(outcome).toEqual({ stage10: 0, stage9: 1, monthly: 4 });
+  });
+
+  it("總表 rules 沒有 stages 陣列時更新：什麼都不刪", async () => {
+    const outcome = await inRollback(async tx => {
+      const before = await stagePlans(tx);
+      await tx.query(`UPDATE public.global_plans SET rules = rules - 'stages' WHERE id = $1`, [MASTER]);
+      await tx.query(`UPDATE public.global_plans SET rules = rules || '{"stages":"not-an-array"}'::jsonb WHERE id = $1`, [MASTER]);
+      return { before, stages: await stagePlans(tx), monthly: await monthlyPlans(tx) };
+    });
+    expect(outcome).toEqual({ before: outcome.before, stages: outcome.before, monthly: 4 });
+    expect(outcome.before).toBeGreaterThan(0);
+  });
+});
+
 describe("牧養總覽的管理範圍（get_pastoral_overview）", () => {
   const overview = (wholeChurch, visibleIds) => asService(async tx => {
     const { rows: [{ result }] } = await tx.query(
@@ -579,5 +658,40 @@ describe("雲柱更正正解（admin_set_lightning_quiz_answer_key，#616）", (
     expect(outcome.history[0]).not.toHaveProperty("originalAnswerKey");
     expect(outcome.list[0]).toMatchObject({ originalAnswerKey: 0, answerKey: 1 });
     expect(typeof outcome.list[0].answerCorrectedAt).toBe("string");
+  });
+});
+
+describe("大區延後梯次的名稱（create_region_stage_cohort，#632）", () => {
+  const createCohort = (tx, isHidden) => tx.query(
+    `SELECT public.create_region_stage_cohort('大區 A', 3, '2026-11-01', '2026-11-30', $1, $2) AS result`,
+    [isHidden, ids.admin]
+  );
+  const sourceName = async tx =>
+    (await tx.query(`SELECT name FROM public.global_plans WHERE id = '00000000-0000-0000-c026-000000000003'`)).rows[0].name;
+
+  it("新建的梯次名稱只標大區，不加「延後梯次」", async () => {
+    const outcome = await asService(async tx => {
+      const result = (await createCohort(tx, true)).rows[0].result;
+      const { rows } = await tx.query(`SELECT name, rules->>'name' AS rules_name, is_hidden FROM public.global_plans WHERE id = $1`, [result.planId]);
+      return { result, row: rows[0], src: await sourceName(tx) };
+    });
+    expect(outcome.result.created).toBe(true);
+    expect(outcome.row).toEqual({ name: `${outcome.src}（大區 A）`, rules_name: `${outcome.src}（大區 A）`, is_hidden: true });
+    expect(outcome.result.name).toBe(`${outcome.src}（大區 A）`);
+  });
+
+  it("同大區同階段再送一次：開放狀態照送出的更新，手動改過的名稱保留", async () => {
+    const outcome = await asService(async tx => {
+      const planId = (await createCohort(tx, true)).rows[0].result.planId;
+      await tx.query(
+        `UPDATE public.global_plans SET name = '自訂名稱', rules = rules || '{"name":"自訂名稱"}'::jsonb WHERE id = $1`,
+        [planId]
+      );
+      const result = (await createCohort(tx, false)).rows[0].result;
+      const { rows } = await tx.query(`SELECT name, rules->>'name' AS rules_name, is_hidden FROM public.global_plans WHERE id = $1`, [planId]);
+      return { planId, result, row: rows[0] };
+    });
+    expect(outcome.result).toMatchObject({ planId: outcome.planId, created: false, name: "自訂名稱", isHidden: false });
+    expect(outcome.row).toEqual({ name: "自訂名稱", rules_name: "自訂名稱", is_hidden: false });
   });
 });
