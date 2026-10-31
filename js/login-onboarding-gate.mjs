@@ -35,9 +35,10 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
     return {
       enterApp: false,
       title: "請先填寫姓名",
-      subtitle: "帳號已建立，但會員中心還沒有姓名。請到會員中心完成資料。這不是登入失敗。",
+      subtitle: "會員中心還沒有你的姓名，填好就能開始。",
       button: "前往會員中心填寫姓名",
       mode: "hub-continue",
+      switchAccount: true,
     };
   }
   if (block.reason === "membership_application_required") {
@@ -47,6 +48,7 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
       subtitle: "請先送出正式會籍申請。牧者審核可以稍後完成，送出後即可使用聖經速讀。",
       button: "前往會員中心填寫會籍",
       mode: "hub-continue",
+      switchAccount: true,
     };
   }
   if (block.reason === "member_context_unavailable") {
@@ -125,10 +127,15 @@ export function applyLoginGateView({
     if (hasTokens && block) refreshActionsEl.classList.remove("hidden");
     else refreshActionsEl.classList.add("hidden");
   }
-  // #615「請用跟上次相同的方式登入」只放在一般登入畫面；已登入、卡在會員中心步驟時不需要。
-  const methodHintEl = loginGate && typeof loginGate.querySelector === "function"
-    ? loginGate.querySelector("[data-login-method-hint]")
-    : null;
-  if (methodHintEl) methodHintEl.classList.toggle("hidden", copy.mode !== "sso");
+  const query = (selector) => (loginGate && typeof loginGate.querySelector === "function"
+    ? loginGate.querySelector(selector)
+    : null);
+  // #645：換一種方式登入會開出新帳號，會員中心會把它當新人、卡在填姓名／會籍。
+  // 這兩個畫面多一個次要連結，讓會友登出改用原本的方式（#615 的 logoutToSwitchAccount）。
+  const switchAccountEl = query("[data-login-switch-account]");
+  if (switchAccountEl) switchAccountEl.classList.toggle("hidden", !copy.switchAccount);
+  // 紅點狀態只給 showConnectionError（真正的連線錯誤／登入失效）；這裡的畫面已經把原因寫在副標。
+  const statusEl = query("#gate-status-container");
+  if (statusEl) statusEl.classList.add("hidden");
   return copy;
 }

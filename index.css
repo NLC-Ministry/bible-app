@@ -3412,13 +3412,22 @@ body:not(.dark-theme) .settings-row-btn:hover {
   line-height: 1.5;
 }
 
-/* #615：提醒用同一種方式登入（換方式會開出新的空帳號） */
-.login-method-hint {
-  margin: 0 0 0.8rem;
-  color: var(--text-muted);
+/* #645：缺姓名／會籍的畫面上，給換方式開出新帳號的人改回原本的方式 */
+.login-switch-account-link {
+  display: block;
+  margin: 0 auto 0.8rem;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  background: none;
+  color: var(--color-brand);
+  font: inherit;
   font-size: 0.875rem;
   line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
+
 
 /* #615：沒有計畫的畫面上，請可能用錯登入方式的會友改回原本的方式 */
 .account-switch-hint {

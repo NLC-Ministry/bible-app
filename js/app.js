@@ -1042,7 +1042,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // failure (those keep the tokens), so this won't fire on a flaky reconnect.
   // Called both from onAppForeground and from the auth:session-expired event.
   function surfaceLoginCardIfSessionLost() {
-    if (typeof db === "undefined" || typeof db.showConnectionError !== "function") return;
+    if (typeof db === "undefined" || typeof db.showSessionLostGate !== "function") return;
     const loggedIn = typeof auth !== "undefined" && typeof auth.isLoggedIn === "function" && auth.isLoggedIn();
     if (loggedIn) return;
     const appLayout = document.querySelector(".app-layout");
@@ -1050,7 +1050,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const showingApp = appLayout && !appLayout.classList.contains("hidden")
       && (!gate || gate.classList.contains("hidden"));
     if (state.isSupabaseMode && showingApp) {
-      db.showConnectionError("登入狀態已失效，請重新登入。");
+      db.showSessionLostGate("登入狀態已失效，請重新登入。");
     }
   }
 
@@ -1410,8 +1410,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       // usable) leaves tokens intact, so isLoggedIn() stays true and this
       // does nothing — the next natural retry (focus, tab switch) picks it
       // back up instead of yanking the user out of what they were doing.
-      if (typeof auth.isLoggedIn === "function" && !auth.isLoggedIn() && typeof window.db.showConnectionError === "function") {
-        window.db.showConnectionError("重新連線後登入狀態已失效，請重新登入。");
+      if (typeof auth.isLoggedIn === "function" && !auth.isLoggedIn() && typeof window.db.showSessionLostGate === "function") {
+        window.db.showSessionLostGate("重新連線後登入狀態已失效，請重新登入。");
       }
     }
   });

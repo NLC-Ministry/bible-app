@@ -185,14 +185,15 @@ describe("login gate wiring", () => {
   });
 
   it("surfaces the login card when the session died while the app was open", () => {
-    // Shared helper: gate HIDDEN + app shell showing + !isLoggedIn() → showConnectionError.
+    // Shared helper: gate HIDDEN + app shell showing + !isLoggedIn() → showSessionLostGate
+    // (#645: auto-redirects a returning member to SSO once, else the login card).
     const helper = app.slice(app.indexOf("function surfaceLoginCardIfSessionLost"), app.indexOf("function onAppForeground"));
     expect(helper).toContain("auth.isLoggedIn()");
     expect(helper).toContain("if (loggedIn) return");
     expect(helper).toContain('querySelector(".app-layout")');
     expect(helper).toContain('getElementById("login-gate")');
     expect(helper).toContain("state.isSupabaseMode && showingApp");
-    expect(helper).toContain('db.showConnectionError("登入狀態已失效');
+    expect(helper).toContain('db.showSessionLostGate("登入狀態已失效');
 
     // onAppForeground uses the helper for the !loggedIn branch (no reload/re-render).
     const fn = app.slice(app.indexOf("function onAppForeground"), app.indexOf('document.addEventListener("visibilitychange"'));
