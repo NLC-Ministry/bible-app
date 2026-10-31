@@ -66,6 +66,7 @@ import {
   getLoginGateCopy,
   launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
+import { maybeAutoRedirectToSso } from './login-auto-redirect.mjs';
 import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
 import {
   COMMENTARY_INDEX_CACHE_KEY,
@@ -619,6 +620,16 @@ const db = {
         }
       });
     }
+    // #645：缺姓名／會籍畫面上的「以前登入過？改用原本的方式登入」
+    const switchAccountLink = document.querySelector("#login-gate [data-login-switch-account]");
+    if (switchAccountLink) {
+      switchAccountLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        switchAccountLink.disabled = true;
+        if (typeof auth !== "undefined" && typeof auth.logoutToSwitchAccount === "function") auth.logoutToSwitchAccount();
+        else if (typeof auth !== "undefined") auth.logout();
+      });
+    }
     this.bindLoginGateHubReturnSync();
 
 
@@ -725,6 +736,12 @@ const db = {
             if (buttonEl) buttonEl.dataset.loginGateMode = copy.mode;
             return false;
           }
+        }
+
+        // #645：token 已失效（被拒時清掉了）但這台裝置登入過 → 直接轉 SSO，不先顯示登入卡。
+        // 剛從 Logto 回來（取消或失敗）不轉，免得又被送回去。
+        if (!hasOAuthCallback && typeof auth !== "undefined" && !auth.isLoggedIn() && this.autoRedirectToSso()) {
+          return false;
         }
 
         // Fallback: Standard Supabase email/Google session
@@ -1333,8 +1350,9 @@ const db = {
         // denial. Don't yank an already-rendered optimistic view over it.
         console.warn("[BackgroundReconcile] member_context_unavailable after live check — keeping optimistic view.", block);
       } else {
-        console.warn("[BackgroundReconcile] Cached session no longer valid after live check:", block);
-        this.showConnectionError(copy.subtitle || undefined);
+        // 會員中心阻擋狀態（缺姓名、缺會籍…）：跟冷啟動同一套畫面，按鈕帶去會員中心（#645）。
+        console.warn("[BackgroundReconcile] Member Hub block after live check:", block);
+        this.applyLoginOnboardingGate();
       }
     } catch (syncErr) {
       if (this.isNetworkUnreachableError(syncErr)) {
@@ -1344,7 +1362,10 @@ const db = {
         // — not a connectivity blip, so the optimistic view is actually
         // wrong. Downgrade gracefully instead of leaving stale state up.
         console.warn("[BackgroundReconcile] Session sync rejected after live check:", syncErr);
-        this.showConnectionError();
+        const sessionLost = syncErr?.status === 401
+          || (typeof auth !== "undefined" && typeof auth.isLoggedIn === "function" && !auth.isLoggedIn());
+        if (sessionLost) this.showSessionLostGate();
+        else this.showConnectionError();
       }
     } finally {
       window.__bootMark?.("background-reconcile-done");
@@ -1373,6 +1394,31 @@ const db = {
     return user;
   },
 
+  // token \u5931\u6548\uff08\u88ab Logto \u62d2\u7d55\u3001nlc-session 401\uff09\uff1a\u767b\u5165\u904e\u7684\u4eba\u76f4\u63a5\u8f49 SSO\uff0c5 \u5206\u9418\u5167\u7b2c\u4e8c\u6b21\u624d\u986f\u793a\u767b\u5165\u5361\uff08#645\uff09\u3002
+  showSessionLostGate(message = "\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002") {
+    if (this.autoRedirectToSso()) return;
+    this.showConnectionError(message);
+  },
+
+  autoRedirectToSso() {
+    return maybeAutoRedirectToSso({ beforeLaunch: () => this.showSignInGate() });
+  },
+
+  // 一般登入畫面（歡迎詞＋登入按鈕），跟第一次來的人看到的一樣。
+  showSignInGate() {
+    const loginGate = document.getElementById("login-gate");
+    applyLoginGateView({
+      block: null,
+      hasTokens: false,
+      loginGate,
+      appLayout: document.querySelector(".app-layout"),
+      titleEl: loginGate && loginGate.querySelector(".login-title"),
+      subtitleEl: document.getElementById("login-gate-subtitle"),
+      buttonEl: document.getElementById("btn-gate-nlc-login"),
+      refreshActionsEl: document.getElementById("login-gate-refresh-actions")
+    });
+  },
+
   showConnectionError(message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002") {
     state.isSupabaseMode = true;
 
@@ -1382,7 +1428,17 @@ const db = {
       btnNlcGate.style.opacity = "1";
       btnNlcGate.style.cursor = "pointer";
       btnNlcGate.textContent = "\u91cd\u65b0\u767b\u5165";
+      // \u4e4b\u524d\u82e5\u986f\u793a\u904e\u6703\u54e1\u4e2d\u5fc3\u963b\u64cb\u756b\u9762\uff0c\u6309\u9215\u9084\u505c\u5728 hub-continue\uff1b\u9019\u88e1\u662f\u771f\u7684\u8981\u91cd\u65b0\u767b\u5165\uff08#645\uff09\u3002
+      btnNlcGate.dataset.loginGateMode = "sso";
     }
+    const welcome = getLoginGateCopy(null, { hasTokens: false });
+    const gateTitle = document.querySelector("#login-gate .login-title");
+    if (gateTitle) gateTitle.textContent = welcome.title;
+    const gateSubtitle = document.getElementById("login-gate-subtitle");
+    if (gateSubtitle) gateSubtitle.textContent = welcome.subtitle;
+    document.querySelector("#login-gate [data-login-switch-account]")?.classList.add("hidden");
+    document.getElementById("login-gate-refresh-actions")?.classList.add("hidden");
+    document.getElementById("gate-status-container")?.classList.remove("hidden");
 
     const btnGoogleGate = document.getElementById("btn-gate-google-login");
     if (btnGoogleGate) {

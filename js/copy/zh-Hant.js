@@ -50,7 +50,7 @@ window.APP_COPY = {
   },
   auth: {
     loginSubtitle: "跟弟兄姊妹一起速讀聖經，登入後進度會自動同步。",
-    loginMethodHint: "請用跟上次相同的方式登入（手機號碼或 Email），換一種方式會變成新的帳號。",
+    loginSwitchAccount: "以前登入過？改用原本的方式登入",
   },
   // #615：換一種方式登入而開出新的空帳號時，在沒有計畫的畫面提示改回原本的方式。
   accountSwitchHint: {
