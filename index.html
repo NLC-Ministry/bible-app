@@ -1737,7 +1737,7 @@
         <span class="nlc-icon nlc-icon--sm" data-icon="lock" aria-hidden="true"></span>
         使用 NLC 身份登入 (SSO)
       </button>
-      <p class="login-method-hint" data-login-method-hint>請用跟上次相同的方式登入（手機號碼或 Email），換一種方式會變成新的帳號。</p>
+      <button type="button" class="login-switch-account-link hidden" data-login-switch-account>以前登入過？改用原本的方式登入</button>
 
       <div class="login-gate-refresh-actions hidden" id="login-gate-refresh-actions">
         <a class="secondary-btn login-gate-refresh-button" id="login-gate-refresh-latest"
@@ -1754,7 +1754,7 @@
 
 
 
-      <div style="margin-top: 2rem; font-size: 0.875rem; color: var(--text-muted);" id="gate-status-container">
+      <div class="hidden" style="margin-top: 2rem; font-size: 0.875rem; color: var(--text-muted);" id="gate-status-container">
         <span style="display: inline-flex; align-items: center; gap: 0.3rem;">
           <span style="width: 6px; height: 6px; background: var(--color-success-foreground); border-radius: 50%;"
             id="gate-status-dot"></span>

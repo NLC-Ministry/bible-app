@@ -93,41 +93,43 @@ describe("account switch hint card", () => {
   });
 });
 
-describe("login gate: same-method reminder", () => {
+// #645：一般登入畫面不再放「請用跟上次相同的方式登入」（沒事的會友看了會擔心）；
+// 改成只在會員中心把人當新人（缺姓名／會籍）時，給「以前登入過？改用原本的方式登入」。
+describe("login gate: switch-account link", () => {
   const gate = () => {
     document.body.innerHTML = `
       <div class="login-gate hidden" id="login-gate">
         <h2 class="login-title"></h2>
         <p id="login-gate-subtitle"></p>
         <button id="btn-gate-nlc-login"></button>
-        <p data-login-method-hint>hint</p>
+        <button class="hidden" data-login-switch-account>link</button>
       </div>
       <div class="app-layout"></div>`;
     return {
       loginGate: document.getElementById("login-gate"),
       appLayout: document.querySelector(".app-layout"),
       buttonEl: document.getElementById("btn-gate-nlc-login"),
-      hintEl: document.querySelector("[data-login-method-hint]")
+      linkEl: document.querySelector("[data-login-switch-account]")
     };
   };
 
-  it("shows the reminder on the plain sign-in screen", () => {
+  it("stays hidden on the plain sign-in screen", () => {
     const els = gate();
-    els.hintEl.classList.add("hidden");
     applyLoginGateView({ block: null, hasTokens: false, ...els });
-    expect(els.hintEl.classList.contains("hidden")).toBe(false);
+    expect(els.linkEl.classList.contains("hidden")).toBe(true);
   });
 
-  it("hides it on the onboarding/retry screens where the member is already signed in", () => {
+  it("shows on the missing-name screen a switched login method lands on", () => {
     const els = gate();
-    applyLoginGateView({ block: { reason: "member_context_unavailable" }, hasTokens: true, ...els });
-    expect(els.hintEl.classList.contains("hidden")).toBe(true);
+    applyLoginGateView({ block: { reason: "member_profile_required" }, hasTokens: true, ...els });
+    expect(els.linkEl.classList.contains("hidden")).toBe(false);
   });
 
-  it("index.html carries the reminder inside the login card", () => {
+  it("index.html carries the link inside the login card, and no same-method reminder", () => {
     const html = readFileSync("index.html", "utf8");
     const card = html.slice(html.indexOf('id="login-gate"'), html.indexOf('id="gate-status-container"'));
-    expect(card).toContain("data-login-method-hint");
+    expect(card).toContain("data-login-switch-account");
+    expect(card).not.toContain("data-login-method-hint");
   });
 });
 
