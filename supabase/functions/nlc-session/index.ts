@@ -75,13 +75,15 @@ function recordLogtoJwt(source: string, result: LogtoJwtResult, token: string) {
     logtoJwtStats.detailed = 0;
   }
 }
-// nlc-session 用：決定這次登入採信哪份身分資料。
-//   · 向 Logto UserInfo 查到的（fresh）一定是真的（Logto 自己驗了 access token）。
-//   · 前端送來的 id_token 只有在簽章驗過、而且 sub 跟 fresh 相同時，才拿來補欄位——
+// nlc-session 用：決定這次登入採信哪份身分資料（#646）。
+//   · 身分（sub）以 access token 為準：JWT access token 由 nlc-session 自己驗過簽章（accessTokenResult），
+//     驗不過就拒絕，不改用 id_token。Logto UserInfo 不收帶 resource 的 JWT access token，所以只有
+//     不透明 access token（accessTokenResult 為 null）才用 UserInfo 查到的 fresh。
+//   · 前端送來的 id_token 只有在簽章驗過、而且 sub 跟上面相同時，才拿來補 email／姓名等欄位——
 //     否則攻擊者可以附一張偽造、填了受害者 email 的 id_token，讓 email 比對把受害者帳號綁給他。
-//   · 查不到 fresh（UserInfo 故障）時，只接受驗過簽章的 id_token。
 // 回傳 { userinfo } 或 { error, status }。mode=off 時回到舊行為。
 function pickSessionUserinfo(
+  accessTokenResult: LogtoJwtResult | null,
   fresh: Record<string, unknown> | null,
   idTokenResult: LogtoJwtResult | null,
   unverifiedIdTokenClaims: Record<string, unknown> | null
@@ -90,16 +92,21 @@ function pickSessionUserinfo(
     const merged = { ...(unverifiedIdTokenClaims || {}), ...(fresh || {}) };
     return merged.sub ? { userinfo: merged } : { error: "invalid_userinfo", status: 401 };
   }
+  let sub = "";
+  if (accessTokenResult) {
+    if (!accessTokenResult.ok) {
+      return accessTokenResult.reason === "jwks_unavailable"
+        ? { error: "auth_verification_unavailable", status: 503 }
+        : { error: "invalid_logto_token", status: 401 };
+    }
+    sub = String(accessTokenResult.payload.sub || "");
+  } else if (fresh && fresh.sub) {
+    sub = String(fresh.sub);
+  }
+  if (!sub) return { error: "invalid_userinfo", status: 401 };
   const verified = idTokenResult && idTokenResult.ok ? idTokenResult.payload : null;
-  if (fresh && fresh.sub) {
-    const usable = verified && verified.sub === fresh.sub ? verified : {};
-    return { userinfo: { ...usable, ...fresh } };
-  }
-  if (verified && verified.sub) return { userinfo: { ...verified } };
-  if (idTokenResult && !idTokenResult.ok && idTokenResult.reason === "jwks_unavailable") {
-    return { error: "auth_verification_unavailable", status: 503 };
-  }
-  return { error: "invalid_userinfo", status: 401 };
+  const usable = verified && verified.sub === sub ? verified : {};
+  return { userinfo: { ...usable, ...(fresh || {}), sub } };
 }
 // <<< logto-jwt-verify
 
@@ -696,6 +703,14 @@ Deno.serve(async (req: Request) => {
 
     let userinfo: any = null;
     let freshUserinfo: any = null;
+    // 身分以驗過的 access token 為準（#646，跟 nlc-data 同一套驗證）。
+    const accessIsJwt = accessToken.split(".").length === 3;
+    let accessTokenResult: LogtoJwtResult | null = null;
+    if (accessIsJwt && LOGTO_JWT_MODE !== "off") {
+      accessTokenResult = await verifyLogtoJwt(accessToken, issuer, Deno.env.get("NLC_LOGTO_AUDIENCE") || undefined);
+      recordLogtoJwt("nlc-session:access_token", accessTokenResult, accessToken);
+      mark("access_token_verify");
+    }
     // id_token 是前端送來的，未驗證前不可信（見 logto-jwt-verify 區塊的 pickSessionUserinfo）
     let idTokenResult: LogtoJwtResult | null = null;
     let unverifiedIdTokenClaims: any = null;
@@ -708,25 +723,27 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // ID-token claims may remain stale after a profile edit. Always retrieve
-    // current UserInfo during a real Edge session sync; the browser caches the
-    // resulting projection, so this does not run on every page navigation.
-    try {
-      const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
-      mark("oidc_discovery");
-      const userinfoEndpoint = discovery.userinfo_endpoint;
-      if (userinfoEndpoint) {
-        const fullUserinfo = await fetchJson(userinfoEndpoint, { headers: bearerHeaders });
-        mark("logto_userinfo");
-        if (fullUserinfo && fullUserinfo.sub) {
-          freshUserinfo = fullUserinfo;
+    // Logto UserInfo 只收不透明 access token；前端登入／續期都帶 resource，拿到的是 JWT，
+    // 打 UserInfo 每次都失敗（#646）。只有不透明 token 才去查（本地驗不了）。
+    // email／姓名等欄位改從驗過、sub 相同的 id_token 取：續期時 Logto 會發新的 id_token，姓名也優先用會員中心。
+    if (!accessIsJwt) {
+      try {
+        const discovery = await fetchJson(`${issuer}/.well-known/openid-configuration`);
+        mark("oidc_discovery");
+        const userinfoEndpoint = discovery.userinfo_endpoint;
+        if (userinfoEndpoint) {
+          const fullUserinfo = await fetchJson(userinfoEndpoint, { headers: bearerHeaders });
+          mark("logto_userinfo");
+          if (fullUserinfo && fullUserinfo.sub) {
+            freshUserinfo = fullUserinfo;
+          }
         }
+      } catch (err) {
+        console.warn("Failed to fetch fresh userinfo from OIDC endpoint:", err);
       }
-    } catch (err) {
-      console.warn("Failed to fetch fresh userinfo from OIDC endpoint:", err);
     }
 
-    const picked = pickSessionUserinfo(freshUserinfo, idTokenResult, unverifiedIdTokenClaims);
+    const picked = pickSessionUserinfo(accessTokenResult, freshUserinfo, idTokenResult, unverifiedIdTokenClaims);
     if ("error" in picked) {
       return jsonResponse({ error: picked.error }, picked.status);
     }
