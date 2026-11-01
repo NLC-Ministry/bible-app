@@ -73,7 +73,16 @@ describe("both functions embed the same verification code", () => {
   });
   it("nlc-session no longer seeds userinfo from the raw id_token", () => {
     expect(nlcSessionSrc).not.toMatch(/userinfo\s*=\s*parseJwt\(idToken\)/);
-    expect(nlcSessionSrc).toMatch(/pickSessionUserinfo\(freshUserinfo, idTokenResult, unverifiedIdTokenClaims\)/);
+    expect(nlcSessionSrc).toMatch(/pickSessionUserinfo\(accessTokenResult, freshUserinfo, idTokenResult, unverifiedIdTokenClaims\)/);
+  });
+  // #646：Logto UserInfo 不收帶 resource 的 JWT access token（每次都失敗），身分改以驗過的 access token 為準。
+  it("nlc-session verifies the access token itself and asks UserInfo only for opaque tokens", () => {
+    const serve = nlcSessionSrc.slice(nlcSessionSrc.indexOf("Deno.serve("));
+    expect(serve).toContain('verifyLogtoJwt(accessToken, issuer, Deno.env.get("NLC_LOGTO_AUDIENCE") || undefined)');
+    expect(serve).toContain('recordLogtoJwt("nlc-session:access_token"');
+    const userinfoCall = serve.indexOf(".well-known/openid-configuration");
+    expect(userinfoCall).toBeGreaterThan(serve.indexOf("if (!accessIsJwt) {"));
+    expect(serve.indexOf("verifyLogtoJwt(accessToken")).toBeLessThan(serve.indexOf("pickSessionUserinfo("));
   });
 });
 
@@ -142,47 +151,67 @@ describe("modes", () => {
 });
 
 describe("pickSessionUserinfo (nlc-session account-linking)", () => {
-  const fresh = { sub: "attacker", name: "Attacker" };   // Logto UserInfo 的結果：真的，但這人沒有 email
+  // pickSessionUserinfo(accessTokenResult, fresh, idTokenResult, unverifiedIdTokenClaims)
+  //   accessTokenResult：nlc-session 驗 JWT access token 的結果（不透明 token 為 null）
+  //   fresh：只有不透明 access token 才會去查 Logto UserInfo
+  const access = async (sub, mode) => (mode || load()).verifyLogtoJwt(await sign({ sub, aud: "https://platform.example.test" }), ISSUER);
 
-  it("ignores a forged id_token's email even when UserInfo succeeded (the takeover path)", async () => {
+  it("a verified access token alone is enough (id_token missing or expired)", async () => {
+    const { pickSessionUserinfo } = load();
+    expect(pickSessionUserinfo(await access("u1"), null, null, null)).toEqual({ userinfo: { sub: "u1" } });
+    const { verifyLogtoJwt } = load();
+    const expiredId = await verifyLogtoJwt(await sign({ sub: "u1", email: "u1@example.test" }, { exp: Math.floor(Date.now() / 1000) - 600 }), ISSUER);
+    expect(pickSessionUserinfo(await access("u1"), null, expiredId, { sub: "u1", email: "u1@example.test" })).toEqual({ userinfo: { sub: "u1" } });
+  });
+
+  it("fills email/name from a verified id_token only when its sub matches the access token", async () => {
+    const { verifyLogtoJwt, pickSessionUserinfo } = load();
+    const same = await verifyLogtoJwt(await sign({ sub: "u1", email: "u1@example.test", name: "U1" }), ISSUER);
+    expect(pickSessionUserinfo(await access("u1"), null, same, null).userinfo).toMatchObject({ sub: "u1", email: "u1@example.test", name: "U1" });
+
+    const other = await verifyLogtoJwt(await sign({ sub: "victim", email: "victim@example.test" }), ISSUER);
+    expect(pickSessionUserinfo(await access("attacker"), null, other, null)).toEqual({ userinfo: { sub: "attacker" } });
+  });
+
+  it("ignores a forged id_token's email (the takeover path)", async () => {
     const { verifyLogtoJwt, pickSessionUserinfo } = load();
     const forged = forge({ sub: "attacker", email: "victim@example.test" });
-    const res = pickSessionUserinfo(fresh, await verifyLogtoJwt(forged, ISSUER), { sub: "attacker", email: "victim@example.test" });
-    expect(res.userinfo).toEqual(fresh);
-    expect(res.userinfo.email).toBeUndefined();
+    const res = pickSessionUserinfo(await access("attacker"), null, await verifyLogtoJwt(forged, ISSUER), { sub: "attacker", email: "victim@example.test" });
+    expect(res).toEqual({ userinfo: { sub: "attacker" } });
   });
 
-  it("uses verified id_token claims to fill gaps, but only for the same sub", async () => {
+  it.each([
+    ["forged", async () => forge({ sub: "victim" })],
+    ["signed by someone else's key", async () => sign({ sub: "victim" }, { key: otherKeys.privateKey })],
+    ["expired", async () => sign({ sub: "u1" }, { exp: Math.floor(Date.now() / 1000) - 600 })]
+  ])("rejects an access token that is %s, even with a valid id_token", async (_label, make) => {
     const { verifyLogtoJwt, pickSessionUserinfo } = load();
+    const bad = await verifyLogtoJwt(await make(), ISSUER);
+    const goodId = await verifyLogtoJwt(await sign({ sub: "victim", email: "victim@example.test" }), ISSUER);
+    expect(pickSessionUserinfo(bad, null, goodId, null)).toEqual({ error: "invalid_logto_token", status: 401 });
+  });
+
+  it("opaque access token: trusts UserInfo, and a verified id_token only for the same sub", async () => {
+    const { verifyLogtoJwt, pickSessionUserinfo } = load();
+    const fresh = { sub: "attacker", name: "Attacker" };
+    const forged = forge({ sub: "attacker", email: "victim@example.test" });
+    expect(pickSessionUserinfo(null, fresh, await verifyLogtoJwt(forged, ISSUER), { sub: "attacker", email: "victim@example.test" }).userinfo).toEqual(fresh);
     const same = await verifyLogtoJwt(await sign({ sub: "attacker", email: "me@example.test" }), ISSUER);
-    expect(pickSessionUserinfo(fresh, same, null).userinfo).toMatchObject({ sub: "attacker", email: "me@example.test", name: "Attacker" });
-
-    const other = await verifyLogtoJwt(await sign({ sub: "someone-else", email: "x@example.test" }), ISSUER);
-    expect(pickSessionUserinfo(fresh, other, null).userinfo).toEqual(fresh);
-  });
-
-  it("when UserInfo is down, accepts only a verified id_token", async () => {
-    const { verifyLogtoJwt, pickSessionUserinfo } = load();
-    const good = await verifyLogtoJwt(await sign({ sub: "u1", email: "u1@example.test" }), ISSUER);
-    expect(pickSessionUserinfo(null, good, null).userinfo).toMatchObject({ sub: "u1", email: "u1@example.test" });
-
-    const forged = forge({ sub: "u1", email: "victim@example.test" });
-    expect(pickSessionUserinfo(null, await verifyLogtoJwt(forged, ISSUER), { sub: "u1" })).toEqual({ error: "invalid_userinfo", status: 401 });
-    expect(pickSessionUserinfo(null, null, null)).toEqual({ error: "invalid_userinfo", status: 401 });
+    expect(pickSessionUserinfo(null, fresh, same, null).userinfo).toMatchObject({ sub: "attacker", email: "me@example.test", name: "Attacker" });
+    expect(pickSessionUserinfo(null, null, same, null)).toEqual({ error: "invalid_userinfo", status: 401 });
   });
 
   it("protects nlc-session in report mode too (only 'off' restores the old behavior)", async () => {
-    const forged = forge({ sub: "attacker", email: "victim@example.test" });
-    const claims = { sub: "attacker", email: "victim@example.test" };
     const report = load("report");
-    expect(report.pickSessionUserinfo(fresh, await report.verifyLogtoJwt(forged, ISSUER), claims).userinfo.email).toBeUndefined();
+    expect(report.pickSessionUserinfo(await report.verifyLogtoJwt(forge({ sub: "victim" }), ISSUER), null, null, { sub: "victim" }))
+      .toEqual({ error: "invalid_logto_token", status: 401 });
     const off = load("off");
-    expect(off.pickSessionUserinfo(fresh, null, claims).userinfo.email).toBe("victim@example.test");
+    expect(off.pickSessionUserinfo(null, null, null, { sub: "u1", email: "u1@example.test" }).userinfo.email).toBe("u1@example.test");
   });
 
-  it("returns 503 (retry, don't log out) when JWKS is unreachable and UserInfo is down", async () => {
-    const { verifyLogtoJwt, pickSessionUserinfo } = load("report", { jwksUnavailable: true });
+  it("returns 503 (retry, don't log out) when JWKS is unreachable", async () => {
+    const { verifyLogtoJwt, pickSessionUserinfo } = load("enforce", { jwksUnavailable: true });
     const res = await verifyLogtoJwt(await sign({ sub: "u1" }), ISSUER);
-    expect(pickSessionUserinfo(null, res, { sub: "u1" })).toEqual({ error: "auth_verification_unavailable", status: 503 });
+    expect(pickSessionUserinfo(res, null, null, { sub: "u1" })).toEqual({ error: "auth_verification_unavailable", status: 503 });
   });
 });

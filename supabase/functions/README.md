@@ -6,7 +6,7 @@ Current flow:
 
 1. Frontend completes Logto PKCE login.
 2. Frontend calls `nlc-session` with the Logto access token.
-3. `nlc-session` verifies Logto userinfo and upserts `profiles` / `user_identities` with the service role.
+3. `nlc-session` verifies the Logto access token (JWKS signature; `sub` comes from it), takes email/name only from a verified `id_token` with the same `sub`, and upserts `profiles` / `user_identities` with the service role. Logto UserInfo is called only for opaque access tokens: it rejects the resource-bound JWT access tokens the app uses (#646).
 4. Frontend uses a small client shim that calls `nlc-data` for database reads/writes.
 5. `nlc-data` verifies the Logto access token on each request, resolves the current profile, and applies server-side table/action restrictions before using the Supabase service role.
 
@@ -32,7 +32,7 @@ Current flow:
    正常流量應該幾乎全是 `nlc-data:ok`；少量 `expired` 屬正常（前端會自動續期重試）。
    若出現大量 `bad_signature` / `unknown_key` / `unsupported_alg`，**先別切 enforce**，回報處理。
 3. 從 log 的 `aud` 確認 access token 的 audience，選填 `NLC_LOGTO_AUDIENCE`（通常是
-   `https://platform.newlife.org.tw`）；`id_token` 的 audience 是 Logto app 的 client id，選填 `NLC_LOGTO_CLIENT_ID`。
+   `https://platform.newlife.org.tw`；`nlc-data` 與 `nlc-session` 都用它驗 access token，#646）；`id_token` 的 audience 是 Logto app 的 client id，選填 `NLC_LOGTO_CLIENT_ID`。
 4. 確認無誤後 `supabase secrets set NLC_JWT_VERIFY_MODE=enforce`（不用重新部署）。
 
 正式站與 staging 都已切到 `enforce`。#564 起程式碼的預設也是 `enforce`：沒設 secret、空字串或設錯值都當 `enforce`，

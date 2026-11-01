@@ -86,13 +86,15 @@ function recordLogtoJwt(source: string, result: LogtoJwtResult, token: string) {
     logtoJwtStats.detailed = 0;
   }
 }
-// nlc-session 用：決定這次登入採信哪份身分資料。
-//   · 向 Logto UserInfo 查到的（fresh）一定是真的（Logto 自己驗了 access token）。
-//   · 前端送來的 id_token 只有在簽章驗過、而且 sub 跟 fresh 相同時，才拿來補欄位——
+// nlc-session 用：決定這次登入採信哪份身分資料（#646）。
+//   · 身分（sub）以 access token 為準：JWT access token 由 nlc-session 自己驗過簽章（accessTokenResult），
+//     驗不過就拒絕，不改用 id_token。Logto UserInfo 不收帶 resource 的 JWT access token，所以只有
+//     不透明 access token（accessTokenResult 為 null）才用 UserInfo 查到的 fresh。
+//   · 前端送來的 id_token 只有在簽章驗過、而且 sub 跟上面相同時，才拿來補 email／姓名等欄位——
 //     否則攻擊者可以附一張偽造、填了受害者 email 的 id_token，讓 email 比對把受害者帳號綁給他。
-//   · 查不到 fresh（UserInfo 故障）時，只接受驗過簽章的 id_token。
 // 回傳 { userinfo } 或 { error, status }。mode=off 時回到舊行為。
 function pickSessionUserinfo(
+  accessTokenResult: LogtoJwtResult | null,
   fresh: Record<string, unknown> | null,
   idTokenResult: LogtoJwtResult | null,
   unverifiedIdTokenClaims: Record<string, unknown> | null
@@ -101,16 +103,21 @@ function pickSessionUserinfo(
     const merged = { ...(unverifiedIdTokenClaims || {}), ...(fresh || {}) };
     return merged.sub ? { userinfo: merged } : { error: "invalid_userinfo", status: 401 };
   }
+  let sub = "";
+  if (accessTokenResult) {
+    if (!accessTokenResult.ok) {
+      return accessTokenResult.reason === "jwks_unavailable"
+        ? { error: "auth_verification_unavailable", status: 503 }
+        : { error: "invalid_logto_token", status: 401 };
+    }
+    sub = String(accessTokenResult.payload.sub || "");
+  } else if (fresh && fresh.sub) {
+    sub = String(fresh.sub);
+  }
+  if (!sub) return { error: "invalid_userinfo", status: 401 };
   const verified = idTokenResult && idTokenResult.ok ? idTokenResult.payload : null;
-  if (fresh && fresh.sub) {
-    const usable = verified && verified.sub === fresh.sub ? verified : {};
-    return { userinfo: { ...usable, ...fresh } };
-  }
-  if (verified && verified.sub) return { userinfo: { ...verified } };
-  if (idTokenResult && !idTokenResult.ok && idTokenResult.reason === "jwks_unavailable") {
-    return { error: "auth_verification_unavailable", status: 503 };
-  }
-  return { error: "invalid_userinfo", status: 401 };
+  const usable = verified && verified.sub === sub ? verified : {};
+  return { userinfo: { ...usable, ...(fresh || {}), sub } };
 }
 // <<< logto-jwt-verify
 
