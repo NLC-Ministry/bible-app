@@ -207,10 +207,13 @@ describe("NLC and browser integration", () => {
     expect(plan).toContain("function bindPlanParticipationItemActions");
     const bindActions = plan.slice(
       plan.indexOf("function bindPlanParticipationItemActions"),
-      plan.indexOf("function bindPlanParticipationItemActions") + 1200
+      plan.indexOf("function bindPlanParticipationItemActions") + 2000
     );
     expect(bindActions).toContain("openJoinedPlanTeam(plan)");
     expect(bindActions).toContain("window.openReadingTeamDialog(plan, { preferredDivision: division })");
+    // #652：個人讀經中的上一個計畫隊長，卡片直接帶隊。
+    expect(bindActions).toContain('action === "carry-team"');
+    expect(bindActions).toContain("window.carryReadingTeamWithConfirm(plan, team)");
   });
 
   it("confirms solo joins before enrolling", () => {
@@ -441,7 +444,7 @@ describe("NLC and browser integration", () => {
 
   it("keeps personal progress primary and offers optional 3-person or 6-person teams", () => {
     expect(teamUi).toContain("計畫已加入");
-    expect(teamUi).toContain("你可以同時參加一支 3 人團隊與一支 6 人團隊");
+    expect(teamUi).toContain("你可以同時參加 3 人團隊與 6 人團隊");
     expect(teamUi).toContain("章節進度只需勾選一次");
     expect(teamUi).toContain("data-team-skip");
     expect(teamUi).toContain('data-team-division="3"');
