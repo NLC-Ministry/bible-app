@@ -2013,7 +2013,7 @@ function renderJoinedPlansList() {
             const isLoggedIn = typeof auth !== "undefined" && auth.isLoggedIn();
 
             if (!isLoggedIn) {
-              teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">團隊功能需登入正式帳號</span>`;
+              teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">登入後才能使用團隊功能</span>`;
             } else {
               teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">正在載入團隊狀態...</span>`;
               db.getMyReadingTeam(plan).then(result => {
@@ -2061,7 +2061,7 @@ async function joinTeamGlobally(inviteCode) {
   }
 
   if (!state.isSupabaseMode || !state.supabase) {
-    return { success: false, message: "團隊功能需登入正式帳號使用。" };
+    return { success: false, message: "登入後才能使用團隊功能。" };
   }
 
   loader.show("正在尋找並加入團隊...");

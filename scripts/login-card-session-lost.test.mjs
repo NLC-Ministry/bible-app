@@ -1,6 +1,6 @@
 // #645：登入卡
 // - 背景確認發現會員中心阻擋狀態時，畫面跟冷啟動一樣（applyLoginGateView），不是「連線錯誤」卡。
-// - 缺姓名的畫面多一個「以前登入過？改用原本的方式登入」。
+// - 缺姓名的畫面多一個換回原本登入方式的連結（#648 起文字是「找不到以前的進度？換回上次的登入方式」）。
 // - 一般登入畫面只有歡迎詞＋登入按鈕；紅點狀態只在真正的連線錯誤／登入失效時出現。
 // - 曾經登入過的人 token 失效時直接轉去 SSO，5 分鐘內只轉一次。
 import { JSDOM } from "jsdom";
@@ -52,14 +52,14 @@ describe("login card copy and view (#645)", () => {
     const { doc, els } = gateDom();
     const copy = applyLoginGateView({ block: { reason: "member_profile_required" }, hasTokens: true, ...els });
     expect(els.titleEl.textContent).toBe("請先填寫姓名");
-    expect(els.subtitleEl.textContent).toBe("會員中心還沒有你的姓名，填好就能開始。");
+    expect(els.subtitleEl.textContent).toBe("還差一步：填上你的名字就能開始。會開啟教會的會員頁面。");
     expect(els.subtitleEl.textContent).not.toContain("這不是登入失敗");
-    expect(els.buttonEl.textContent).toBe("前往會員中心填寫姓名");
+    expect(els.buttonEl.textContent).toBe("去填寫姓名");
     expect(els.buttonEl.dataset.loginGateMode).toBe("hub-continue");
     expect(copy.switchAccount).toBe(true);
     const link = doc.querySelector("[data-login-switch-account]");
     expect(hidden(link)).toBe(false);
-    expect(link.textContent.trim()).toBe("以前登入過？改用原本的方式登入");
+    expect(link.textContent.trim()).toBe("找不到以前的進度？換回上次的登入方式");
     expect(hidden(doc.getElementById("gate-status-container"))).toBe(true);
   });
 
@@ -78,7 +78,7 @@ describe("login card copy and view (#645)", () => {
     const { doc, els } = gateDom();
     const status = doc.getElementById("gate-status-container");
     status.classList.remove("hidden");
-    doc.getElementById("gate-status-text").textContent = "登入同步失敗，請重新登入。";
+    doc.getElementById("gate-status-text").textContent = "登入過期了，請再登入一次。讀經進度不會不見。";
     applyLoginGateView({ block: { reason: "member_profile_required" }, hasTokens: true, ...els });
     expect(hidden(status)).toBe(true);
   });
@@ -146,8 +146,8 @@ describe("auto SSO redirect decision (#645)", () => {
 describe("app.js routes lost sessions through the auto-redirect gate (#645)", () => {
   it("foreground / session-expired / reconnect use db.showSessionLostGate", () => {
     const helper = app.slice(app.indexOf("function surfaceLoginCardIfSessionLost"), app.indexOf("function onAppForeground"));
-    expect(helper).toContain('db.showSessionLostGate("登入狀態已失效');
-    expect(app).toContain('window.db.showSessionLostGate("重新連線後登入狀態已失效');
+    expect(helper).toContain("db.showSessionLostGate()");
+    expect(app).toContain("window.db.showSessionLostGate()");
   });
 });
 
@@ -221,7 +221,7 @@ describe("db: background reconciliation and session loss (#645)", () => {
     expect(doc.getElementById("login-gate").classList.contains("hidden")).toBe(false);
     expect(doc.querySelector(".login-title").textContent).toBe("請先填寫姓名");
     const btn = doc.getElementById("btn-gate-nlc-login");
-    expect(btn.textContent).toBe("前往會員中心填寫姓名");
+    expect(btn.textContent).toBe("去填寫姓名");
     expect(btn.dataset.loginGateMode).toBe("hub-continue");
     expect(doc.querySelector("[data-login-switch-account]").classList.contains("hidden")).toBe(false);
     expect(doc.getElementById("gate-status-container").classList.contains("hidden")).toBe(true);
@@ -230,7 +230,7 @@ describe("db: background reconciliation and session loss (#645)", () => {
 
   it("a rejected session redirects a returning member to SSO instead of showing the card", async () => {
     localStorage.setItem(OFFLINE_IDENTITY_KEY, JSON.stringify({ verifiedAt: new Date().toISOString(), profile: { id: "p1" } }));
-    db.showSessionLostGate("登入狀態已失效，請重新登入。");
+    db.showSessionLostGate();
     expect(launch).toHaveBeenCalledWith({ intent: "login", returnTo: "/" });
     // 轉址前先換成乾淨的登入畫面：轉不成時還有按鈕，也沒有紅字
     const doc = dom.window.document;
@@ -245,12 +245,12 @@ describe("db: background reconciliation and session loss (#645)", () => {
     const doc = dom.window.document;
     const btn = doc.getElementById("btn-gate-nlc-login");
     btn.dataset.loginGateMode = "hub-continue"; // left over from an earlier hub-block view
-    db.showSessionLostGate("登入狀態已失效，請重新登入。");
+    db.showSessionLostGate();
     expect(launch).not.toHaveBeenCalled();
     expect(doc.getElementById("login-gate").classList.contains("hidden")).toBe(false);
     expect(btn.dataset.loginGateMode).toBe("sso");
     expect(doc.getElementById("gate-status-container").classList.contains("hidden")).toBe(false);
-    expect(doc.getElementById("gate-status-text").textContent).toBe("登入狀態已失效，請重新登入。");
+    expect(doc.getElementById("gate-status-text").textContent).toBe("登入過期了，請再登入一次。讀經進度不會不見。");
     expect(doc.querySelector("[data-login-switch-account]").classList.contains("hidden")).toBe(true);
   });
 });

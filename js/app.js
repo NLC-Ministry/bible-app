@@ -1050,7 +1050,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const showingApp = appLayout && !appLayout.classList.contains("hidden")
       && (!gate || gate.classList.contains("hidden"));
     if (state.isSupabaseMode && showingApp) {
-      db.showSessionLostGate("登入狀態已失效，請重新登入。");
+      db.showSessionLostGate();
     }
   }
 
@@ -1411,7 +1411,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       // does nothing — the next natural retry (focus, tab switch) picks it
       // back up instead of yanking the user out of what they were doing.
       if (typeof auth.isLoggedIn === "function" && !auth.isLoggedIn() && typeof window.db.showSessionLostGate === "function") {
-        window.db.showSessionLostGate("重新連線後登入狀態已失效，請重新登入。");
+        window.db.showSessionLostGate();
       }
     }
   });

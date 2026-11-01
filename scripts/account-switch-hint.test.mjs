@@ -94,7 +94,7 @@ describe("account switch hint card", () => {
 });
 
 // #645：一般登入畫面不再放「請用跟上次相同的方式登入」（沒事的會友看了會擔心）；
-// 改成只在會員中心把人當新人（缺姓名／會籍）時，給「以前登入過？改用原本的方式登入」。
+// 改成只在會員中心把人當新人（缺姓名／會籍）時，給換回原本登入方式的連結（#648 起文字是「找不到以前的進度？換回上次的登入方式」）。
 describe("login gate: switch-account link", () => {
   const gate = () => {
     document.body.innerHTML = `

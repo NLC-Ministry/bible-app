@@ -23,8 +23,8 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
     return {
       enterApp: false,
       title: "新生命聖經速讀計畫",
-      subtitle: "跟弟兄姊妹一起速讀聖經，登入後進度會自動同步。",
-      button: "使用 NLC 身份登入 (SSO)",
+      subtitle: "跟弟兄姊妹一起速讀聖經。登入後，換手機也能接著讀。第一次使用也從這裡開始。",
+      button: "登入",
       mode: "sso",
     };
   }
@@ -35,8 +35,8 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
     return {
       enterApp: false,
       title: "請先填寫姓名",
-      subtitle: "會員中心還沒有你的姓名，填好就能開始。",
-      button: "前往會員中心填寫姓名",
+      subtitle: "還差一步：填上你的名字就能開始。會開啟教會的會員頁面。",
+      button: "去填寫姓名",
       mode: "hub-continue",
       switchAccount: true,
     };
@@ -45,8 +45,8 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
     return {
       enterApp: false,
       title: "請先完成會籍登記",
-      subtitle: "請先送出正式會籍申請。牧者審核可以稍後完成，送出後即可使用聖經速讀。",
-      button: "前往會員中心填寫會籍",
+      subtitle: "送出會籍申請就能開始，不用等牧者審核完成。會開啟教會的會員頁面。",
+      button: "去填寫會籍申請",
       mode: "hub-continue",
       switchAccount: true,
     };
@@ -55,7 +55,7 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
     return {
       enterApp: false,
       title: "正在確認會員資料",
-      subtitle: "登入已完成，但會員中心暫時無法同步。請重試，不需要重新註冊。支援代碼：MEMBER_CONTEXT_UNAVAILABLE",
+      subtitle: "你已經登入了，只是資料一時讀不到。請再試一次，不用重新註冊。（代碼：MEMBER_CONTEXT_UNAVAILABLE）",
       button: "重新確認會員資料",
       mode: "retry-sync",
     };
@@ -71,9 +71,9 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
   }
   return {
     enterApp: false,
-    title: "需要在會員中心繼續",
-    subtitle: "請由會員中心安全地繼續。不要重複註冊帳號。",
-    button: "前往會員中心",
+    title: "還有一步要完成",
+    subtitle: "按下方按鈕繼續就好，不用重新註冊。",
+    button: "繼續",
     mode: "hub-continue",
   };
 }
