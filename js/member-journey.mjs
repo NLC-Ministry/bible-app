@@ -1,23 +1,10 @@
-const KNOWN_REQUIRED_ACTIONS = new Set([
-  'complete_profile',
-  'submit_membership',
-  'await_membership_review',
-  'resolve_membership_record',
-  'request_placement',
-  'await_placement_review',
-  'none',
-]);
+// 登入只看兩件事（#650）：會員中心有沒有這個帳號、會籍是不是停用。
+// 姓名、初次資料、會籍申請、小組安置都不擋登入——那些是會變動的會員資料，
+// App 拿到的又是副本，拿來擋登入會造成「一直要填姓名」的循環。
 
-const KNOWN_MEMBERSHIP_STATES = new Set(['none', 'pending', 'approved', 'inactive']);
-const KNOWN_PLACEMENT_STATES = new Set(['missing', 'active', 'invalid']);
-const DEFAULT_MAX_PROJECTION_AGE_MS = 60 * 60 * 1000;
-
-const USER_COMPLETE_ACTIONS = new Set([
-  'await_membership_review',
-  'request_placement',
-  'await_placement_review',
-  'none',
-]);
+// nlc-session 在會員中心 /api/me/context 回 404 CONTEXT_NOT_FOUND 時寫進
+// member_context_sync_error 的固定代碼。
+export const MEMBER_HUB_NOT_FOUND_ERROR = 'member_hub_context_not_found';
 
 export function isCanonicalMemberJourneyProjection(user) {
   return Number(user?.member_context_contract_version) >= 2;
@@ -30,51 +17,21 @@ function recoveryFields(user) {
   };
 }
 
-export function getUserOnboardingBlock(user, options = {}) {
+export function getUserOnboardingBlock(user) {
   if (!user) return null;
-  if (!isCanonicalMemberJourneyProjection(user)) {
-    return { reason: 'member_context_unavailable', requiredAction: '', requiredActionUrl: null };
-  }
-
-  const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
-  const maxAgeMs = Number.isFinite(Number(options.maxAgeMs))
-    ? Number(options.maxAgeMs)
-    : DEFAULT_MAX_PROJECTION_AGE_MS;
-  const syncedAt = Date.parse(String(user?.member_context_synced_at || ''));
-  const projectionAge = Number.isFinite(syncedAt) ? Math.max(0, now - syncedAt) : Infinity;
   const recovery = recoveryFields(user);
-
-  if (projectionAge > maxAgeMs) {
-    return { reason: 'member_context_unavailable', ...recovery };
-  }
-
-  const action = recovery.requiredAction;
-  if (!KNOWN_REQUIRED_ACTIONS.has(action)) {
-    return { reason: 'unknown_member_hub_action', ...recovery };
-  }
-
-  const membershipState = String(user?.member_context_membership_lifecycle_state || '');
-  if (!KNOWN_MEMBERSHIP_STATES.has(membershipState)) {
-    return { reason: 'unknown_member_hub_state', ...recovery };
-  }
-  if (membershipState === 'inactive') {
+  // 連不上會員中心時，nlc-session 保留上次確認成功的欄位：不管多久以前，照用。
+  const confirmed = isCanonicalMemberJourneyProjection(user);
+  if (confirmed && String(user?.member_context_membership_lifecycle_state || '') === 'inactive') {
     return { reason: 'inactive_membership', ...recovery };
   }
-  if (action === 'resolve_membership_record') {
-    return { reason: 'membership_record_inconsistent', ...recovery };
+  if (String(user?.member_context_sync_error || '') === MEMBER_HUB_NOT_FOUND_ERROR) {
+    return { reason: 'member_not_registered', ...recovery };
   }
-  if (action === 'complete_profile' && membershipState !== 'pending' && membershipState !== 'approved') {
-    return { reason: 'member_profile_required', ...recovery };
+  if (!confirmed) {
+    return { reason: 'member_context_unavailable', ...recovery };
   }
-  if (action === 'submit_membership' && membershipState !== 'pending' && membershipState !== 'approved') {
-    return { reason: 'membership_application_required', ...recovery };
-  }
-  if (membershipState === 'pending' || membershipState === 'approved' || USER_COMPLETE_ACTIONS.has(action)) {
-    return null;
-  }
-  return { reason: 'unknown_member_hub_action', ...recovery };
+  return null;
 }
 
 export const getCanonicalMemberPrerequisiteBlock = getUserOnboardingBlock;
-
-export { DEFAULT_MAX_PROJECTION_AGE_MS, KNOWN_REQUIRED_ACTIONS };

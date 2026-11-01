@@ -18,7 +18,8 @@ export function consumeBibleHubResume(search) {
   }
 }
 
-export function getLoginGateCopy(block, { hasTokens } = {}) {
+// 登入只擋「沒註冊」和「停用」（#650）；姓名、會籍申請不再擋登入。
+export function getLoginGateCopy(block, { hasTokens, returnedFromHub = false } = {}) {
   if (!hasTokens) {
     return {
       enterApp: false,
@@ -31,23 +32,16 @@ export function getLoginGateCopy(block, { hasTokens } = {}) {
   if (!block) {
     return { enterApp: true, title: "", subtitle: "", button: "", mode: "enter" };
   }
-  if (block.reason === "member_profile_required") {
+  if (block.reason === "member_not_registered") {
+    // 剛從會員中心回來、確認後還是沒註冊：不再把人送回去，改成讓他自己再確認一次。
     return {
       enterApp: false,
-      title: "請先填寫姓名",
-      subtitle: "還差一步：填上你的名字就能開始。會開啟教會的會員頁面。",
-      button: "去填寫姓名",
-      mode: "hub-continue",
-      switchAccount: true,
-    };
-  }
-  if (block.reason === "membership_application_required") {
-    return {
-      enterApp: false,
-      title: "請先完成會籍登記",
-      subtitle: "送出會籍申請就能開始，不用等牧者審核完成。會開啟教會的會員頁面。",
-      button: "去填寫會籍申請",
-      mode: "hub-continue",
+      title: "請先到會員中心註冊",
+      subtitle: returnedFromHub
+        ? "還沒看到你在會員中心的資料。如果剛註冊好，請再確認一次。"
+        : "這個帳號還沒在教會的會員中心註冊。註冊好回到這裡就能開始。會開啟教會的會員頁面。",
+      button: returnedFromHub ? "重新確認" : "去註冊",
+      mode: returnedFromHub ? "retry-sync" : "hub-continue",
       switchAccount: true,
     };
   }
@@ -107,8 +101,9 @@ export function applyLoginGateView({
   subtitleEl,
   buttonEl,
   refreshActionsEl,
+  returnedFromHub = false,
 } = {}) {
-  const copy = getLoginGateCopy(block, { hasTokens });
+  const copy = getLoginGateCopy(block, { hasTokens, returnedFromHub });
   if (copy.enterApp) {
     if (loginGate) loginGate.classList.add("hidden");
     if (appLayout) appLayout.classList.remove("hidden");
@@ -122,6 +117,7 @@ export function applyLoginGateView({
   if (buttonEl) {
     buttonEl.textContent = copy.button;
     buttonEl.dataset.loginGateMode = copy.mode;
+    buttonEl.dataset.loginGateReason = block?.reason || "";
   }
   if (refreshActionsEl) {
     if (hasTokens && block) refreshActionsEl.classList.remove("hidden");
@@ -130,8 +126,8 @@ export function applyLoginGateView({
   const query = (selector) => (loginGate && typeof loginGate.querySelector === "function"
     ? loginGate.querySelector(selector)
     : null);
-  // #645：換一種方式登入會開出新帳號，會員中心會把它當新人、卡在填姓名／會籍。
-  // 這兩個畫面多一個次要連結，讓會友登出改用原本的方式（#615 的 logoutToSwitchAccount）。
+  // #645：換一種方式登入會開出新帳號，會員中心不認得它，就會落在「沒註冊」（#650）。
+  // 這個畫面多一個次要連結，讓會友登出改用原本的方式（#615 的 logoutToSwitchAccount）。
   const switchAccountEl = query("[data-login-switch-account]");
   if (switchAccountEl) switchAccountEl.classList.toggle("hidden", !copy.switchAccount);
   // 紅點狀態只給 showConnectionError（真正的連線錯誤／登入失效）；這裡的畫面已經把原因寫在副標。

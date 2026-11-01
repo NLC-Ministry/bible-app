@@ -213,9 +213,9 @@ window.showPromptDialog = showPromptDialog;
 
 // ── User Avatar (shadcn-inspired: image + initials fallback) ──
 
-// 計畫資格（能不能進讀經計畫）改成「只在登入時判斷」——由 db.init 的
-// getUserOnboardingBlock() → getLoginGateCopy() 在會員資料剛同步過的當下決定，
-// 通過了才進 App。計畫分頁本身不再有獨立的資格閘門（那個閘門會在冷啟動
+// 登入只看「已註冊、未停用」（#650）——由 db.init 的 getUserOnboardingBlock()
+// → getLoginGateCopy() 決定，通過了就進 App；計畫的區域、梯次限制由後端加入計畫時擋。
+// 計畫分頁本身不再有獨立的資格閘門（那個閘門會在冷啟動
 // member_context_synced_at 看起來過期時整頁閃一下）。所以這裡不再需要
 // getPlanEligibilityBlock / 「本 session 已確認過」的旗標。
 

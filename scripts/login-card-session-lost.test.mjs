@@ -48,14 +48,15 @@ describe("login card copy and view (#645)", () => {
     expect(els.buttonEl.dataset.loginGateMode).toBe("sso");
   });
 
-  it("missing name: short subtitle, Hub button, and a secondary switch-account link", () => {
+  it("not registered (#650): short subtitle, Hub button, and a secondary switch-account link", () => {
     const { doc, els } = gateDom();
-    const copy = applyLoginGateView({ block: { reason: "member_profile_required" }, hasTokens: true, ...els });
-    expect(els.titleEl.textContent).toBe("請先填寫姓名");
-    expect(els.subtitleEl.textContent).toBe("還差一步：填上你的名字就能開始。會開啟教會的會員頁面。");
+    const copy = applyLoginGateView({ block: { reason: "member_not_registered" }, hasTokens: true, ...els });
+    expect(els.titleEl.textContent).toBe("請先到會員中心註冊");
+    expect(els.subtitleEl.textContent).toBe("這個帳號還沒在教會的會員中心註冊。註冊好回到這裡就能開始。會開啟教會的會員頁面。");
     expect(els.subtitleEl.textContent).not.toContain("這不是登入失敗");
-    expect(els.buttonEl.textContent).toBe("去填寫姓名");
+    expect(els.buttonEl.textContent).toBe("去註冊");
     expect(els.buttonEl.dataset.loginGateMode).toBe("hub-continue");
+    expect(els.buttonEl.dataset.loginGateReason).toBe("member_not_registered");
     expect(copy.switchAccount).toBe(true);
     const link = doc.querySelector("[data-login-switch-account]");
     expect(hidden(link)).toBe(false);
@@ -63,8 +64,19 @@ describe("login card copy and view (#645)", () => {
     expect(hidden(doc.getElementById("gate-status-container"))).toBe(true);
   });
 
-  it("a new account stuck on the membership form also gets the switch-account link", () => {
-    expect(getLoginGateCopy({ reason: "membership_application_required" }, { hasTokens: true }).switchAccount).toBe(true);
+  it("right after returning from the Hub and still not registered: re-check, not another trip (#650)", () => {
+    const copy = getLoginGateCopy({ reason: "member_not_registered" }, { hasTokens: true, returnedFromHub: true });
+    expect(copy.button).toBe("重新確認");
+    expect(copy.mode).toBe("retry-sync");
+    expect(copy.switchAccount).toBe(true);
+  });
+
+  it("the missing-name and membership-form screens are gone (#650)", () => {
+    for (const reason of ["member_profile_required", "membership_application_required"]) {
+      const copy = getLoginGateCopy({ reason }, { hasTokens: true });
+      expect(copy.title, reason).not.toBe("請先填寫姓名");
+      expect(copy.title, reason).not.toBe("請先完成會籍登記");
+    }
   });
 
   it("existing-member and retry screens don't offer switching accounts", () => {
@@ -79,7 +91,7 @@ describe("login card copy and view (#645)", () => {
     const status = doc.getElementById("gate-status-container");
     status.classList.remove("hidden");
     doc.getElementById("gate-status-text").textContent = "登入過期了，請再登入一次。讀經進度不會不見。";
-    applyLoginGateView({ block: { reason: "member_profile_required" }, hasTokens: true, ...els });
+    applyLoginGateView({ block: { reason: "member_not_registered" }, hasTokens: true, ...els });
     expect(hidden(status)).toBe(true);
   });
 });
@@ -213,15 +225,15 @@ describe("db: background reconciliation and session loss (#645)", () => {
     dom.window.close();
   });
 
-  it("a missing name found by the background check shows the same card as a cold boot", async () => {
-    block = { reason: "member_profile_required" };
+  it("not registered found by the background check shows the same card as a cold boot", async () => {
+    block = { reason: "member_not_registered" };
     const doc = dom.window.document;
     doc.querySelector(".app-layout").classList.remove("hidden");
     await db.startBackgroundSessionReconciliation();
     expect(doc.getElementById("login-gate").classList.contains("hidden")).toBe(false);
-    expect(doc.querySelector(".login-title").textContent).toBe("請先填寫姓名");
+    expect(doc.querySelector(".login-title").textContent).toBe("請先到會員中心註冊");
     const btn = doc.getElementById("btn-gate-nlc-login");
-    expect(btn.textContent).toBe("去填寫姓名");
+    expect(btn.textContent).toBe("去註冊");
     expect(btn.dataset.loginGateMode).toBe("hub-continue");
     expect(doc.querySelector("[data-login-switch-account]").classList.contains("hidden")).toBe(false);
     expect(doc.getElementById("gate-status-container").classList.contains("hidden")).toBe(true);

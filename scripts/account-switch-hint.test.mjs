@@ -94,7 +94,7 @@ describe("account switch hint card", () => {
 });
 
 // #645：一般登入畫面不再放「請用跟上次相同的方式登入」（沒事的會友看了會擔心）；
-// 改成只在會員中心把人當新人（缺姓名／會籍）時，給換回原本登入方式的連結（#648 起文字是「找不到以前的進度？換回上次的登入方式」）。
+// 改成只在會員中心不認得這個帳號（沒註冊，#650）時，給換回原本登入方式的連結（#648 起文字是「找不到以前的進度？換回上次的登入方式」）。
 describe("login gate: switch-account link", () => {
   const gate = () => {
     document.body.innerHTML = `
@@ -119,9 +119,9 @@ describe("login gate: switch-account link", () => {
     expect(els.linkEl.classList.contains("hidden")).toBe(true);
   });
 
-  it("shows on the missing-name screen a switched login method lands on", () => {
+  it("shows on the not-registered screen a switched login method lands on", () => {
     const els = gate();
-    applyLoginGateView({ block: { reason: "member_profile_required" }, hasTokens: true, ...els });
+    applyLoginGateView({ block: { reason: "member_not_registered" }, hasTokens: true, ...els });
     expect(els.linkEl.classList.contains("hidden")).toBe(false);
   });
 
