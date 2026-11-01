@@ -806,7 +806,8 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
       const result = await db.getMyReadingTeam(plan);
       if (closed) return;
       if (!result.success) {
-        const isAuthExpired = result.message && (result.message.includes("登入狀態已失效") || result.message.includes("重新登入") || result.message.includes("會員資料"));
+        // db 標好 authExpired（登入過期／找不到帳號）；不要再比對訊息文字，文字會改（#648）。
+        const isAuthExpired = Boolean(result.authExpired);
         panel.innerHTML = `<header class="reading-team-dialog__header"><h3 id="reading-team-dialog-title">團隊報名</h3><button type="button" class="reading-team-close dialog-close-button icon-button icon-button--subtle" data-team-close aria-label="關閉"><span class="nlc-icon nlc-icon--sm" data-icon="close" aria-hidden="true"></span></button></header><div class="reading-team-empty-error"><p>${escapeHTML(result.message || "目前無法載入團隊資料。")}</p><button type="button" class="secondary-btn" data-team-retry>${isAuthExpired ? "重新登入" : "重新載入"}</button></div>`;
         panel.querySelector("[data-team-close]").onclick = close;
         panel.querySelector("[data-team-retry]").onclick = isAuthExpired ? () => {

@@ -67,6 +67,7 @@ import {
   launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
 import { maybeAutoRedirectToSso } from './login-auto-redirect.mjs';
+import { SESSION_EXPIRED_MESSAGE, isAuthExpiredError } from './copy/auth-messages.mjs';
 import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
 import {
   COMMENTARY_INDEX_CACHE_KEY,
@@ -779,7 +780,7 @@ const db = {
         // Same rule as above: only fall back to offline mode when the network
         // itself is actually unreachable, not for a server-side/config error.
         if (this.isNetworkUnreachableError(e) && this.tryRestoreOfflineSession()) return true;
-        const message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uFF08" + (e.message || e) + "\uFF09\uFF0C\u8acb\u91cd\u65b0\u767b\u5165\u3002";
+        const message = SESSION_EXPIRED_MESSAGE + "\uFF08" + (e.message || e) + "\uFF09";
         this.showConnectionError(message);
         return false;
       }
@@ -1272,7 +1273,8 @@ const db = {
       // This typically means the Logto sub changed between devices or tokens are mismatched.
       // Show a specific error and prompt re-login instead of crashing.
       if (response.status === 409 && payload.error === "profile_resolution_failed") {
-        const msg = payload.message || "帳號資料暫時無法讀取，請重新登入。";
+        // 文字由前端決定（#648），不沿用伺服器的 payload.message。
+        const msg = "找不到你的帳號資料，請再登入一次。還是不行請找教會同工。";
         this.showConnectionError(msg);
         const profileErr = new Error(msg);
         profileErr.status = response.status;
@@ -1395,7 +1397,7 @@ const db = {
   },
 
   // token \u5931\u6548\uff08\u88ab Logto \u62d2\u7d55\u3001nlc-session 401\uff09\uff1a\u767b\u5165\u904e\u7684\u4eba\u76f4\u63a5\u8f49 SSO\uff0c5 \u5206\u9418\u5167\u7b2c\u4e8c\u6b21\u624d\u986f\u793a\u767b\u5165\u5361\uff08#645\uff09\u3002
-  showSessionLostGate(message = "\u767b\u5165\u72c0\u614b\u5df2\u5931\u6548\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002") {
+  showSessionLostGate(message = SESSION_EXPIRED_MESSAGE) {
     if (this.autoRedirectToSso()) return;
     this.showConnectionError(message);
   },
@@ -1419,7 +1421,7 @@ const db = {
     });
   },
 
-  showConnectionError(message = "\u767b\u5165\u540c\u6b65\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002") {
+  showConnectionError(message = SESSION_EXPIRED_MESSAGE) {
     state.isSupabaseMode = true;
 
     const btnNlcGate = document.getElementById("btn-gate-nlc-login");
@@ -3958,8 +3960,8 @@ const db = {
   _readingTeamErrorMessage(error) {
     const raw = String(error && (error.message || error.error || error.details) || error || "");
     const messages = {
-      profile_required: "目前找不到你的會員資料，請重新登入後再試。",
-      profile_identity_not_found: "目前找不到你的會員資料，請重新登入後再試。",
+      profile_required: "找不到你的帳號資料，請登出後再登入一次。",
+      profile_identity_not_found: "找不到你的帳號資料，請登出後再登入一次。",
       plan_audience_restricted: "這個計畫只開放特定大區參加。如果你的牧區／大區資料還沒設定，請先到會員中心補齊，再回來加入。",
       plan_requires_pastoral_zone: "這個階段開放前，請先到會員中心完成牧區設定，才能加入。",
       campaign_stage_not_open: "這個計畫階段尚未開放報名，請稍後再試。",
@@ -4021,18 +4023,24 @@ const db = {
 
   async _callReadingTeamRpc(functionName, args) {
     if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "團隊報名需登入正式帳號後使用。" };
+      return { success: false, message: "登入後才能使用團隊報名。" };
     }
     try {
       const { data, error } = await state.supabase.rpc(functionName, args);
-      if (error) return { success: false, error, message: this._readingTeamErrorMessage(error) };
+      if (error) return { success: false, error, authExpired: this._isReadingTeamAuthError(error), message: this._readingTeamErrorMessage(error) };
       if (this.READING_TEAM_MUTATING_RPCS.has(functionName)) {
         window.dispatchEvent(new CustomEvent("reading-team:changed", { detail: { rpc: functionName } }));
       }
       return { success: true, data };
     } catch (error) {
-      return { success: false, error, message: this._readingTeamErrorMessage(error) };
+      return { success: false, error, authExpired: this._isReadingTeamAuthError(error), message: this._readingTeamErrorMessage(error) };
     }
+  },
+
+  // 團隊對話框靠這個決定按鈕是「重新登入」還是「重新載入」（#648：看代碼，不比對訊息文字）。
+  _isReadingTeamAuthError(error) {
+    const raw = String(error && (error.message || error.error) || "");
+    return isAuthExpiredError(error) || raw.includes("profile_required");
   },
 
   _quizPlanId(plan) {
@@ -4097,7 +4105,7 @@ const db = {
 
   async _callQuizRpc(functionName, args = {}) {
     if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "小測驗功能需要登入正式帳號。" };
+      return { success: false, message: "登入後才能使用小測驗。" };
     }
     try {
       const { data, error } = await state.supabase.rpc(functionName, args);
@@ -4344,16 +4352,14 @@ const db = {
   // （分數超出配分之類）完全不同——這種狀況重試沒有用，呼叫端要改成請使用者
   // 重新登入，而不是照一般錯誤處理（見 grade.html 的批改頁）。
   // 另一條路：refresh token 被拒時 auth.getValidAccessToken() 根本不發請求，
-  // 直接 throw「登入狀態已失效」——走的是 _callExamRpc 的 catch，也要認得。
+  // 直接 throw 帶 AUTH_SESSION_EXPIRED 代碼的錯誤——走的是 _callExamRpc 的 catch，也要認得（#648 起看代碼不看文字）。
   _isAuthExpiredError(error) {
-    const raw = String((error && (error.error || error.message)) || "").toLowerCase();
-    return raw.includes("invalid_logto_token") || raw.includes("invalid_token") || raw.includes("profile_identity_not_found")
-      || raw.includes("登入狀態已失效");
+    return isAuthExpiredError(error);
   },
 
   async _callExamRpc(functionName, args = {}) {
     if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "大測驗功能需要登入正式帳號。" };
+      return { success: false, message: "登入後才能使用大測驗。" };
     }
     try {
       const { data, error } = await state.supabase.rpc(functionName, args);
@@ -4364,7 +4370,7 @@ const db = {
           success: false,
           error,
           authExpired,
-          message: authExpired ? "登入已過期，請重新登入才能繼續。" : this._examErrorMessage(error)
+          message: authExpired ? "登入過期了，請再登入一次就能繼續。" : this._examErrorMessage(error)
         };
       }
       return { success: true, data };
@@ -4375,7 +4381,7 @@ const db = {
         success: false,
         error,
         authExpired,
-        message: authExpired ? "登入已過期，請重新登入才能繼續。" : this._examErrorMessage(error)
+        message: authExpired ? "登入過期了，請再登入一次就能繼續。" : this._examErrorMessage(error)
       };
     }
   },
@@ -5416,8 +5422,8 @@ const db = {
       plan_requires_pastoral_zone: "這個階段開放前，請先到會員中心完成牧區設定，才能加入。",
       campaign_stage_not_open: "這個計畫階段尚未開放報名，請稍後再試。",
       campaign_stage_progress_not_open: "這個計畫階段尚未開放，暫時無法加入或記錄進度。",
-      profile_required: "目前找不到你的會員資料，請重新登入後再試。",
-      profile_identity_not_found: "目前找不到你的會員資料，請重新登入後再試。",
+      profile_required: "找不到你的帳號資料，請登出後再登入一次。",
+      profile_identity_not_found: "找不到你的帳號資料，請登出後再登入一次。",
       plan_not_found: "找不到所選計畫，請重新整理後再試。"
     };
     const key = Object.keys(messages).find(code => raw.includes(code));
@@ -5779,7 +5785,7 @@ const db = {
     if (!built.ok) return { success: false, message: built.message };
     try {
       const user = await this.getCurrentDbUser();
-      if (!user) return { success: false, message: "目前找不到你的會員資料，請重新登入後再試。" };
+      if (!user) return { success: false, message: "找不到你的帳號資料，請登出後再登入一次。" };
       const { data, error } = await state.supabase
         .from("reading_plans")
         .insert(buildPersonalPlanInsert(user.id, built.fields))
@@ -6164,7 +6170,7 @@ const db = {
   // 把來源記在 source_plan_id，排程由前端一般路徑處理。修改一律從計畫列表用 id 進去。
   async createRegionStageCohort({ greatRegion, sourcePlanId, startDate, endDate, isHidden = true }) {
     if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "此功能需要登入正式帳號。" };
+      return { success: false, message: "登入後才能使用這個功能。" };
     }
     try {
       const { data, error } = await state.supabase.rpc("create_region_stage_cohort", {
@@ -6646,7 +6652,7 @@ const db = {
   // ── 經文注釋審核（#471）：全部走 RPC，SQL 端檢查管理員或被指派的審核者 ──────────
   async _callCommentaryReviewRpc(functionName, args = {}) {
     if (!state.isSupabaseMode || !state.supabase) {
-      return { success: false, message: "經文注釋審核需要登入正式帳號。" };
+      return { success: false, message: "登入後才能審核經文注釋。" };
     }
     try {
       const { data, error } = await state.supabase.rpc(functionName, args);
@@ -7137,7 +7143,7 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_voucher_invalid: "沒有選到要更改的兌換券，請重新整理後再試。",
     lightning_quiz_invalid_answer_key: "新的正解不完整或跟題目對不上，請檢查後再存。",
     lightning_quiz_correction_not_published: "只有已排程的題目才需要更正答案；準備中的題目請直接編輯。",
-    profile_required: "找不到你的會員資料，請重新登入後再試。"
+    profile_required: "找不到你的帳號資料，請登出後再登入一次。"
   };
   const key = Object.keys(messages).find(code => raw.includes(code));
   if (!key) return "雲柱測驗資料處理失敗，請稍後再試。";
@@ -7151,7 +7157,7 @@ db._lightningQuizErrorMessage = function(error) {
 
 db._callLightningQuizRpc = async function(functionName, args = {}) {
   if (!state.isSupabaseMode || !state.supabase) {
-    return { success: false, message: "雲柱測驗功能需要登入正式帳號。" };
+    return { success: false, message: "登入後才能使用雲柱測驗。" };
   }
   try {
     const { data, error } = await state.supabase.rpc(functionName, args);
@@ -7359,13 +7365,13 @@ db._readingActivityErrorMessage = function(error) {
   if (raw.includes("reading_activity_admin_required")) return "只有系統管理員可以查看讀經使用率。";
   if (raw.includes("reading_activity_range_too_long")) return "日期區間最長 180 天，請縮短後再試。";
   if (raw.includes("reading_activity_invalid_range")) return "日期區間不正確，請重新選擇。";
-  if (raw.includes("profile_required")) return "找不到你的會員資料，請重新登入後再試。";
+  if (raw.includes("profile_required")) return "找不到你的帳號資料，請登出後再登入一次。";
   return "讀經使用率載入失敗，請稍後再試。";
 };
 
 db._callReadingActivityRpc = async function(functionName, args) {
   if (!state.isSupabaseMode || !state.supabase) {
-    return { success: false, message: "讀經使用率需要登入正式帳號。" };
+    return { success: false, message: "登入後才能查看讀經使用率。" };
   }
   try {
     const { data, error } = await state.supabase.rpc(functionName, args);

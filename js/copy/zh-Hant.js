@@ -49,8 +49,8 @@ window.APP_COPY = {
     pilgrimageTitle: "牧區讀經排行",
   },
   auth: {
-    loginSubtitle: "跟弟兄姊妹一起速讀聖經，登入後進度會自動同步。",
-    loginSwitchAccount: "以前登入過？改用原本的方式登入",
+    loginSubtitle: "跟弟兄姊妹一起速讀聖經。登入後，換手機也能接著讀。第一次使用也從這裡開始。",
+    loginSwitchAccount: "找不到以前的進度？換回上次的登入方式",
   },
   // #615：換一種方式登入而開出新的空帳號時，在沒有計畫的畫面提示改回原本的方式。
   accountSwitchHint: {
