@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { transformSync } from "esbuild";
+import { createSessionExpiredError } from "../js/copy/auth-messages.mjs";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -132,7 +133,7 @@ describe("db exam write path", () => {
   });
 
   it("flags a thrown 'session is dead' error from the auth layer as authExpired", async () => {
-    rpc.mockRejectedValueOnce(new Error("登入狀態已失效，請重新登入。"));
+    rpc.mockRejectedValueOnce(createSessionExpiredError());
     const res = await db.saveExamProgress(A, { q1: true });
     expect(res.authExpired).toBe(true);
   });

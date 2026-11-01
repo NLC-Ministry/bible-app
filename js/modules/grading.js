@@ -594,7 +594,7 @@ class GradingWorkspace {
     this._mirror();
     const box = document.createElement("div");
     box.className = "grade-auth-expired";
-    box.innerHTML = `<p>登入已過期，需要重新登入才能繼續批改。你目前的分數已經存在這台裝置上，重新登入後會自動回到這一張。</p>
+    box.innerHTML = `<p>登入過期了，請再登入一次就能繼續批改。你打的分數已經存在這台裝置上，登入後會自動回到這一張。</p>
       <button type="button" class="primary-btn" data-g-relogin>重新登入</button>`;
     box.querySelector("[data-g-relogin]").addEventListener("click", async () => {
       this._readInputs();

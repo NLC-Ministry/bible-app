@@ -28,7 +28,7 @@ function makeEl(initialClass = "") {
 describe("login gate copy", () => {
   it("asks anonymous users to start SSO", () => {
     const copy = getLoginGateCopy(null, { hasTokens: false });
-    expect(copy.button).toBe("使用 NLC 身份登入 (SSO)");
+    expect(copy.button).toBe("登入");
     expect(copy.enterApp).toBe(false);
   });
 
@@ -38,8 +38,9 @@ describe("login gate copy", () => {
       requiredActionUrl: "https://member.newlife.org.tw/member/continue",
     }, { hasTokens: true });
     expect(copy.enterApp).toBe(false);
-    expect(copy.button).toContain("會員中心");
-    expect(copy.subtitle).toContain("姓名");
+    // #648：按鈕不寫「會員中心」，副標說明會開啟教會的會員頁面。
+    expect(copy.button).toContain("姓名");
+    expect(copy.subtitle).toContain("會員頁面");
   });
 
   it("keeps the card up until the official form is submitted", () => {
@@ -97,8 +98,8 @@ describe("login gate view", () => {
     expect(copy.enterApp).toBe(false);
     expect(loginGate.classList.contains("hidden")).toBe(false);
     expect(appLayout.classList.contains("hidden")).toBe(true);
-    expect(subtitleEl.textContent).toContain("姓名");
-    expect(buttonEl.textContent).toContain("會員中心");
+    expect(subtitleEl.textContent).toContain("名字");
+    expect(buttonEl.textContent).toContain("姓名");
     expect(buttonEl.dataset.loginGateMode).toBe("hub-continue");
     expect(refreshActionsEl.classList.contains("hidden")).toBe(false);
   });
@@ -193,7 +194,7 @@ describe("login gate wiring", () => {
     expect(helper).toContain('querySelector(".app-layout")');
     expect(helper).toContain('getElementById("login-gate")');
     expect(helper).toContain("state.isSupabaseMode && showingApp");
-    expect(helper).toContain('db.showSessionLostGate("登入狀態已失效');
+    expect(helper).toContain("db.showSessionLostGate()");
 
     // onAppForeground uses the helper for the !loggedIn branch (no reload/re-render).
     const fn = app.slice(app.indexOf("function onAppForeground"), app.indexOf('document.addEventListener("visibilitychange"'));

@@ -466,7 +466,7 @@ describe("NLC and browser integration", () => {
     expect(teamUi).toContain("只有同隊成員可查看");
     expect(teamUi).toContain("其他隊伍的資料不會顯示");
     expect(teamUi).not.toContain("UUID");
-    expect(db).toContain("目前找不到你的會員資料");
+    expect(db).toContain("找不到你的帳號資料");
   });
 
   it("keeps the other team-size creation entry visible inside My Team", () => {

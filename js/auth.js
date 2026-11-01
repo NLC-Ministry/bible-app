@@ -14,6 +14,7 @@ import {
   detectAuthenticationEnvironment,
   shouldGateInteractiveAuth
 } from "./auth-environment.js";
+import { createSessionExpiredError } from "./copy/auth-messages.mjs";
 import {
   BOOT_FETCH_TIMEOUT_MS,
   TOKEN_HARD_TIMEOUT_MS,
@@ -887,14 +888,14 @@ const auth = {
         this._clearStoredTokens();
         this._resetAppAuthState();
         this._signalSessionExpired();
-        throw new Error("登入狀態已失效，請重新登入。");
+        throw createSessionExpiredError();
       }
     }
 
     const nextToken = localStorage.getItem(this.keys.accessToken);
     if (!nextToken) {
       this._signalSessionExpired();
-      throw new Error("登入狀態已失效，請重新登入。");
+      throw createSessionExpiredError();
     }
     if (this.config.platformResource && nextToken.split(".").length !== 3) {
       console.warn(
