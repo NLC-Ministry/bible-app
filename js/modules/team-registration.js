@@ -141,6 +141,21 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
     return true;
   }
 
+  // 先確認再帶隊；團隊視窗、計畫卡片、詳細頁入口（#652）共用。帶成功回 true。
+  async function carryTeamWithConfirm(plan, team) {
+    const confirmed = await window.showConfirmDialog({
+      title: "帶隊伍一起加入",
+      message: `確認後「${team.name || ""}」的隊員會直接加入「${plan.name || "這個計畫"}」和同一支隊伍。\n若有隊員已經在這個計畫加入了別的隊伍，或還沒設定牧區，會略過那位隊員，其餘隊員照常帶入。`,
+      confirmText: "帶隊加入",
+      cancelText: "取消"
+    });
+    if (!confirmed) return false;
+    return carryTeamIntoPlan(plan, team);
+  }
+
+  window.getReadingTeamCarryoverTeams = getCarryoverTeams;
+  window.carryReadingTeamWithConfirm = carryTeamWithConfirm;
+
   function renderCarryoverTeamButtons(teams) {
     return teams.map(team => `
       <button type="button" class="reading-team-choice" data-carryover-division="${Number(team.division)}">
@@ -621,10 +636,21 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
     const renderCarryoverSection = async availableDivisions => {
       const section = panel.querySelector("[data-team-carryover]");
       if (!section) return;
+      // 可能帶隊的計畫先放佔位，免得「建立新團隊」先出現、帶隊選項晚一步才跳出來（#652）。
+      const mayCarry = isCampaignStageKind(plan) && !isCampaignStageEnded(plan);
+      if (mayCarry) {
+        section.innerHTML = `<p class="reading-team-loading" style="margin: 0; font-size: 0.875rem; color: var(--text-muted);">正在查看上一個計畫的隊伍…</p>`;
+        section.hidden = false;
+      }
       const teams = (await getCarryoverTeams(plan))
         .filter(team => availableDivisions.includes(Number(team.division)));
       // 載入期間使用者可能已經換畫面或關掉視窗。
-      if (closed || !teams.length || !section.isConnected) return;
+      if (closed || !section.isConnected) return;
+      if (!teams.length) {
+        section.hidden = true;
+        section.innerHTML = "";
+        return;
+      }
       section.innerHTML = `
         <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.6rem;">
           <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
@@ -637,15 +663,8 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
         button.onclick = async () => {
           const team = teams.find(item => Number(item.division) === Number(button.dataset.carryoverDivision));
           if (!team) return;
-          const confirmed = await window.showConfirmDialog({
-            title: "帶隊伍一起加入",
-            message: `確認後「${team.name || ""}」的隊員會直接加入「${plan.name || "這個計畫"}」和同一支隊伍。\n若有隊員已經在這個計畫加入了別的隊伍，或還沒設定牧區，會略過那位隊員，其餘隊員照常帶入。`,
-            confirmText: "帶隊加入",
-            cancelText: "取消"
-          });
-          if (!confirmed) return;
           section.querySelectorAll("button").forEach(item => { item.disabled = true; });
-          const carried = await carryTeamIntoPlan(plan, team);
+          const carried = await carryTeamWithConfirm(plan, team);
           if (closed) return;
           if (!carried) {
             section.querySelectorAll("button").forEach(item => { item.disabled = false; });
@@ -1032,99 +1051,45 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
     return context && context.team ? [context] : [];
   }
 
-  window.renderReadingTeamRegistrationInline = async function renderReadingTeamRegistrationInline(container, plan, options = {}) {
-    if (!container || !isSupportedPlan(plan)) return;
+  // 計畫詳細頁「個人」分頁頂端的團隊入口（#652）：還沒有隊伍的人在這裡建立 / 加入團隊，
+  // 上一個計畫的隊長則優先看到帶隊按鈕。有隊伍的人走「團隊」分頁，這裡不顯示。
+  window.renderReadingTeamEntryInline = async function renderReadingTeamEntryInline(container, plan) {
+    if (!container) return;
+    const hide = () => { container.classList.add("hidden"); container.innerHTML = ""; };
+    if (!isSupportedPlan(plan) || isCampaignStageEnded(plan)
+      || typeof auth === "undefined" || !auth.isLoggedIn()) return hide();
 
-    if (isCampaignStageEnded(plan)) {
-      container.innerHTML = '<div class="p-6 text-center text-muted"><p class="reading-team-stage-ended-note">這個階段已經結束，不能再建立或加入團隊。請到「目前進行中」的階段計畫報名團隊。</p></div>';
-      return;
-    }
-
-    // Get existing team memberships first
     const result = await db.getMyReadingTeam(plan);
-    const joinedContexts = result && result.success ? getJoinedReadingTeamContexts(result.context) : [];
+    if (!result || !result.success || getJoinedReadingTeamContexts(result.context).length) return hide();
+    const teams = await getCarryoverTeams(plan);
+    // 等待期間使用者可能已經切到別的計畫。
+    if (state.activePlan !== plan) return;
 
-    const joinedDivisions = new Set(joinedContexts.map(context => Number(context.team.division)));
-    const availableDivisions = [3, 6].filter(division => !joinedDivisions.has(division));
-
-    let preferredDivision = [3, 6].includes(Number(options.preferredDivision)) ? Number(options.preferredDivision) : 3;
-    if (!availableDivisions.includes(preferredDivision)) preferredDivision = availableDivisions[0] || 3;
-
-    if (availableDivisions.length === 0) {
-      container.innerHTML = `<div class="p-6 text-center text-muted"><p>你已加入所有組別的團隊（3 人與 6 人團隊）。</p></div>`;
-      return;
-    }
-
+    const heading = teams.length
+      ? { title: "帶上一個計畫的隊伍一起加入", description: "隊員不用重新報名或輸入邀請碼。" }
+      : { title: "個人讀經中", description: "想和夥伴一起讀，可以建立或加入 3 人、6 人團隊。" };
     container.innerHTML = `
-      <div class="reading-team-registration-card" style="padding: 1.2rem; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-card); box-shadow: var(--shadow-sm); margin-bottom: 1rem;">
-        <p class="reading-team-dialog__intro" style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.2rem;">
-          ${joinedContexts.length ? `你已加入 ${Array.from(joinedDivisions).join("、")} 人團隊，還可以建立另一種人數的團隊。` : "你可以同時參加一支 3 人團隊與一支 6 人團隊。建立新團隊即可加入此計畫之團隊。"}
-        </p>
-
-        <form id="reading-team-create-form-inline" class="reading-team-form-card" role="tabpanel" style="display: flex; flex-direction: column; gap: 1rem;">
-          <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.4rem;">
-            <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="plus" aria-hidden="true"></span></span>
-            <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 600;">建立新團隊</h4><p style="margin: 0; font-size: 0.875rem; color: var(--text-muted);">選擇人數並命名，你會成為隊長。</p></div>
-          </div>
-          <div>
-            <span class="reading-team-field-label" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊人數</span>
-            <div class="reading-team-division-switch" role="radiogroup" aria-label="選擇團隊組別" style="display: flex; gap: 8px;">
-              ${availableDivisions.map(division => `<button type="button" class="secondary-btn" data-division="${division}" aria-checked="${preferredDivision === division}" style="flex: 1; padding: 0.5rem 0.8rem; font-size: 0.875rem;">${division} 人團隊</button>`).join("")}
-            </div>
-          </div>
-          <div>
-            <label for="reading-team-name-inline" style="display: block; font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); margin-bottom: 0.4rem;">團隊名稱</label>
-            <input id="reading-team-name-inline" class="form-control" maxlength="40" required placeholder="例如：恩典同行隊" style="width: 100%;">
-          </div>
-          <button type="submit" class="primary-btn reading-team-submit" style="width: 100%; margin-top: 0.5rem;">建立 <span data-division-label>${preferredDivision}</span> 人團隊並產生邀請碼</button>
-        </form>
-
-        <p class="reading-team-registration-privacy" style="font-size: 0.875rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">加入後，你可以查看自己的團隊與夥伴進度；其他隊伍的資料不會顯示。</p>
-        <p class="reading-team-form-error" data-team-error role="alert" hidden style="color: var(--color-danger); font-size: 0.875rem; margin-top: 0.8rem; text-align: center;"></p>
+      <div class="reading-team-registration-card" style="padding: 1.2rem; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-card); box-shadow: var(--shadow-sm);">
+        <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.8rem;">
+          <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
+          <div><h4 style="margin: 0; font-size: 0.95rem; font-weight: 500;">${heading.title}</h4><p style="margin: 0; font-size: 0.875rem; color: var(--text-muted);">${heading.description}</p></div>
+        </div>
+        ${teams.length ? `<div class="reading-team-choice-grid" style="margin-bottom: 0.8rem;">${renderCarryoverTeamButtons(teams)}</div>` : ""}
+        <button type="button" class="secondary-btn" data-team-entry-open style="width: 100%;">${teams.length ? "或建立 / 加入其他團隊" : "建立 / 加入團隊"}</button>
       </div>`;
+    container.classList.remove("hidden");
 
-    const error = container.querySelector("[data-team-error]");
-    const showError = message => { error.textContent = message; error.hidden = false; };
-
-    // Bind division switches
-    const divisionButtons = container.querySelectorAll("[data-division]");
-    divisionButtons.forEach(button => {
-      if (Number(button.dataset.division) === preferredDivision) {
-        button.classList.add("active");
-        button.style.background = "var(--color-brand-subtle)";
-        button.style.borderColor = "var(--primary-color)";
-        button.style.color = "var(--primary-color)";
-      }
-      button.onclick = () => {
-        preferredDivision = Number(button.dataset.division);
-        divisionButtons.forEach(item => {
-          const isSelected = item === button;
-          item.classList.toggle("active", isSelected);
-          item.style.background = isSelected ? "var(--color-brand-subtle)" : "";
-          item.style.borderColor = isSelected ? "var(--primary-color)" : "";
-          item.style.color = isSelected ? "var(--primary-color)" : "";
-        });
-        container.querySelector("[data-division-label]").textContent = preferredDivision;
+    container.querySelector("[data-team-entry-open]").onclick = () => window.openReadingTeamDialog(plan);
+    container.querySelectorAll("[data-carryover-division]").forEach(button => {
+      button.onclick = async () => {
+        const team = teams.find(item => Number(item.division) === Number(button.dataset.carryoverDivision));
+        if (!team) return;
+        container.querySelectorAll("button").forEach(item => { item.disabled = true; });
+        // 帶隊後隊員、團隊分頁、計畫卡片都要換掉；重新載入最單純（同探索頁帶隊加入）。
+        if (await window.carryReadingTeamWithConfirm(plan, team)) return window.location.reload();
+        container.querySelectorAll("button").forEach(item => { item.disabled = false; });
       };
     });
-
-    // Handle submit events
-    container.querySelector("#reading-team-create-form-inline").onsubmit = async event => {
-      event.preventDefault();
-      error.hidden = true;
-      const submitBtn = event.currentTarget.querySelector('button[type="submit"]');
-      submitBtn.disabled = true;
-      const nameInput = container.querySelector("#reading-team-name-inline").value.trim();
-      const result = await db.createReadingTeam(plan, preferredDivision, nameInput);
-      submitBtn.disabled = false;
-      if (!result.success) return showError(result.message || "建立隊伍失敗，請稍後再試。");
-      showToast("團隊建立成功！");
-      // Trigger plan view update to stats mode
-      if (window.PlanPageController) {
-        await window.PlanPageController.switchPage(PLAN_PAGE.GROUP, { forceReload: true });
-      }
-    };
-
     hydrate(container);
   };
 

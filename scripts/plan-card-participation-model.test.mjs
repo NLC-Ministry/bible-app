@@ -39,6 +39,38 @@ describe("getPlanParticipationModel", () => {
     expect(m.action).toEqual({ label: "建立 / 加入團隊", division: 3, action: "join-team-division" });
   });
 
+  // #652：個人加入後，上一個計畫的隊長在卡片上要直接看到帶隊入口。
+  it("offers carrying the previous plan's team when a solo member can carry one", () => {
+    const m = getPlanParticipationModel(null, [], {
+      carryoverTeams: [{ sourceTeamId: "t1", name: "光鹽", division: 6, memberCount: 5 }]
+    });
+    expect(m.variant).toBe("carryover");
+    expect(m.icon).toBe("people");
+    expect(m.tone).toBe("brand");
+    expect(m.title).toBe("帶「光鹽」加入");
+    expect(m.description).toBe("上一個計畫的隊伍可直接帶入");
+    expect(m.action).toEqual({ label: "帶隊加入", division: 6, action: "carry-team" });
+  });
+
+  it("names how many teams can be carried when there is more than one", () => {
+    const m = getPlanParticipationModel(null, [], {
+      carryoverTeams: [
+        { sourceTeamId: "t1", name: "光鹽", division: 3 },
+        { sourceTeamId: "t2", name: "恩典", division: 6 }
+      ]
+    });
+    expect(m.variant).toBe("carryover");
+    expect(m.title).toBe("帶上一個計畫的 2 支隊伍加入");
+    expect(m.action).toEqual({ label: "帶隊加入", division: 3, action: "open-team-dialog" });
+  });
+
+  it("ignores carryover teams once the member is already in a team", () => {
+    const m = getPlanParticipationModel(null, [ctx(3, { memberCount: 2, capacity: 3 })], {
+      carryoverTeams: [{ sourceTeamId: "t1", name: "光鹽", division: 6 }]
+    });
+    expect(m.variant).toBe("team-open");
+  });
+
   it("filters out falsy / teamless contexts before deciding (still solo)", () => {
     expect(getPlanParticipationModel(null, [null, undefined, {}]).variant).toBe("solo");
   });

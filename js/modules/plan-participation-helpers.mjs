@@ -24,7 +24,31 @@ function invitePendingModel(info) {
   };
 }
 
-export function getPlanParticipationModel(plan, contexts = []) {
+// 個人讀經中、但能帶上一個計畫的隊伍進來（#652）：一支就直接帶，兩支以上開團隊視窗選。
+function carryoverModel(teams) {
+  const [first] = teams;
+  if (teams.length === 1) {
+    return {
+      variant: "carryover",
+      title: `帶「${first.name || "我的團隊"}」加入`,
+      description: "上一個計畫的隊伍可直接帶入",
+      tone: "brand",
+      icon: "people",
+      action: { label: "帶隊加入", division: Number(first.division), action: "carry-team" }
+    };
+  }
+  return {
+    variant: "carryover",
+    title: `帶上一個計畫的 ${teams.length} 支隊伍加入`,
+    description: "上一個計畫的隊伍可直接帶入",
+    tone: "brand",
+    icon: "people",
+    action: { label: "帶隊加入", division: Number(first.division), action: "open-team-dialog" }
+  };
+}
+
+// carryoverTeams：getReadingTeamCarryoverTeams 的結果（[{ sourceTeamId, name, division, memberCount }]）。
+export function getPlanParticipationModel(plan, contexts = [], { carryoverTeams = [] } = {}) {
   const normalizedContexts = Array.isArray(contexts) ? contexts.filter(Boolean) : [];
   const divisions = [3, 6];
   const joinedContexts = normalizedContexts.filter(context => context && context.team);
@@ -38,6 +62,9 @@ export function getPlanParticipationModel(plan, contexts = []) {
   const availableDivision = divisions.find(division => !joinedDivisions.has(division));
 
   if (joinedContexts.length === 0) {
+    const teams = (Array.isArray(carryoverTeams) ? carryoverTeams : [])
+      .filter(team => team && [3, 6].includes(Number(team.division)));
+    if (teams.length) return carryoverModel(teams);
     return {
       variant: "solo",
       title: "個人讀經中",
