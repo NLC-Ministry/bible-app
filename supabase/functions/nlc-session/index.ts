@@ -301,10 +301,13 @@ function buildLockedFields(sourceValues: Record<string, string | null>, options:
 }
 
 /** Keep in sync with scripts/lib/nlc-profile-sync.mjs */
+// #654：platformFailed（平台 API 這次沒回應）時，查不到不等於沒有——會員中心沒給的層沿用舊值。
+// 但會員中心給的層跟舊值不同＝換過歸屬，舊的上層不一定對，就不沿用，免得把新小組掛到舊牧區底下。
 function projectOrgFieldsFromHub(
   mergedOrg: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null },
   existingProfile: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null } | null,
-  hubLinked: boolean
+  hubLinked: boolean,
+  { platformFailed = false }: { platformFailed?: boolean } = {}
 ) {
   const hubOrg = {
     great_region: mergedOrg?.great_region ? String(mergedOrg.great_region).trim() : "",
@@ -312,14 +315,21 @@ function projectOrgFieldsFromHub(
     small_group: mergedOrg?.small_group ? String(mergedOrg.small_group).trim() : ""
   };
 
-  if (hubLinked) return hubOrg;
-
   const firstValue = (...values: any[]) => {
     for (const value of values) {
       if (value !== null && value !== undefined && String(value).trim() !== "") return String(value).trim();
     }
     return "";
   };
+
+  if (hubLinked && !platformFailed) return hubOrg;
+  if (hubLinked) {
+    const moved = (Object.keys(hubOrg) as Array<keyof typeof hubOrg>).some((field) => {
+      const before = firstValue(existingProfile?.[field]);
+      return hubOrg[field] && before && hubOrg[field] !== before;
+    });
+    if (moved) return hubOrg;
+  }
 
   return {
     great_region: firstValue(hubOrg.great_region, existingProfile?.great_region),
@@ -348,7 +358,8 @@ function buildOrgProjectionAudit({
   projectedOrg,
   existingProfile,
   orgResolutionSource,
-  memberContextError
+  memberContextError,
+  platformOrgStatus = "skipped"
 }: {
   memberContext: any;
   organization: any;
@@ -360,6 +371,7 @@ function buildOrgProjectionAudit({
   existingProfile: any;
   orgResolutionSource: string;
   memberContextError: string | null;
+  platformOrgStatus?: "ok" | "failed" | "skipped";
 }) {
   const canonicalPlacement = {
     placementNodeId: organization?.placementNodeId || null,
@@ -373,6 +385,7 @@ function buildOrgProjectionAudit({
     status: projectedOrg?.great_region || projectedOrg?.pastoral_zone || projectedOrg?.small_group ? "projected" : "empty",
     member_context_available: Boolean(memberContext),
     member_context_error: memberContextError || null,
+    platform_status: platformOrgStatus,
     canonical_placement: canonicalPlacement,
     inputs: {
       platform: copyOrgFields(platformOrgFields),
@@ -580,14 +593,6 @@ function isMemberHubContextNotFound(err: any) {
     || body.error?.code === "CONTEXT_NOT_FOUND";
 }
 
-async function fetchJsonOptional(url: string, init?: RequestInit) {
-  try {
-    return await fetchJson(url, init);
-  } catch (err) {
-    console.warn("Optional fetch failed:", url, err);
-    return null;
-  }
-}
 
 async function resolveLocalOrgLinks(
   supabaseAdmin: any,
@@ -807,14 +812,22 @@ Deno.serve(async (req: Request) => {
     let platformOrganization: any = null;
     let platformOrgFields = { great_region: null as string | null, pastoral_zone: null as string | null, small_group: null as string | null };
 
+    // 「失敗」跟「成功但沒有歸屬」要分開（#654）：失敗時，會員中心沒給的層沿用舊值。
+    let platformOrgStatus: "ok" | "failed" | "skipped" = "skipped";
     if (memberId) {
-      const platformResponse = await fetchJsonOptional(
-        `${platformApiUrl}/members/${encodeURIComponent(memberId)}/organization`,
-        { headers: bearerHeaders }
-      );
-      platformOrganization = platformResponse?.organization || null;
-      if (platformOrganization?.careChain) {
-        platformOrgFields = orgFromCareChain(platformOrganization.careChain);
+      try {
+        const platformResponse = await fetchJson(
+          `${platformApiUrl}/members/${encodeURIComponent(memberId)}/organization`,
+          { headers: bearerHeaders }
+        );
+        platformOrgStatus = "ok";
+        platformOrganization = platformResponse?.organization || null;
+        if (platformOrganization?.careChain) {
+          platformOrgFields = orgFromCareChain(platformOrganization.careChain);
+        }
+      } catch (err) {
+        platformOrgStatus = "failed";
+        console.warn("Platform organization fetch failed; keeping existing org levels Member Hub did not supply.", err);
       }
       mark("platform_org");
     }
@@ -932,7 +945,9 @@ Deno.serve(async (req: Request) => {
 
     // Member Hub is canonical only when the context endpoint was reachable for this session.
     const hubLinked = !!memberContext;
-    const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked);
+    const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked, {
+      platformFailed: platformOrgStatus === "failed"
+    });
     const orgProjectionAudit = buildOrgProjectionAudit({
       memberContext,
       organization,
@@ -943,7 +958,8 @@ Deno.serve(async (req: Request) => {
       projectedOrg,
       existingProfile,
       orgResolutionSource,
-      memberContextError
+      memberContextError,
+      platformOrgStatus
     });
     console.info("nlc-session org projection", JSON.stringify(orgProjectionAudit));
 
