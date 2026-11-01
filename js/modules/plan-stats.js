@@ -152,6 +152,13 @@ async function renderPlanStatsView() {
     if (teamSwitcher) teamSwitcher.classList.add("hidden");
     if (teamInline) teamInline.classList.add("hidden");
     if (regContainer) regContainer.classList.add("hidden");
+    // 還沒有隊伍的人在個人分頁頂端看到建立 / 加入團隊、帶隊入口（#652）；不等它，免得擋住個人統計。
+    if (regContainer && typeof window.renderReadingTeamEntryInline === "function") {
+      void window.renderReadingTeamEntryInline(regContainer, state.activePlan).catch(err => {
+        console.warn("[plan-stats] team entry failed:", err);
+        regContainer.classList.add("hidden");
+      });
+    }
     // Show personal, hide group
     if (personalSec) personalSec.classList.remove("hidden");
     if (groupSec) groupSec.classList.add("hidden");

@@ -1781,6 +1781,19 @@ function bindPlanParticipationItemActions(card, plan, model) {
         return;
       }
 
+      if (action === "carry-team" && typeof window.carryReadingTeamWithConfirm === "function") {
+        const team = (model.carryoverTeams || []).find(item => Number(item.division) === division);
+        if (!team) return;
+        button.disabled = true;
+        // 帶隊後隊員、團隊分頁、計畫卡片都要換掉；重新載入最單純（同探索頁帶隊加入）。
+        if (await window.carryReadingTeamWithConfirm(plan, team)) {
+          window.location.reload();
+          return;
+        }
+        button.disabled = false;
+        return;
+      }
+
       if (
         (action === "join-team-division" || action === "open-team-dialog")
         && typeof window.openReadingTeamDialog === "function"
@@ -2016,10 +2029,16 @@ function renderJoinedPlansList() {
               teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">登入後才能使用團隊功能</span>`;
             } else {
               teamContainer.innerHTML = `<span class="plan-card-participation-item__hint">正在載入團隊狀態...</span>`;
-              db.getMyReadingTeam(plan).then(result => {
+              db.getMyReadingTeam(plan).then(async result => {
                 if (!teamContainer.parentElement) return;
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
-                const participationModel = getPlanParticipationModel(plan, contexts);
+                // 個人讀經中的上一個計畫隊長：卡片直接給帶隊入口（#652）。
+                const carryoverTeams = contexts.length === 0 && typeof window.getReadingTeamCarryoverTeams === "function"
+                  ? await window.getReadingTeamCarryoverTeams(plan).catch(() => [])
+                  : [];
+                if (!teamContainer.parentElement) return;
+                const participationModel = getPlanParticipationModel(plan, contexts, { carryoverTeams });
+                participationModel.carryoverTeams = carryoverTeams;
                 teamContainer.innerHTML = renderPlanParticipationItem(participationModel);
                 bindPlanParticipationItemActions(card, plan, participationModel);
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
