@@ -625,8 +625,8 @@ async function refreshCurrentAppView() {
 }
 
 // ─── 計畫資格：只在登入時判斷 ───
-// 登入流程（db.init → getUserOnboardingBlock → getLoginGateCopy）已經在「會員
-// 資料剛同步過」的當下判斷過一次；通過了才會進到 App。計畫分頁 / 首頁的讀經
+// 登入流程（db.init → getUserOnboardingBlock → getLoginGateCopy）只看「已註冊、
+// 未停用」（#650），通過了就進 App；計畫的區域、梯次限制由後端加入計畫時擋。計畫分頁 / 首頁的讀經
 // 捷徑不再自己重新判斷——這樣冷啟動時 member_context_synced_at 看起來過期，也
 // 不會把整個計畫分頁擋掉閃一下。會員資料若之後真的變動（例如會籍被停用），
 // 下次登入時會重新判斷。

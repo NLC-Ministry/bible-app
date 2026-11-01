@@ -32,23 +32,11 @@ describe("login gate copy", () => {
     expect(copy.enterApp).toBe(false);
   });
 
-  it("keeps the card up for a missing name", () => {
-    const copy = getLoginGateCopy({
-      reason: "member_profile_required",
-      requiredActionUrl: "https://member.newlife.org.tw/member/continue",
-    }, { hasTokens: true });
+  it("keeps the card up for an account the Member Hub has never seen (#650)", () => {
+    const copy = getLoginGateCopy({ reason: "member_not_registered" }, { hasTokens: true });
     expect(copy.enterApp).toBe(false);
-    // #648：按鈕不寫「會員中心」，副標說明會開啟教會的會員頁面。
-    expect(copy.button).toContain("姓名");
+    expect(copy.mode).toBe("hub-continue");
     expect(copy.subtitle).toContain("會員頁面");
-  });
-
-  it("keeps the card up until the official form is submitted", () => {
-    const copy = getLoginGateCopy({
-      reason: "membership_application_required",
-    }, { hasTokens: true });
-    expect(copy.enterApp).toBe(false);
-    expect(copy.subtitle).toContain("會籍");
   });
 
   it("enters the app when Hub says user work is done", () => {
@@ -85,7 +73,7 @@ describe("login gate view", () => {
     const refreshActionsEl = makeEl("hidden");
 
     const copy = applyLoginGateView({
-      block: { reason: "member_profile_required" },
+      block: { reason: "member_not_registered" },
       hasTokens: true,
       loginGate,
       appLayout,
@@ -98,8 +86,8 @@ describe("login gate view", () => {
     expect(copy.enterApp).toBe(false);
     expect(loginGate.classList.contains("hidden")).toBe(false);
     expect(appLayout.classList.contains("hidden")).toBe(true);
-    expect(subtitleEl.textContent).toContain("名字");
-    expect(buttonEl.textContent).toContain("姓名");
+    expect(subtitleEl.textContent).toContain("會員中心註冊");
+    expect(buttonEl.textContent).toBe("去註冊");
     expect(buttonEl.dataset.loginGateMode).toBe("hub-continue");
     expect(refreshActionsEl.classList.contains("hidden")).toBe(false);
   });

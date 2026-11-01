@@ -74,7 +74,9 @@ describe("release onboarding startup timing", () => {
     // calls) on every cold boot. Still the same single authoritative sync
     // call gating `sessionSync`/`initialSessionSyncSucceeded`, just no longer
     // forced past a still-fresh cache.
-    expect(db).toContain("sessionSync = await this.syncNlcSessionWithSupabase(false)");
+    // #650：平常用 10 分鐘暫存，只有從會員中心回來（?resume=plan）才強制重新確認。
+    expect(db).toContain("sessionSync = await this.syncNlcSessionWithSupabase(returnedFromHub)");
+    expect(db).toContain("const returnedFromHub = consumeBibleHubResume(window.location.search)");
   });
 
   it("does not auto-show after a failed initial sync and does auto-show after both startup syncs succeed", () => {

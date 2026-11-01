@@ -68,16 +68,18 @@ describe("plan entry: eligibility judged at login only (js/app.js + js/db.js)", 
     // force=false as of the boot-perf fix — see app-version-config.test.mjs
     // for why: trusts the existing 10-minute edge-session cache instead of
     // always re-hitting the slow nlc-session round trip on cold boot.
-    expect(initSlice).toContain("await this.syncNlcSessionWithSupabase(false)");
+    // #650：只有從會員中心回來才強制重新確認。
+    expect(initSlice).toContain("await this.syncNlcSessionWithSupabase(returnedFromHub)");
     expect(initSlice).toContain("const block = getUserOnboardingBlock(state.currentUser)");
     expect(initSlice).toContain("getLoginGateCopy(block");
     expect(initSlice).toContain("applyLoginGateView");
   });
 
-  it("login gate copy still covers every fail-closed member-hub reason", () => {
+  it("login gate copy covers only not-registered, unavailable and inactive (#650)", () => {
     const gate = read("js/login-onboarding-gate.mjs");
-    expect(gate).toContain('block.reason === "member_profile_required"');
-    expect(gate).toContain('block.reason === "membership_application_required"');
+    expect(gate).not.toContain('block.reason === "member_profile_required"');
+    expect(gate).not.toContain('block.reason === "membership_application_required"');
+    expect(gate).toContain('block.reason === "member_not_registered"');
     expect(gate).toContain('block.reason === "member_context_unavailable"');
     expect(gate).toContain('block.reason === "inactive_membership"');
   });

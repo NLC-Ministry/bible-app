@@ -63,6 +63,7 @@ import {
 } from './data/admin-user-directory.mjs';
 import {
   applyLoginGateView,
+  consumeBibleHubResume,
   getLoginGateCopy,
   launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
@@ -601,6 +602,24 @@ const db = {
         e.preventDefault();
         const mode = btnNlcGate.dataset.loginGateMode || "sso";
         if (mode === "hub-continue") {
+          // 「沒註冊」：送去會員中心前先強制確認一次，已經註冊好了就直接進 App（#650）。
+          if (btnNlcGate.dataset.loginGateReason === "member_not_registered") {
+            btnNlcGate.disabled = true;
+            this.syncNlcSessionWithSupabase(true)
+              .catch((err) => {
+                console.warn("[LoginOnboardingGate] Pre-hub sync failed:", err);
+              })
+              .then(() => {
+                btnNlcGate.disabled = false;
+                const block = getUserOnboardingBlock(state.currentUser);
+                if (block?.reason === "member_not_registered") {
+                  launchMemberHubContinue(typeof auth !== "undefined" ? auth : null);
+                } else {
+                  this.applyLoginOnboardingGate();
+                }
+              });
+            return;
+          }
           launchMemberHubContinue(typeof auth !== "undefined" ? auth : null);
           return;
         }
@@ -692,6 +711,8 @@ const db = {
               return true;
             }
 
+            // 從會員中心回來（?resume=plan）：會友可能剛在那邊註冊好，不能用 10 分鐘暫存（#650）。
+            const returnedFromHub = consumeBibleHubResume(window.location.search);
             let sessionSync = null;
             window.__bootMark?.("nlc-session-sync-start");
             try {
@@ -699,7 +720,7 @@ const db = {
               // fresh instead of always re-hitting nlc-session, whose own
               // round trip measured 3.5-5.2s in production (mostly Member
               // Hub / Platform org calls this app can't speed up).
-              sessionSync = await this.syncNlcSessionWithSupabase(false);
+              sessionSync = await this.syncNlcSessionWithSupabase(returnedFromHub);
             } catch (syncErr) {
               console.warn("⚠️ NLC session sync warning:", syncErr);
               // Only a genuine connectivity failure falls back to the cached
@@ -712,7 +733,7 @@ const db = {
             window.__bootMark?.("nlc-session-sync-done");
             const block = getUserOnboardingBlock(state.currentUser);
             const hasValidTokens = auth.isLoggedIn();
-            const copy = getLoginGateCopy(block, { hasTokens: hasValidTokens });
+            const copy = getLoginGateCopy(block, { hasTokens: hasValidTokens, returnedFromHub });
             const loginGate = document.getElementById("login-gate");
             const appLayout = document.querySelector(".app-layout");
             const titleEl = loginGate && loginGate.querySelector(".login-title");
@@ -732,7 +753,8 @@ const db = {
               titleEl,
               subtitleEl,
               buttonEl,
-              refreshActionsEl: document.getElementById("login-gate-refresh-actions")
+              refreshActionsEl: document.getElementById("login-gate-refresh-actions"),
+              returnedFromHub
             });
             if (buttonEl) buttonEl.dataset.loginGateMode = copy.mode;
             return false;

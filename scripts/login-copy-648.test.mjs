@@ -29,14 +29,10 @@ describe("login card wording (#648)", () => {
   });
 
   it("Member Hub screens don't name 會員中心 on the button, and say where it goes", () => {
-    const name = getLoginGateCopy({ reason: "member_profile_required" }, { hasTokens: true });
-    expect(name.title).toBe("請先填寫姓名");
-    expect(name.subtitle).toBe("還差一步：填上你的名字就能開始。會開啟教會的會員頁面。");
-    expect(name.button).toBe("去填寫姓名");
-
-    const membership = getLoginGateCopy({ reason: "membership_application_required" }, { hasTokens: true });
-    expect(membership.subtitle).toBe("送出會籍申請就能開始，不用等牧者審核完成。會開啟教會的會員頁面。");
-    expect(membership.button).toBe("去填寫會籍申請");
+    const register = getLoginGateCopy({ reason: "member_not_registered" }, { hasTokens: true });
+    expect(register.title).toBe("請先到會員中心註冊");
+    expect(register.subtitle).toBe("這個帳號還沒在教會的會員中心註冊。註冊好回到這裡就能開始。會開啟教會的會員頁面。");
+    expect(register.button).toBe("去註冊");
 
     const other = getLoginGateCopy({ reason: "something_else" }, { hasTokens: true });
     expect(other.title).toBe("還有一步要完成");
@@ -56,7 +52,7 @@ describe("login card wording (#648)", () => {
     const doc = dom.window.document;
     const loginGate = doc.getElementById("login-gate");
     applyLoginGateView({
-      block: { reason: "member_profile_required" },
+      block: { reason: "member_not_registered" },
       hasTokens: true,
       loginGate,
       titleEl: loginGate.querySelector(".login-title"),

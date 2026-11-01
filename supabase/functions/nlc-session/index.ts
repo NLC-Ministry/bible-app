@@ -557,10 +557,27 @@ async function fetchJson(url: string, init?: RequestInit) {
   }
 
   if (!response.ok) {
-    throw new Error(`${url} failed: ${response.status} ${typeof body === "string" ? body : JSON.stringify(body)}`);
+    const err: any = new Error(`${url} failed: ${response.status} ${typeof body === "string" ? body : JSON.stringify(body)}`);
+    err.status = response.status;
+    err.body = body;
+    throw err;
   }
 
   return body;
+}
+
+// Keep in sync with js/member-journey.mjs MEMBER_HUB_NOT_FOUND_ERROR.
+const MEMBER_HUB_CONTEXT_NOT_FOUND = "member_hub_context_not_found";
+
+// 只有 404 加上會員中心自己的 CONTEXT_NOT_FOUND 才算「沒註冊」；一般 404（路徑錯、
+// 部署出錯的 HTML 頁）照連線失敗處理，免得把所有人都當成沒註冊擋在外面。
+function isMemberHubContextNotFound(err: any) {
+  if (err?.status !== 404) return false;
+  const body = err?.body;
+  if (!body || typeof body !== "object") return false;
+  return body.code === "CONTEXT_NOT_FOUND"
+    || body.error === "CONTEXT_NOT_FOUND"
+    || body.error?.code === "CONTEXT_NOT_FOUND";
 }
 
 async function fetchJsonOptional(url: string, init?: RequestInit) {
@@ -765,8 +782,14 @@ Deno.serve(async (req: Request) => {
         memberContextError = "member_hub_context_invalid_envelope";
       }
     } catch (err) {
-      console.error("Member Hub context fetch failed:", err);
-      memberContextError = `member_hub_context_failed: ${err instanceof Error ? err.message : String(err)}`;
+      if (isMemberHubContextNotFound(err)) {
+        // 會員中心確定沒有這個帳號（沒註冊過）：固定代碼，前端靠它顯示「請先到會員中心註冊」（#650）。
+        console.warn("Member Hub has no context for this account (not registered).");
+        memberContextError = MEMBER_HUB_CONTEXT_NOT_FOUND;
+      } else {
+        console.error("Member Hub context fetch failed:", err);
+        memberContextError = `member_hub_context_failed: ${err instanceof Error ? err.message : String(err)}`;
+      }
     }
 
     if (!memberContext) {
