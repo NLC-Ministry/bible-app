@@ -117,7 +117,9 @@ const OWN_OR_GIVEN_PLANS = [
 const ONE_PERSON_SUPPORT_VIEW = [
   "admin_api_user_summary",
   "admin_api_user_timeline",
-  "_admin_api_section_items"
+  "_admin_api_section_items",
+  // 合併重複帳號（#655）：把同一位會友兩個帳號的計畫（含個人計畫）整批搬到一起，不是排行或統計
+  "admin_merge_profiles"
 ];
 
 function functionsTouchingReadingTables() {

@@ -1014,3 +1014,190 @@ describe("小測驗補發過去沒發出去的日子（publish_daily_quiz_makeup
     expect(result).toMatchObject({ source: "custom" });
   });
 });
+
+describe("合併重複帳號（admin_merge_profiles，#655）", () => {
+  // 換登入方式開出的新帳號（source）併回原本的帳號（target）
+  const M = {
+    target: "21000000-0000-4000-8000-000000000001",
+    source: "21000000-0000-4000-8000-000000000002",
+    sourceMember: "22000000-0000-4000-8000-000000000002",
+    teamA: "23000000-0000-4000-8000-000000000001",
+    teamB: "23000000-0000-4000-8000-000000000002"
+  };
+  const one = async (tx, sql, params = []) => (await tx.query(sql, params)).rows[0];
+  const n = async (tx, sql, params = []) => Number((await one(tx, sql, params)).n);
+
+  /** 以資料庫擁有者身分建好兩個帳號的資料，fn 跑完一律 rollback。 */
+  async function withAccounts(fn) {
+    let result;
+    let failure;
+    try {
+      await db.transaction(async tx => {
+        try {
+          const role = (await one(tx, `SELECT id FROM public.role_definitions WHERE code = 'member'`)).id;
+          await tx.query(
+            `INSERT INTO public.profiles (id, name, role_id, email, phone, nlc_member_id, is_active) VALUES
+               ($1, '重複會友', $3, NULL, '0912000000', NULL, TRUE),
+               ($2, '重複會友', $3, 'dup@example.invalid', NULL, $4, TRUE)`,
+            [M.target, M.source, role, M.sourceMember]
+          );
+          // 10 月利未記已結束（固定期程、教會挑戰階段）：直接寫入要略過各種「已結束」檢查
+          await tx.exec(`SET LOCAL session_replication_role = replica`);
+          const g10 = (await one(tx, `SELECT id FROM public.global_plans WHERE rules->>'presetKey' = 'church_r1final_2026_10'`)).id;
+          const plan = async (userId, globalPlanId, round) => (await one(tx,
+            `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books, current_round)
+             SELECT $1, id, name, start_date, end_date, target_books, $3 FROM public.global_plans WHERE id = $2 RETURNING id`,
+            [userId, globalPlanId, round])).id;
+          const targetPlan = await plan(M.target, g10, 1);
+          const sourcePlan = await plan(M.source, g10, 2);
+          const sourceOnlyPlan = await plan(M.source, ids.plan, 1);
+          const log = (userId, planId, book, chapter, readAt) => tx.query(
+            `INSERT INTO public.reading_logs (user_id, plan_id, book, chapter, read_at) VALUES ($1, $2, $3, $4, $5)`,
+            [userId, planId, book, chapter, readAt]
+          );
+          await log(M.target, targetPlan, "利未記", 1, "2026-10-05T01:00:00Z");
+          await log(M.target, targetPlan, "利未記", 2, "2026-10-06T01:00:00Z");
+          await log(M.source, sourcePlan, "利未記", 2, "2026-10-01T01:00:00Z"); // 比 target 早
+          await log(M.source, sourcePlan, "利未記", 3, "2026-10-31T01:00:00Z");
+          await log(M.source, sourceOnlyPlan, "創世記", 1, "2026-10-20T01:00:00Z");
+          await log(M.target, null, "創世記", 5, "2026-09-01T01:00:00Z");
+          await log(M.source, null, "創世記", 5, "2026-09-02T01:00:00Z");
+          await log(M.source, null, "創世記", 6, "2026-09-03T01:00:00Z");
+          // 兩人在同一階段各在一隊：source 的隊員資格衝突（每人每階段每組別一隊），隊長改成 target
+          await tx.query(
+            `INSERT INTO public.reading_teams (id, global_plan_id, division, name, captain_id, invite_code) VALUES
+               ($1, $3, 3, '甲隊', $4, 'MERGEAAA01'), ($2, $3, 3, '乙隊', $5, 'MERGEBBB01')`,
+            [M.teamA, M.teamB, g10, M.target, M.source]
+          );
+          await tx.query(
+            `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role) VALUES
+               ($1, $3, 3, $4, 'captain'), ($2, $3, 3, $5, 'captain')`,
+            [M.teamA, M.teamB, g10, M.target, M.source]
+          );
+          await tx.query(
+            `INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES
+               ($1, 'logto', 'merge-sub-phone', TRUE), ($2, 'logto', 'merge-sub-email', TRUE)`,
+            [M.target, M.source]
+          );
+          // 兩個帳號都答了同一份小測驗
+          await tx.query(
+            `INSERT INTO public.quiz_attempts (publication_id, user_id, answers, score, total, status, completed_at) VALUES
+               ($1, $2, '[]', 2, 2, 'submitted', now()), ($1, $3, '[]', 0, 2, 'submitted', now())`,
+            [ids.publication, M.target, M.source]
+          );
+          await tx.exec(`SET LOCAL session_replication_role = DEFAULT`);
+          result = await fn(tx, { g10, targetPlan, sourcePlan, sourceOnlyPlan });
+        } catch (error) {
+          failure = error;
+        }
+        await tx.rollback();
+      });
+    } catch (error) {
+      if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+    }
+    if (failure) throw failure;
+    return result;
+  }
+
+  const merge = async (tx, dryRun, source = M.source, target = M.target) =>
+    (await one(tx, `SELECT public.admin_merge_profiles($1, $2, $3) AS r`, [source, target, dryRun])).r;
+
+  const snapshot = async tx => ({
+    sourcePlans: await n(tx, `SELECT count(*) AS n FROM public.reading_plans WHERE user_id = $1`, [M.source]),
+    sourceLogs: await n(tx, `SELECT count(*) AS n FROM public.reading_logs WHERE user_id = $1`, [M.source]),
+    targetLogs: await n(tx, `SELECT count(*) AS n FROM public.reading_logs WHERE user_id = $1`, [M.target]),
+    sourceIdentities: await n(tx, `SELECT count(*) AS n FROM public.user_identities WHERE profile_id = $1`, [M.source]),
+    sourceActive: (await one(tx, `SELECT is_active FROM public.profiles WHERE id = $1`, [M.source])).is_active,
+    merges: await n(tx, `SELECT count(*) AS n FROM public.profile_merges`)
+  });
+
+  it("預覽：回報各表要搬幾筆、幾筆衝突，但什麼都不改", async () => {
+    const outcome = await withAccounts(async tx => {
+      const before = await snapshot(tx);
+      const report = await merge(tx, true);
+      return { before, report, after: await snapshot(tx) };
+    });
+    expect(outcome.after).toEqual(outcome.before);
+    expect(outcome.report).toMatchObject({
+      dryRun: true,
+      readingPlans: { moved: 1, mergedIntoExisting: 1 },
+      readingLogs: { moved: 3, duplicatesDropped: 2, earlierReadAtKept: 1 }
+    });
+    const other = Object.fromEntries(outcome.report.otherTables.map(row => [`${row.table}.${row.column}`, row]));
+    expect(other["public.reading_team_members.user_id"]).toMatchObject({ moved: 0, conflictsDeleted: 1 });
+    expect(other["public.reading_teams.captain_id"]).toMatchObject({ moved: 1, conflictsDeleted: 0 });
+    expect(other["public.user_identities.profile_id"]).toMatchObject({ moved: 1 });
+    expect(other["public.quiz_attempts.user_id"]).toMatchObject({ moved: 0, conflictsDeleted: 1 });
+  });
+
+  it("執行：資料搬到原本的帳號，重複的只留一筆（保留較早的打卡時間），新帳號停用", async () => {
+    const outcome = await withAccounts(async (tx, plans) => {
+      const report = await merge(tx, false);
+      const logs = (await tx.query(
+        `SELECT plan_id, book, chapter, read_at FROM public.reading_logs WHERE user_id = $1 ORDER BY book, chapter`, [M.target]
+      )).rows;
+      return {
+        report,
+        plans,
+        after: await snapshot(tx),
+        targetPlans: (await tx.query(`SELECT id, current_round FROM public.reading_plans WHERE user_id = $1 ORDER BY current_round`, [M.target])).rows,
+        logs,
+        teams: (await tx.query(`SELECT team_id FROM public.reading_team_members WHERE user_id IN ($1, $2)`, [M.target, M.source])).rows,
+        captainB: (await one(tx, `SELECT captain_id FROM public.reading_teams WHERE id = $1`, [M.teamB])).captain_id,
+        identities: (await tx.query(`SELECT provider_user_id, is_primary FROM public.user_identities WHERE profile_id = $1 ORDER BY provider_user_id`, [M.target])).rows,
+        attempts: (await tx.query(`SELECT user_id, score FROM public.quiz_attempts WHERE publication_id = $1 AND user_id IN ($2, $3)`, [ids.publication, M.target, M.source])).rows,
+        source: await one(tx, `SELECT is_active, nlc_member_id, email FROM public.profiles WHERE id = $1`, [M.source]),
+        target: await one(tx, `SELECT is_active, email FROM public.profiles WHERE id = $1`, [M.target]),
+        mergeLog: await one(tx, `SELECT source_profile_id, target_profile_id, jsonb_array_length(removed_rows) AS removed FROM public.profile_merges`),
+        triggers: (await tx.query(
+          `SELECT tgname, tgenabled FROM pg_trigger WHERE tgname IN ('trg_reading_plans_progress_transition', 'trg_reading_log_stage_progress_open')`
+        )).rows
+      };
+    });
+    const { plans } = outcome;
+    expect(outcome.report).toMatchObject({ dryRun: false });
+    expect(outcome.after).toMatchObject({ sourcePlans: 0, sourceLogs: 0, sourceIdentities: 0, sourceActive: false, merges: 1 });
+    expect(outcome.targetPlans).toEqual([
+      { id: plans.sourceOnlyPlan, current_round: 1 },
+      { id: plans.targetPlan, current_round: 2 }
+    ]);
+    const byChapter = Object.fromEntries(outcome.logs.map(row => [`${row.book}${row.chapter}`, row]));
+    expect(Object.keys(byChapter).sort()).toEqual(["利未記1", "利未記2", "利未記3", "創世記1", "創世記5", "創世記6"].sort());
+    expect(byChapter["利未記2"].plan_id).toBe(plans.targetPlan);
+    expect(new Date(byChapter["利未記2"].read_at).toISOString()).toBe("2026-10-01T01:00:00.000Z");
+    expect(byChapter["利未記3"].plan_id).toBe(plans.targetPlan);
+    expect(byChapter["創世記1"].plan_id).toBe(plans.sourceOnlyPlan);
+    expect(new Date(byChapter["創世記5"].read_at).toISOString()).toBe("2026-09-01T01:00:00.000Z");
+    expect(outcome.teams).toEqual([{ team_id: M.teamA }]);
+    expect(outcome.captainB).toBe(M.target);
+    expect(outcome.identities).toEqual([
+      { provider_user_id: "merge-sub-email", is_primary: false },
+      { provider_user_id: "merge-sub-phone", is_primary: true }
+    ]);
+    expect(outcome.attempts).toEqual([{ user_id: M.target, score: 2 }]);
+    expect(outcome.source).toEqual({ is_active: false, nlc_member_id: null, email: null });
+    expect(outcome.target).toEqual({ is_active: true, email: "dup@example.invalid" });
+    // 刪掉的：重複的 2 筆打卡、併入後的來源計畫、衝突的隊員資格、重複的小測驗作答
+    expect(outcome.mergeLog).toMatchObject({ source_profile_id: M.source, target_profile_id: M.target, removed: 5 });
+    expect(outcome.triggers).toHaveLength(2);
+    for (const trigger of outcome.triggers) expect(trigger.tgenabled).toBe("O");
+  });
+
+  it("同一個帳號、找不到帳號、已經併過的帳號：擋下", async () => {
+    await expect(withAccounts(tx => merge(tx, true, M.source, M.source))).rejects.toThrow(/profile_merge_same_profile/);
+    await expect(withAccounts(tx => merge(tx, true, "21000000-0000-4000-8000-0000000000ff"))).rejects.toThrow(/profile_merge_profile_not_found/);
+    await expect(withAccounts(async tx => {
+      await merge(tx, false);
+      return merge(tx, true);
+    })).rejects.toThrow(/profile_merge_already_merged/);
+  });
+
+  it("只給 service_role：會友和 anon 都不能呼叫", async () => {
+    const privileges = await asService(async tx => one(tx,
+      `SELECT has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+              has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+       FROM pg_proc p WHERE p.proname = 'admin_merge_profiles'`));
+    expect(privileges).toEqual({ anon: false, authenticated: false, service: true });
+  });
+});
