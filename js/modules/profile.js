@@ -1139,6 +1139,12 @@ async function handleLogoutAndClearCache() {
     }
     window.localStorage.removeItem("care_reminder_badge_last_refresh");
 
+    // #663：主動登出後的下一次登入顯示 Logto 登入頁，才換得了登入方式；
+    // token 過期等自動重新登入不經過這裡，照舊直接通過。
+    if (typeof auth !== "undefined" && auth.logoutToSwitchAccount) {
+      await auth.logoutToSwitchAccount();
+      return;
+    }
     if (typeof auth !== "undefined" && auth.logout) {
       await auth.logout();
       return;

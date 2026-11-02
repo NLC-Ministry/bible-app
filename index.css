@@ -3463,6 +3463,12 @@ body:not(.dark-theme) .settings-row-btn:hover {
   color: var(--text-secondary);
 }
 
+.account-switch-hint__account {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
 .account-switch-hint__actions {
   display: flex;
   flex-wrap: wrap;

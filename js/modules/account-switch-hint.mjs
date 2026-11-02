@@ -2,6 +2,7 @@
 // 會員中心另建一位會員，nlc-session 三種連結方式都對不上，就開了全新的空帳號。
 // 舊帳號的計畫和紀錄都還在，但會友只看到「我的計畫不見了」。
 // 這裡在「沒有計畫」的空白畫面加一張提示卡，請他改用原本的方式登入。
+// #663：原本的方式也可能是 Email、這次才用手機，所以卡片說出「現在」用的是哪一種，不預設原本是手機。
 //
 // 只在三個條件同時成立時出現：帳號建立未滿 30 天、會員中心身分有值但不是正式會友
 // （換方式開的新帳號會員中心一定不認得；真正第一次用 App 的正式會友不打擾）、
@@ -59,21 +60,62 @@ export function shouldShowAccountSwitchHintForState(appState, now = Date.now()) 
   });
 }
 
-export function accountSwitchHintMarkup() {
+function escapeText(value) {
+  return String(value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[ch]);
+}
+
+// 886912345678 / +886912345678 / 0912345678 → 0912-***-678
+export function maskPhone(phone) {
+  let digits = String(phone || "").replace(/\D/g, "");
+  if (digits.startsWith("886")) digits = `0${digits.slice(3)}`;
+  if (digits.length < 8) return "";
+  return `${digits.slice(0, 4)}-***-${digits.slice(-3)}`;
+}
+
+// abcdef@gmail.com → ab***@gmail.com
+export function maskEmail(email) {
+  const value = String(email || "").trim();
+  const at = value.lastIndexOf("@");
+  if (at < 1 || at === value.length - 1) return "";
+  const local = value.slice(0, at);
+  return `${local.slice(0, local.length > 2 ? 2 : 1)}***${value.slice(at)}`;
+}
+
+// #663：告訴會友「現在」是用什麼登入，他才知道要換成另一種。
+// 帳號只有手機或只有 Email 才說得準；兩者都有（或都沒有）就不猜。
+export function currentLoginMethod(user) {
+  const phone = maskPhone(user && user.phone);
+  const email = maskEmail(user && user.email);
+  if (phone && !email) return { method: "phone", masked: phone };
+  if (email && !phone) return { method: "email", masked: email };
+  return { method: "", masked: "" };
+}
+
+export function accountSwitchHintMarkup(currentUser) {
   const copy = (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.accountSwitchHint) || {};
+  const { method, masked } = currentLoginMethod(currentUser);
+  const account = `<span class="account-switch-hint__account">${escapeText(masked)}</span>`;
+  let body;
+  if (method === "phone") {
+    body = (copy.bodyPhone || "你現在是用手機 {account} 登入的。如果你以前參加時是用 Email 或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account);
+  } else if (method === "email") {
+    body = (copy.bodyEmail || "你現在是用 Email {account} 登入的。如果你以前參加時是用手機號碼或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account);
+  } else {
+    body = copy.bodyUnknown || "如果你以前參加時是用另一種方式（Email 或手機號碼）登入，計畫會在那裡，請登出後改用那個方式登入。";
+  }
   return `
     <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">
       <h3 class="account-switch-hint__title" id="account-switch-hint-title">
         <span class="nlc-icon nlc-icon--sm" data-icon="info" aria-hidden="true"></span>
-        <span>${copy.title || "以前參加過讀經計畫嗎？"}</span>
+        <span>${copy.title || "找不到你的讀經計畫嗎？"}</span>
       </h3>
-      <p class="account-switch-hint__body">${copy.body || "如果你之前用手機號碼（或其他方式）登入過，你的計畫和閱讀紀錄都在那個帳號裡。請先登出，再改用原本的方式登入。"}</p>
+      <p class="account-switch-hint__body">${body}</p>
       <div class="account-switch-hint__actions">
         <button type="button" class="primary-btn account-switch-hint__switch" data-account-switch-logout>
           <span class="nlc-icon nlc-icon--sm" data-icon="logout" aria-hidden="true"></span>
-          <span>${copy.switchCta || "登出，改用原本的方式登入"}</span>
+          <span>${copy.switchCta || "登出，換別的方式登入"}</span>
         </button>
-        <button type="button" class="secondary-btn" data-account-switch-dismiss>${copy.dismissCta || "我是第一次使用"}</button>
+        <button type="button" class="secondary-btn" data-account-switch-dismiss>${copy.dismissCta || "我是第一次參加"}</button>
       </div>
     </section>
   `;
