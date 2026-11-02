@@ -5,7 +5,10 @@ import {
   ACCOUNT_SWITCH_HINT_MAX_AGE_DAYS,
   accountSwitchHintMarkup,
   bindAccountSwitchHint,
+  currentLoginMethod,
   isAccountSwitchHintDismissed,
+  maskEmail,
+  maskPhone,
   shouldShowAccountSwitchHint
 } from "../js/modules/account-switch-hint.mjs";
 import { applyLoginGateView } from "../js/login-onboarding-gate.mjs";
@@ -90,6 +93,68 @@ describe("account switch hint card", () => {
   it("does nothing when the container has no card", () => {
     document.body.innerHTML = `<div id="host"></div>`;
     expect(() => bindAccountSwitchHint(document.getElementById("host"), { profileId: "p", onSwitch: vi.fn() })).not.toThrow();
+  });
+});
+
+// #663：會友原本用 Email、這次用手機登入，舊文案「如果你之前用手機號碼…」讓他以為手機就是原本的方式，
+// 每次登出又選手機。卡片改成說出「現在」用的是哪一種。
+describe("account switch hint: current login method", () => {
+  const bodyText = user => {
+    document.body.innerHTML = accountSwitchHintMarkup(user);
+    return document.querySelector(".account-switch-hint__body").textContent;
+  };
+
+  it("masks phone numbers the way nlc-session stores them (886…, no +)", () => {
+    expect(maskPhone("886912345678")).toBe("0912-***-678");
+    expect(maskPhone("+886 912 345 678")).toBe("0912-***-678");
+    expect(maskPhone("0912345678")).toBe("0912-***-678");
+    expect(maskPhone("123")).toBe("");
+    expect(maskPhone(null)).toBe("");
+  });
+
+  it("masks email addresses", () => {
+    expect(maskEmail("abcdef@gmail.com")).toBe("ab***@gmail.com");
+    expect(maskEmail("a@x.org")).toBe("a***@x.org");
+    expect(maskEmail("not-an-email")).toBe("");
+    expect(maskEmail("")).toBe("");
+  });
+
+  it("only names a method when the account has just one of phone / email", () => {
+    expect(currentLoginMethod({ phone: "886912345678", email: null })).toEqual({ method: "phone", masked: "0912-***-678" });
+    expect(currentLoginMethod({ phone: "", email: "abcdef@gmail.com" })).toEqual({ method: "email", masked: "ab***@gmail.com" });
+    expect(currentLoginMethod({ phone: "886912345678", email: "abcdef@gmail.com" }).method).toBe("");
+    expect(currentLoginMethod(undefined).method).toBe("");
+  });
+
+  it("a phone login is told it is on the phone and to try Email (the reported case)", () => {
+    const text = bodyText({ phone: "886912345678" });
+    expect(text).toContain("你現在是用手機 0912-***-678 登入的");
+    expect(text).toContain("Email");
+    expect(text).not.toContain("如果你之前用手機號碼");
+  });
+
+  it("an email login is told it is on Email and to try the phone number", () => {
+    const text = bodyText({ email: "abcdef@gmail.com" });
+    expect(text).toContain("你現在是用 Email ab***@gmail.com 登入的");
+    expect(text).toContain("手機號碼");
+  });
+
+  it("falls back to neutral copy when it can't tell", () => {
+    const text = bodyText({});
+    expect(text).not.toContain("你現在是用");
+    expect(text).toContain("Email 或手機號碼");
+  });
+
+  it("escapes the shown address", () => {
+    document.body.innerHTML = accountSwitchHintMarkup({ email: "<img>x@ex.com" });
+    expect(document.querySelector(".account-switch-hint__body img")).toBeNull();
+    expect(document.querySelector(".account-switch-hint__account").textContent).toBe("<i***@ex.com");
+  });
+
+  it("the profile page logout also forces the Logto sign-in page next time", () => {
+    const source = readFileSync("js/modules/profile.js", "utf8");
+    const handler = source.slice(source.indexOf("async function handleLogoutAndClearCache"));
+    expect(handler.slice(0, handler.indexOf("\n}"))).toContain("auth.logoutToSwitchAccount()");
   });
 });
 

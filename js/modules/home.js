@@ -390,7 +390,7 @@ export function updateDashboardView() {
     planSummaryDiv.onkeydown = null;
     const showAccountSwitchHint = shouldShowAccountSwitchHintForState(state);
     planSummaryDiv.innerHTML = `
-      ${showAccountSwitchHint ? accountSwitchHintMarkup() : ""}
+      ${showAccountSwitchHint ? accountSwitchHintMarkup(state.currentUser) : ""}
       <div class="empty-state" style="text-align: center; padding: 2rem 0;">
         <p style="color: var(--text-secondary); margin-bottom: 1rem;">${(window.APP_COPY && window.APP_COPY.plan.emptyBody) || "還沒加入讀經計畫"}</p>
         <button class="primary-btn" onclick="appRouter.switchTab('plan-view')">${(window.APP_COPY && window.APP_COPY.plan.emptyCta) || "去找計畫"}</button>
