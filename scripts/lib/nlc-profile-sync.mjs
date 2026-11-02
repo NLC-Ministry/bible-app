@@ -199,15 +199,17 @@ export function buildLockedFields(sourceValues, options = {}) {
  * Project org placement into profile fields. When hubLinked, Member Hub is
  * canonical — empty Hub values clear stale local projection instead of
  * preserving existing profile org fields.
+ *
+ * #654：platformFailed（平台 API 這次沒回應）時，查不到不等於沒有——會員中心
+ * 沒給的層沿用舊值。但會員中心給的層跟舊值不同＝換過歸屬，舊的上層不一定對，
+ * 就不沿用，免得把新小組掛到舊牧區底下。
  */
-export function projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked) {
+export function projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked, { platformFailed = false } = {}) {
   const hubOrg = {
     great_region: mergedOrg?.great_region ? String(mergedOrg.great_region).trim() : "",
     pastoral_zone: mergedOrg?.pastoral_zone ? String(mergedOrg.pastoral_zone).trim() : "",
     small_group: mergedOrg?.small_group ? String(mergedOrg.small_group).trim() : ""
   };
-
-  if (hubLinked) return hubOrg;
 
   const firstValue = (...values) => {
     for (const value of values) {
@@ -215,6 +217,15 @@ export function projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked) {
     }
     return "";
   };
+
+  if (hubLinked && !platformFailed) return hubOrg;
+  if (hubLinked) {
+    const moved = Object.keys(hubOrg).some((field) => {
+      const before = firstValue(existingProfile?.[field]);
+      return hubOrg[field] && before && hubOrg[field] !== before;
+    });
+    if (moved) return hubOrg;
+  }
 
   return {
     great_region: firstValue(hubOrg.great_region, existingProfile?.great_region),
@@ -241,7 +252,8 @@ export function buildOrgProjectionAudit({
   projectedOrg,
   existingProfile,
   orgResolutionSource,
-  memberContextError
+  memberContextError,
+  platformOrgStatus = "skipped"
 }) {
   const canonicalPlacement = {
     placementNodeId: organization?.placementNodeId || null,
@@ -255,6 +267,7 @@ export function buildOrgProjectionAudit({
     status: projectedOrg?.great_region || projectedOrg?.pastoral_zone || projectedOrg?.small_group ? "projected" : "empty",
     member_context_available: Boolean(memberContext),
     member_context_error: memberContextError || null,
+    platform_status: platformOrgStatus,
     canonical_placement: canonicalPlacement,
     inputs: {
       platform: copyOrgFields(platformOrgFields),

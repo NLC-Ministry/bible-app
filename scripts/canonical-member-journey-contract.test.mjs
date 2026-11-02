@@ -112,7 +112,12 @@ describe('canonical Bible user-onboarding door (#650: registered + not inactive 
   it('nlc-session writes the same not-registered code, only for a 404 CONTEXT_NOT_FOUND', () => {
     const source = fs.readFileSync('supabase/functions/nlc-session/index.ts', 'utf8');
     expect(source).toContain(`const MEMBER_HUB_CONTEXT_NOT_FOUND = "${MEMBER_HUB_NOT_FOUND_ERROR}"`);
-    const fn = source.slice(source.indexOf('function isMemberHubContextNotFound'), source.indexOf('async function fetchJsonOptional'));
+    const start = source.indexOf('function isMemberHubContextNotFound');
+    expect(start).toBeGreaterThan(-1);
+    const rest = source.slice(start);
+    const end = rest.search(/\r?\n\}\r?\n/);
+    expect(end).toBeGreaterThan(0);
+    const fn = rest.slice(0, end);
     expect(fn).toContain('err?.status !== 404');
     expect(fn).toContain('CONTEXT_NOT_FOUND');
     expect(source).toContain('memberContextError = MEMBER_HUB_CONTEXT_NOT_FOUND');

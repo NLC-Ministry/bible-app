@@ -247,6 +247,55 @@ describe("projectOrgFieldsFromHub", () => {
       small_group: "馬鈴"
     });
   });
+
+  // #654：查不到不等於沒有。
+  const existing = { great_region: "北大區", pastoral_zone: "青年牧區", small_group: "馬鈴薯" };
+
+  it("keeps the levels Member Hub did not supply when the platform lookup failed", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: null, pastoral_zone: null, small_group: "馬鈴薯" },
+      existing,
+      true,
+      { platformFailed: true }
+    )).toEqual(existing);
+  });
+
+  it("keeps everything when the platform failed and Member Hub supplied no level at all", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: null, pastoral_zone: null, small_group: null },
+      existing,
+      true,
+      { platformFailed: true }
+    )).toEqual(existing);
+  });
+
+  it("still clears levels when the platform answered and the member has no placement there", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: null, pastoral_zone: null, small_group: "馬鈴薯" },
+      existing,
+      true,
+      { platformFailed: false }
+    )).toEqual({ great_region: "", pastoral_zone: "", small_group: "馬鈴薯" });
+  });
+
+  it("uses the Member Hub value for a level it supplied, even when the platform failed", () => {
+    expect(projectOrgFieldsFromHub(
+      { great_region: "北大區", pastoral_zone: "青年牧區", small_group: null },
+      { ...existing, small_group: "" },
+      true,
+      { platformFailed: true }
+    )).toEqual({ great_region: "北大區", pastoral_zone: "青年牧區", small_group: "" });
+  });
+
+  it("does not hang a moved member's new group under the old pastoral zone", () => {
+    // 會員中心給的小組跟舊的不同＝換過歸屬，舊的上層不一定對：不沿用。
+    expect(projectOrgFieldsFromHub(
+      { great_region: null, pastoral_zone: null, small_group: "地瓜" },
+      existing,
+      true,
+      { platformFailed: true }
+    )).toEqual({ great_region: "", pastoral_zone: "", small_group: "地瓜" });
+  });
 });
 
 describe("resolveProjectedProfileName", () => {
@@ -426,7 +475,10 @@ describe("nlc-session member context sync timestamp", () => {
   it("projects org placement from Member Hub for every Logto session", () => {
     const source = fs.readFileSync("supabase/functions/nlc-session/index.ts", "utf8");
 
-    expect(source).toContain("projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked)");
+    expect(source).toContain("projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked, {");
+    // #654：平台 API 失敗跟「成功但沒有歸屬」分開記錄，失敗時才沿用舊的層。
+    expect(source).toContain('platformFailed: platformOrgStatus === "failed"');
+    expect(source).toContain('platformOrgStatus = "failed"');
     expect(source).toContain("const hubLinked = !!memberContext");
     expect(source).toContain("placementLevelName");
     expect(source).toContain("placementNodeName");
