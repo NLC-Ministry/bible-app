@@ -1201,3 +1201,67 @@ describe("合併重複帳號（admin_merge_profiles，#655）", () => {
     expect(privileges).toEqual({ anon: false, authenticated: false, service: true });
   });
 });
+
+describe("帶隊進下一個月（get_reading_team_carryover_offer／carry_reading_teams_to_stage，#659）", () => {
+  // #639 在 global_plans 加了 source_plan_id 欄位，跟兩支函式裡同名的變數撞名，
+  // offer 從此對每個人都報 42702 ambiguous，隊長永遠看不到帶隊按鈕。
+  // 自己建上個月／這個月兩張階段計畫，日期跟著今天算：階段結束後名單不能再動（0163），
+  // 用固定日期的月度期末賽，過了那個月測試就會壞。
+  const OCT = "70000000-0000-4000-8000-000000000610";
+  const NOV = "70000000-0000-4000-8000-000000000611";
+  const CAMPAIGN = "70000000-0000-4000-8000-000000000600";
+  const TEAM = "70000000-0000-4000-8000-000000000659";
+  const offerFor = async (tx, actorId) =>
+    (await tx.query(`SELECT public.get_reading_team_carryover_offer($1, $2) AS offer`, [NOV, actorId])).rows[0].offer;
+  const seedOctoberTeam = async tx => {
+    await tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books, is_hidden, plan_kind, rules) VALUES
+         ($1, '上個月', CURRENT_DATE - 20, CURRENT_DATE + 10, ARRAY['利未記'], FALSE, 'church_campaign_stage', jsonb_build_object('parentCampaignId', $3::text)),
+         ($2, '這個月', CURRENT_DATE - 5,  CURRENT_DATE + 30, ARRAY['民數記'], FALSE, 'church_campaign_stage', jsonb_build_object('parentCampaignId', $3::text))`,
+      [OCT, NOV, CAMPAIGN]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_teams (id, global_plan_id, division, name, captain_id, invite_code)
+       VALUES ($1, $2, 3, '十月隊', $3, 'CARRY65901')`,
+      [TEAM, OCT, ids.member]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role)
+       VALUES ($1, $2, 3, $3, 'captain'), ($1, $2, 3, $4, 'member')`,
+      [TEAM, OCT, ids.member, ids.other]
+    );
+  };
+
+  it("上個月的隊長查得到可以帶的隊伍", async () => {
+    const offer = await asService(async tx => {
+      await seedOctoberTeam(tx);
+      return offerFor(tx, ids.member);
+    });
+    expect(offer).toMatchObject({ eligible: true, sourcePlanId: OCT, targetPlanId: NOV });
+    expect(offer.teams).toEqual([expect.objectContaining({ sourceTeamId: TEAM, name: "十月隊", division: 3, memberCount: 2 })]);
+  });
+
+  it("隊員（不是隊長）沒有可帶的隊伍", async () => {
+    const offer = await asService(async tx => {
+      await seedOctoberTeam(tx);
+      return offerFor(tx, ids.other);
+    });
+    expect(offer).toMatchObject({ eligible: false, teams: [] });
+  });
+
+  it("帶隊後隊長和隊員都進了下個月的同一支隊伍，offer 不再列這一組", async () => {
+    const outcome = await asService(async tx => {
+      await seedOctoberTeam(tx);
+      await tx.query(`SELECT public.carry_reading_teams_to_stage($1, $2, 3)`, [NOV, ids.member]);
+      const members = (await tx.query(
+        `SELECT user_id, member_role FROM public.reading_team_members WHERE global_plan_id = $1 ORDER BY member_role`, [NOV]
+      )).rows;
+      return { members, offer: await offerFor(tx, ids.member) };
+    });
+    expect(outcome.members).toEqual([
+      { user_id: ids.member, member_role: "captain" },
+      { user_id: ids.other, member_role: "member" }
+    ]);
+    expect(outcome.offer).toMatchObject({ eligible: false, teams: [] });
+  });
+});

@@ -110,6 +110,10 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
       return [];
     }
     const result = await db.getReadingTeamCarryoverOffer(plan);
+    // RPC 壞掉時也只能當成「沒有可帶的隊伍」，但要留下紀錄：#659 就是報錯被當成沒資格，好幾天沒人發現。
+    if (!result || !result.success) {
+      console.warn("[team-registration] carryover offer failed:", result && (result.error || result.message));
+    }
     const offer = result && result.success ? result.context || {} : {};
     return offer.eligible && Array.isArray(offer.teams) ? offer.teams : [];
   }
