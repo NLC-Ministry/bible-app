@@ -10,7 +10,7 @@ const db = read("js/db.js");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const teamUi = read("js/modules/team-registration.js");
 const migrationByDate = currentMigrationSql("20260928101011_carryover_next_plan_by_date.sql");
-const migrationDivision = read("supabase/migrations/20260928120418_carryover_single_division.sql");
+const migrationDivision = currentMigrationSql("20260928120418_carryover_single_division.sql");
 const migrationTaoyuan = read("supabase/migrations/20260928101019_taoyuan_first_round_final_exodus.sql");
 const migrationTaoyuanLevNumDeut = read("supabase/migrations/20260928155627_taoyuan_first_round_final_lev_num_deut.sql");
 
