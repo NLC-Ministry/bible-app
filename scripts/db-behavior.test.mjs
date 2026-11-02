@@ -1085,6 +1085,12 @@ describe("合併重複帳號（admin_merge_profiles，#655）", () => {
                ($1, $2, '[]', 2, 2, 'submitted', now()), ($1, $3, '[]', 0, 2, 'submitted', now())`,
             [ids.publication, M.target, M.source]
           );
+          // source 收過已讀的關心提醒：送出後收件人不能改（enforce_care_reminder_transition，#660）
+          await tx.query(
+            `INSERT INTO public.care_reminders (sender_id, recipient_id, reason, status, read_at, created_at)
+             VALUES ($1, $2, 'care', 'read', '2026-10-02T01:00:00Z', '2026-10-01T01:00:00Z')`,
+            [ids.admin, M.source]
+          );
           await tx.exec(`SET LOCAL session_replication_role = DEFAULT`);
           result = await fn(tx, { g10, targetPlan, sourcePlan, sourceOnlyPlan });
         } catch (error) {
@@ -1128,10 +1134,16 @@ describe("合併重複帳號（admin_merge_profiles，#655）", () => {
     expect(other["public.reading_teams.captain_id"]).toMatchObject({ moved: 1, conflictsDeleted: 0 });
     expect(other["public.user_identities.profile_id"]).toMatchObject({ moved: 1 });
     expect(other["public.quiz_attempts.user_id"]).toMatchObject({ moved: 0, conflictsDeleted: 1 });
+    expect(other["public.care_reminders.recipient_id"]).toMatchObject({ moved: 1 });
   });
 
   it("執行：資料搬到原本的帳號，重複的只留一筆（保留較早的打卡時間），新帳號停用", async () => {
     const outcome = await withAccounts(async (tx, plans) => {
+      // target 提醒過 source：改指 target 會變成寄給自己（CHECK），留在來源帳號
+      await tx.query(
+        `INSERT INTO public.care_reminders (sender_id, recipient_id, reason) VALUES ($1, $2, 'care')`,
+        [M.target, M.source]
+      );
       const report = await merge(tx, false);
       const logs = (await tx.query(
         `SELECT plan_id, book, chapter, read_at FROM public.reading_logs WHERE user_id = $1 ORDER BY book, chapter`, [M.target]
@@ -1149,9 +1161,16 @@ describe("合併重複帳號（admin_merge_profiles，#655）", () => {
         source: await one(tx, `SELECT is_active, nlc_member_id, email FROM public.profiles WHERE id = $1`, [M.source]),
         target: await one(tx, `SELECT is_active, email FROM public.profiles WHERE id = $1`, [M.target]),
         mergeLog: await one(tx, `SELECT source_profile_id, target_profile_id, jsonb_array_length(removed_rows) AS removed FROM public.profile_merges`),
+        reminders: (await tx.query(
+          `SELECT sender_id, recipient_id FROM public.care_reminders WHERE $1 IN (sender_id, recipient_id) OR $2 IN (sender_id, recipient_id) ORDER BY sender_id`,
+          [M.target, M.source]
+        )).rows,
         triggers: (await tx.query(
-          `SELECT tgname, tgenabled FROM pg_trigger WHERE tgname IN ('trg_reading_plans_progress_transition', 'trg_reading_log_stage_progress_open')`
-        )).rows
+          `SELECT tgname, tgenabled FROM pg_trigger
+           WHERE tgname IN ('trg_reading_plans_progress_transition', 'trg_reading_log_stage_progress_open', 'trg_care_reminders_transition',
+                            'trg_block_ended_stage_teams', 'trg_block_ended_stage_team_members')`
+        )).rows,
+        disabledTriggers: await n(tx, `SELECT count(*) AS n FROM pg_trigger WHERE NOT tgisinternal AND tgenabled = 'D'`)
       };
     });
     const { plans } = outcome;
@@ -1179,8 +1198,16 @@ describe("合併重複帳號（admin_merge_profiles，#655）", () => {
     expect(outcome.target).toEqual({ is_active: true, email: "dup@example.invalid" });
     // 刪掉的：重複的 2 筆打卡、併入後的來源計畫、衝突的隊員資格、重複的小測驗作答
     expect(outcome.mergeLog).toMatchObject({ source_profile_id: M.source, target_profile_id: M.target, removed: 5 });
-    expect(outcome.triggers).toHaveLength(2);
+    // 已讀的關心提醒改寄給 target；target 寄給 source 的那則留在 source（不能寄給自己）
+    expect(outcome.reminders).toEqual(expect.arrayContaining([
+      { sender_id: ids.admin, recipient_id: M.target },
+      { sender_id: M.target, recipient_id: M.source }
+    ]));
+    expect(outcome.reminders).toHaveLength(2);
+    // 暫停的觸發器全部恢復
+    expect(outcome.triggers).toHaveLength(5);
     for (const trigger of outcome.triggers) expect(trigger.tgenabled).toBe("O");
+    expect(outcome.disabledTriggers).toBe(0);
   });
 
   it("同一個帳號、找不到帳號、已經併過的帳號：擋下", async () => {
