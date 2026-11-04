@@ -4,14 +4,14 @@
 // 這裡在「沒有計畫」的空白畫面加一張提示卡，請他改用原本的方式登入。
 // #663：原本的方式也可能是 Email、這次才用手機，所以卡片說出「現在」用的是哪一種，不預設原本是手機。
 //
-// 只在三個條件同時成立時出現：帳號建立未滿 30 天、會員中心身分有值但不是正式會友
-// （換方式開的新帳號會員中心一定不認得；真正第一次用 App 的正式會友不打擾）、
-// 一個計畫都沒有。資料不足（舊版 nlc-session 沒回 created_at、會員中心沒同步）就不顯示。
+// 只在三個條件同時成立時出現：帳號建立未滿 30 天、會員中心身分有值、一個計畫都沒有。
+// 資料不足（舊版 nlc-session 沒回 created_at、會員中心沒同步）就不顯示。
+// #677：不再排除正式會友，會員中心可能很快就核准新帳號。真正第一次用 App 的正式會友也會看到
+// 一次，按「我是第一次參加」就不再出現；新帳號不多，漏掉一位分裂的會友代價更高。
 
 export const ACCOUNT_SWITCH_HINT_MAX_AGE_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DISMISS_KEY_PREFIX = "account_switch_hint_dismissed:";
-const OFFICIAL_MEMBER_STATUS = "official_member";
 
 export function shouldShowAccountSwitchHint({
   accountCreatedAt,
@@ -21,8 +21,7 @@ export function shouldShowAccountSwitchHint({
   now = Date.now()
 } = {}) {
   if (hasAnyPlan || dismissed) return false;
-  const status = String(membershipStatus || "").trim();
-  if (!status || status === OFFICIAL_MEMBER_STATUS) return false;
+  if (!String(membershipStatus || "").trim()) return false;
   const createdAt = Date.parse(String(accountCreatedAt || ""));
   if (!Number.isFinite(createdAt)) return false;
   return now - createdAt <= ACCOUNT_SWITCH_HINT_MAX_AGE_DAYS * DAY_MS;

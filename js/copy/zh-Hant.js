@@ -62,6 +62,11 @@ window.APP_COPY = {
     switchCta: "登出，換別的方式登入",
     dismissCta: "我是第一次參加",
   },
+  loginMethodHint: {
+    phone: "上次在這支手機是用手機 {account} 登入，請用同一個方式才看得到你的計畫。",
+    email: "上次在這支手機是用 Email {account} 登入，請用同一個方式才看得到你的計畫。",
+    unknown: "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。",
+  },
   memberHub: {
     cardTitle: "新生命會員中心",
     cardBody: "姓名、牧區與教會身份由會員中心統一管理，更新後自動同步至本 app。",

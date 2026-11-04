@@ -1,0 +1,109 @@
+// #677：久沒登入的會友回來時容易換一種登入方式，Logto 給新的 sub，App 就開出空帳號。
+// 登入成功後在裝置記下這次的方式，登入卡顯示一行提醒。只存遮罩值，一般登出不清。
+//
+// 建立未滿 30 天又沒有計畫的帳號不記：分裂後開的空帳號如果記下來，提醒就會指向它，
+// 不是原本有計畫的舊帳號。建立時間不明又沒有計畫時也不記。
+import {
+  ACCOUNT_SWITCH_HINT_MAX_AGE_DAYS,
+  currentLoginMethod
+} from "./modules/account-switch-hint.mjs";
+import { OFFLINE_IDENTITY_KEY, parseOfflineIdentity } from "./data/offline-identity.mjs";
+
+export const LAST_LOGIN_METHOD_KEY = "nlc_last_login_method";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function defaultStorage() {
+  return typeof localStorage !== "undefined" ? localStorage : null;
+}
+
+function shouldRemember({ accountCreatedAt, hasAnyPlan, now }) {
+  if (hasAnyPlan) return true;
+  const createdAt = Date.parse(String(accountCreatedAt || ""));
+  return Number.isFinite(createdAt) && now - createdAt > ACCOUNT_SWITCH_HINT_MAX_AGE_DAYS * DAY_MS;
+}
+
+/** 記下這次的登入方式，回傳記下的內容；這個帳號不該記或存不了就回 null。 */
+export function rememberLoginMethod({
+  user,
+  accountCreatedAt,
+  hasAnyPlan,
+  storage = defaultStorage(),
+  now = Date.now()
+} = {}) {
+  if (!storage || !shouldRemember({ accountCreatedAt, hasAnyPlan, now })) return null;
+  const record = currentLoginMethod(user);
+  try {
+    storage.setItem(LAST_LOGIN_METHOD_KEY, JSON.stringify(record));
+  } catch (_) {
+    return null;
+  }
+  return record;
+}
+
+function parseRecord(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && (parsed.method === "phone" || parsed.method === "email") && parsed.masked) {
+      return { method: parsed.method, masked: String(parsed.masked) };
+    }
+    return parsed && parsed.method === "" ? { method: "", masked: "" } : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function hasStoredPlans(storage) {
+  try {
+    const plans = JSON.parse(storage.getItem("active_reading_plans") || "[]");
+    return Array.isArray(plans) && plans.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+// 第一次升級的裝置還沒有紀錄：從身分快照帶入。這裡只取遮罩後的方式，不拿快照當身分，
+// 所以過期的快照也可以讀。
+function seedFromIdentitySnapshot(storage, now) {
+  const profile = parseOfflineIdentity(storage.getItem(OFFLINE_IDENTITY_KEY))?.profile;
+  if (!profile?.id) return null;
+  return rememberLoginMethod({
+    user: profile,
+    accountCreatedAt: profile.created_at,
+    hasAnyPlan: hasStoredPlans(storage),
+    storage,
+    now
+  });
+}
+
+/** 讀裝置上的紀錄（沒有就試著從快照帶入）；都沒有回 null。 */
+export function readLastLoginMethod({ storage = defaultStorage(), now = Date.now() } = {}) {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(LAST_LOGIN_METHOD_KEY);
+    return raw ? parseRecord(raw) : seedFromIdentitySnapshot(storage, now);
+  } catch (_) {
+    return null;
+  }
+}
+
+export function loginMethodHintText(record) {
+  const copy = (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.loginMethodHint) || {};
+  const fill = template => template.replace("{account}", () => record.masked);
+  if (record && record.method === "phone") {
+    return fill(copy.phone || "上次在這支手機是用手機 {account} 登入，請用同一個方式才看得到你的計畫。");
+  }
+  if (record && record.method === "email") {
+    return fill(copy.email || "上次在這支手機是用 Email {account} 登入，請用同一個方式才看得到你的計畫。");
+  }
+  return copy.unknown || "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。";
+}
+
+/** 畫在登入卡上；visible=false 用在不是要會友登入的畫面（沒註冊、資料讀不到等）。 */
+export function renderLoginMethodHint(loginGate, { visible = true, storage = defaultStorage(), now = Date.now() } = {}) {
+  const el = loginGate && typeof loginGate.querySelector === "function"
+    ? loginGate.querySelector("[data-login-method-hint]")
+    : null;
+  if (!el) return;
+  if (visible) el.textContent = loginMethodHintText(readLastLoginMethod({ storage, now }));
+  el.classList.toggle("hidden", !visible);
+}

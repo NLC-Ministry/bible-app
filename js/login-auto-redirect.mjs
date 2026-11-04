@@ -6,15 +6,21 @@
 // - LINE／FB 等內建瀏覽器：照現有規則先顯示「請用瀏覽器開啟」。
 // - 離線：照現有規則走離線閱讀。
 // - 5 分鐘內已經自動轉過一次：轉過去回來還是失效，就改顯示登入卡，不會無限轉。
+// - 上次確認身分超過 14 天（#677）：先顯示登入卡，讓會友看到上次用的登入方式。
 // 會員中心阻擋狀態（缺姓名等）不會走到這裡，那是 applyLoginGateView 的畫面。
 import { detectAuthenticationEnvironment, shouldGateInteractiveAuth } from "./auth-environment.js";
 import { OFFLINE_IDENTITY_KEY, parseOfflineIdentity, resolveUsableOfflineIdentity } from "./data/offline-identity.mjs";
 
 export const AUTO_SSO_REDIRECT_KEY = "nlc_auto_sso_redirect_at";
 export const AUTO_SSO_REDIRECT_COOLDOWN_MS = 5 * 60 * 1000;
+// 依 2026-11 那波案例訂：換方式開新帳號的會友，舊帳號最近一次登入至少是 16 天前。
+// 不必跟著 Logto Session maximum TTL（2026-11-04 為 30 天）調：身分快照滿 30 天本來就不會自動轉，
+// 門檻改成 30 天等於沒有這條規則；14～30 天回來的會友只是多按一次登入。
+export const AUTO_SSO_MAX_IDLE_MS = 14 * 24 * 60 * 60 * 1000;
 
-export function shouldAutoRedirectToSso({ hasIdentitySnapshot, embedded, online, lastRedirectAt, now }) {
+export function shouldAutoRedirectToSso({ hasIdentitySnapshot, embedded, online, lastRedirectAt, now, lastVerifiedAt }) {
   if (!hasIdentitySnapshot || embedded || !online) return false;
+  if (!Number.isFinite(lastVerifiedAt) || now - lastVerifiedAt > AUTO_SSO_MAX_IDLE_MS) return false;
   const last = Number(lastRedirectAt) || 0;
   return now - last > AUTO_SSO_REDIRECT_COOLDOWN_MS;
 }
@@ -53,7 +59,8 @@ export function maybeAutoRedirectToSso({
   } catch (_) {
     return false;
   }
-  if (!shouldAutoRedirectToSso({ hasIdentitySnapshot: !!identity, embedded, online, lastRedirectAt, now })) return false;
+  const lastVerifiedAt = Date.parse(identity?.verifiedAt || "");
+  if (!shouldAutoRedirectToSso({ hasIdentitySnapshot: !!identity, embedded, online, lastRedirectAt, now, lastVerifiedAt })) return false;
   // 記不下時間就沒辦法防循環，寧可顯示登入卡。
   try {
     storage.setItem(AUTO_SSO_REDIRECT_KEY, String(now));

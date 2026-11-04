@@ -3389,6 +3389,14 @@ body:not(.dark-theme) .settings-row-btn:hover {
   line-height: 1.6;
 }
 
+.login-method-hint {
+  margin: -1.5rem 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
 .login-gate-refresh-actions {
   width: 100%;
   margin-top: 0.15rem;
