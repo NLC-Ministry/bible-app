@@ -10,6 +10,8 @@ import {
   shouldHidePlanTeamInviteShortcut
 } from "./plan-participation-helpers.mjs";
 import { getPlanUpgradeAvailability } from "./plan-upgrade-availability.mjs";
+import { needsTeamCarryStatus } from "./team-carry-model.mjs";
+import { getPlanCarryEntries, renderTeamCarryCards } from "./team-carry.mjs";
 import { applyPlanSidebarVisibility } from "./plan-sidebar-visibility.mjs";
 import {
   accountSwitchHintMarkup,
@@ -2032,14 +2034,22 @@ function renderJoinedPlansList() {
               db.getMyReadingTeam(plan).then(async result => {
                 if (!teamContainer.parentElement) return;
                 const contexts = (result && result.success) ? getJoinedReadingTeamContexts(result.context) : [];
-                // 個人讀經中的上一個計畫隊長：卡片直接給帶隊入口（#652）。
-                const carryoverTeams = contexts.length === 0 && typeof window.getReadingTeamCarryoverTeams === "function"
-                  ? await window.getReadingTeamCarryoverTeams(plan).catch(() => [])
+                // 每張卡片讀同一份帶隊狀態（#678），兩種人數都滿隊的人不用查。
+                const carryEntries = needsTeamCarryStatus(contexts)
+                  ? await getPlanCarryEntries(plan).catch(() => [])
                   : [];
                 if (!teamContainer.parentElement) return;
+                // 個人讀經中的上一個計畫隊長：卡片直接給帶隊入口（#652）。其餘狀況顯示帶隊卡片。
+                const carryoverTeams = contexts.length === 0
+                  ? carryEntries.filter(entry => entry.state === "carry")
+                  : [];
                 const participationModel = getPlanParticipationModel(plan, contexts, { carryoverTeams });
                 participationModel.carryoverTeams = carryoverTeams;
-                teamContainer.innerHTML = renderPlanParticipationItem(participationModel);
+                teamContainer.innerHTML = `<div class="team-carry-slot" data-team-carry-slot></div>${renderPlanParticipationItem(participationModel)}`;
+                renderTeamCarryCards(
+                  teamContainer.querySelector("[data-team-carry-slot]"),
+                  carryEntries.filter(entry => !carryoverTeams.includes(entry))
+                );
                 bindPlanParticipationItemActions(card, plan, participationModel);
                 if (typeof hydrateIcons === "function") hydrateIcons(teamContainer);
               }).catch(err => {

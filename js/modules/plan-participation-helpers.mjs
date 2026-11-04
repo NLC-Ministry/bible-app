@@ -3,6 +3,7 @@
 // Extracted from plan.js so the variant logic is unit-testable in isolation:
 // plan.js references runtime globals (state, db, ...) at module load and cannot
 // be imported directly in tests, whereas this helper is pure and side-effect free.
+import { carryTeamTitle } from "./team-carry-model.mjs";
 
 function summarizeTeam(context) {
   const team = context.team || {};
@@ -30,7 +31,7 @@ function carryoverModel(teams) {
   if (teams.length === 1) {
     return {
       variant: "carryover",
-      title: `帶「${first.name || "我的團隊"}」加入`,
+      title: carryTeamTitle(first),
       description: "上一個計畫的隊伍可直接帶入",
       tone: "brand",
       icon: "people",
@@ -47,7 +48,7 @@ function carryoverModel(teams) {
   };
 }
 
-// carryoverTeams：getReadingTeamCarryoverTeams 的結果（[{ sourceTeamId, name, division, memberCount }]）。
+// carryoverTeams：帶隊狀態裡 state 是 carry 的幾筆（[{ sourceTeamId, name, division, memberCount }]，見 team-carry.mjs）。
 export function getPlanParticipationModel(plan, contexts = [], { carryoverTeams = [] } = {}) {
   const normalizedContexts = Array.isArray(contexts) ? contexts.filter(Boolean) : [];
   const divisions = [3, 6];

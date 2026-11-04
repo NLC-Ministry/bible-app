@@ -303,6 +303,10 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "join_reading_team_by_code",
   "get_reading_team_carryover_offer",
   "carry_reading_teams_to_stage",
+  "get_reading_team_carry_status",
+  "take_over_reading_team_carry",
+  "backfill_reading_team_from_source",
+  "join_carried_reading_team",
   "leave_reading_team",
   "remove_reading_team_member",
   "disband_reading_team",
@@ -562,7 +566,9 @@ const BATCH_RPC_FUNCTIONS = new Set([
   "get_quiz_notifications",
   "get_exam_notifications",
   "issue_thread_unread_summary",
-  "get_commentary_review_notifications"
+  "get_commentary_review_notifications",
+  // 首頁的帶隊狀態（#678），跟其他首頁讀取併成同一個請求
+  "get_reading_team_carry_status"
 ]);
 
 function jsonResponse(body: unknown, status = 200) {

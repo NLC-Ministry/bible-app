@@ -86,6 +86,8 @@ const SCOPED_TO_CHURCH_PLAN = [
   "get_unjoined_plan_members",
   "send_plan_join_invitation",
   "get_my_reading_team",
+  "get_reading_team_carry_status",
+  "_reading_team_enroll_member",
   "get_pastoral_zone_leaderboard",
   "get_personal_plan_ranking_summary",
   "get_reading_team_leaderboards",

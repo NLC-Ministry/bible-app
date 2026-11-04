@@ -47,7 +47,7 @@ describe("getPlanParticipationModel", () => {
     expect(m.variant).toBe("carryover");
     expect(m.icon).toBe("people");
     expect(m.tone).toBe("brand");
-    expect(m.title).toBe("帶「光鹽」加入");
+    expect(m.title).toBe("帶「光鹽」進入這個月的計畫");
     expect(m.description).toBe("上一個計畫的隊伍可直接帶入");
     expect(m.action).toEqual({ label: "帶隊加入", division: 6, action: "carry-team" });
   });

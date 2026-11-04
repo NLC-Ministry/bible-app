@@ -25,7 +25,9 @@ export const BATCHABLE_RPC_FUNCTIONS = new Set([
   "get_quiz_notifications",
   "get_exam_notifications",
   "issue_thread_unread_summary",
-  "get_commentary_review_notifications"
+  "get_commentary_review_notifications",
+  // 首頁的帶隊狀態（#678），跟其他首頁讀取併成同一個請求
+  "get_reading_team_carry_status"
 ]);
 
 export const MAX_BATCH_QUERIES = 25;

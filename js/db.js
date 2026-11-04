@@ -4014,6 +4014,11 @@ const db = {
       captain_must_disband_team: "隊長需解散尚未成隊的團隊，不能直接退出。",
       team_carryover_captain_required: "只有上一階段的原隊長可以帶領全隊進入下一階段。",
       team_carryover_member_conflict: "原團隊中有隊員已加入下一階段的其他團隊，無法整隊帶入。",
+      team_takeover_not_open: "計畫開始滿 3 天後，隊員才能接手帶隊。",
+      team_takeover_member_required: "只有上個月的隊員可以接手帶隊。",
+      team_backfill_captain_required: "只有上個月的隊長、而且在這個計畫自己當隊長，才能補帶隊員。",
+      team_backfill_already_carried: "這支隊伍已經帶入這個計畫了，不能再補帶。",
+      team_join_carried_member_required: "只有上個月的隊員可以直接加入這支隊伍。",
       target_stage_not_open: "下一階段尚未開放報名。",
       previous_stage_not_found: "找不到上一階段的團隊資料。",
       team_captain_required: "只有隊長可以解散團隊。",
@@ -4051,7 +4056,10 @@ const db = {
     "disband_reading_team",
     "rename_reading_team",
     "transfer_reading_team_captain",
-    "carry_reading_teams_to_stage"
+    "carry_reading_teams_to_stage",
+    "take_over_reading_team_carry",
+    "backfill_reading_team_from_source",
+    "join_carried_reading_team"
   ]),
 
   async _callReadingTeamRpc(functionName, args) {
@@ -4729,12 +4737,51 @@ const db = {
   },
 
   // division：只帶那一組（3 / 6）；不給 = 隊長在上一個計畫的所有組別。
-  async carryReadingTeamsToStage(plan, division = null) {
+  // teamName：原隊名被用走時，隊長改的新隊名（#678）。
+  async carryReadingTeamsToStage(plan, division = null, teamName = null) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "找不到下一階段計畫。" };
     const args = { p_target_global_plan_id: planId };
     if ([3, 6].includes(Number(division))) args.p_division = Number(division);
+    if (teamName) args.p_team_name = teamName;
     return this._callReadingTeamRpc("carry_reading_teams_to_stage", args);
+  },
+
+  // 登入者在開放中階段的帶隊狀態（#678）。入口都透過 team-carry.mjs 共用同一份，不要直接呼叫。
+  async getReadingTeamCarryStatus() {
+    const result = await this._callReadingTeamRpc("get_reading_team_carry_status", {});
+    return result.success
+      ? { success: true, context: result.data || { teams: [] } }
+      : result;
+  },
+
+  // 階段開始滿 3 天還沒帶入，原隊員接手當新隊長（#678）。
+  async takeOverReadingTeamCarry(plan, sourceTeamId, teamName = null) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到這個計畫。" };
+    const args = { p_target_global_plan_id: planId, p_source_team_id: sourceTeamId };
+    if (teamName) args.p_team_name = teamName;
+    return this._callReadingTeamRpc("take_over_reading_team_carry", args);
+  },
+
+  // 隊長自己的隊還有空位時，把上月隊員補進來（#678）。
+  async backfillReadingTeamFromSource(plan, sourceTeamId) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到這個計畫。" };
+    return this._callReadingTeamRpc("backfill_reading_team_from_source", {
+      p_target_global_plan_id: planId,
+      p_source_team_id: sourceTeamId
+    });
+  },
+
+  // 隊伍已被帶入時，原隊長或被略過的隊員一鍵加入（#678）。
+  async joinCarriedReadingTeam(plan, sourceTeamId) {
+    const planId = this._readingTeamPlanId(plan);
+    if (!planId) return { success: false, message: "找不到這個計畫。" };
+    return this._callReadingTeamRpc("join_carried_reading_team", {
+      p_target_global_plan_id: planId,
+      p_source_team_id: sourceTeamId
+    });
   },
 
   // carry_reading_teams_to_stage 的略過原因（20260928101011，#321）→ 給隊長看的說明。
@@ -4749,7 +4796,8 @@ const db = {
     const memberMessages = {
       already_in_target_team: names => `${names}已在這個計畫加入其他團隊，未一併帶入。`,
       plan_requires_pastoral_zone: names => `${names}還沒設定牧區，未一併帶入；請他們到會員中心設定牧區後，再用邀請碼加入。`,
-      plan_audience_restricted: names => `${names}的大區不在這個計畫的開放範圍，未一併帶入。`
+      plan_audience_restricted: names => `${names}的大區不在這個計畫的開放範圍，未一併帶入。`,
+      team_full: names => `隊伍已額滿，${names}未一併帶入。`
     };
     const captainBlocked = skippedTeam
       ? (captainMessages[skippedTeam.reason] || `目前沒辦法帶隊進入${target}，請稍後再試。`)
