@@ -36,6 +36,9 @@ export function joinMethod(functions) {
   const list = arr(functions).map(String);
   if (list.includes("admin_api_team_add_member")) return { key: "admin", label: "後台加入" };
   if (list.includes("carry_reading_teams_to_stage")) return { key: "carry", label: "帶隊帶入" };
+  if (list.includes("take_over_reading_team_carry")) return { key: "carry", label: "隊員接手帶入" };
+  if (list.includes("backfill_reading_team_from_source")) return { key: "carry", label: "隊長補帶" };
+  if (list.includes("join_carried_reading_team")) return { key: "carry", label: "原隊員一鍵加入" };
   if (list.includes("create_reading_team")) return { key: "create", label: "建隊" };
   if (list.includes("join_reading_team_by_code")) return { key: "code", label: "邀請碼" };
   if (list.length === 0) return { key: "manual", label: "直接改資料庫（管理員）" };

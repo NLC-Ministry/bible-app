@@ -5,6 +5,7 @@ import { DevotionalSharingController } from "./devotional-sharing-controller.mjs
 import { formatUpcomingPlanCountdown } from "./home-plan-countdown.mjs";
 import { refreshLightningQuizHomeCard } from "./lightning-quiz.mjs";
 import { refreshLightningQuizRankingCard } from "./lightning-quiz-ranking.mjs";
+import { refreshTeamCarryHomeCard } from "./team-carry.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 import { formatPlanEndDate, getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
 import { isPlanCheckInClosed } from "../data/plan-checkin-window.mjs";
@@ -197,6 +198,7 @@ export function updateDashboardView() {
   renderDailyVerse();
   updateAnnouncementsList();
   void refreshExamHomeBanner();
+  void refreshTeamCarryHomeCard();
   void refreshLightningQuizHomeCard();
   void refreshLightningQuizRankingCard();
 

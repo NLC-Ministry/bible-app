@@ -87,7 +87,10 @@ describe("reading team member removal refresh", () => {
       isTeamFull,
       countScheduleDaysCoveredByChapters,
       countExpectedScheduleDays,
-      countLateCompletedDays
+      countLateCompletedDays,
+      carryTeamWithConfirm: vi.fn(),
+      getPlanCarryEntries: vi.fn().mockResolvedValue([]),
+      renderTeamCarryCards: vi.fn()
     });
 
     dom.window.document.getElementById("parent").addEventListener("click", parentClick);

@@ -78,7 +78,10 @@ describe("reading team dialog navigation", () => {
       countScheduleDaysCoveredByChapters,
       countExpectedScheduleDays,
       countLateCompletedDays,
-      getRoundProgressDisplay
+      getRoundProgressDisplay,
+      carryTeamWithConfirm: vi.fn(),
+      getPlanCarryEntries: vi.fn().mockResolvedValue([]),
+      renderTeamCarryCards: vi.fn()
     });
 
     dom.window.eval(teamUi.replace(/^import[^;]+;\s*/gm, ""));

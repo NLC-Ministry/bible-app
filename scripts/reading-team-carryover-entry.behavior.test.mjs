@@ -14,7 +14,11 @@ const TEAM3 = { sourceTeamId: "t3", name: "恩典同行隊", division: 3, member
 const TEAM6 = { sourceTeamId: "t6", name: "喜樂六人行", division: 6, memberCount: 5 };
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
-const offer = teams => ({ success: true, context: { eligible: teams.length > 0, teams } });
+// #678 起入口讀共用的帶隊狀態。
+const offer = teams => ({
+  success: true,
+  context: { teams: teams.map(team => ({ ...team, state: "carry", targetPlanId: OCT.id, targetPlanName: OCT.name, roster: [] })) }
+});
 
 let db;
 
@@ -25,7 +29,8 @@ beforeAll(async () => {
   globalThis.showToast = vi.fn();
   globalThis.hydrateIcons = () => {};
   db = {
-    getReadingTeamCarryoverOffer: vi.fn(),
+    _readingTeamPlanId: plan => plan.globalPlanId,
+    getReadingTeamCarryStatus: vi.fn(),
     carryReadingTeamsToStage: vi.fn(),
     getMyReadingTeam: vi.fn(),
     createReadingTeam: vi.fn(),
@@ -41,24 +46,25 @@ beforeAll(async () => {
 beforeEach(() => {
   document.body.innerHTML = "";
   vi.clearAllMocks();
+  window.dispatchEvent(new CustomEvent("reading-team:changed"));
   globalThis.alert = vi.fn();
   window.showConfirmDialog = vi.fn().mockResolvedValue(true);
 });
 
 describe("carry-over when joining the next plan", () => {
   it("goes straight to the normal join when there is nothing to carry", async () => {
-    db.getReadingTeamCarryoverOffer.mockResolvedValue(offer([]));
+    db.getReadingTeamCarryStatus.mockResolvedValue(offer([]));
     await expect(window.offerReadingTeamCarryoverOnJoin(OCT)).resolves.toBe("none");
     expect(document.querySelector("#reading-team-carryover-join-dialog")).toBeNull();
   });
 
   it("does not ask for non-stage plans", async () => {
     await expect(window.offerReadingTeamCarryoverOnJoin({ ...OCT, planKind: "standard" })).resolves.toBe("none");
-    expect(db.getReadingTeamCarryoverOffer).not.toHaveBeenCalled();
+    expect(db.getReadingTeamCarryStatus).not.toHaveBeenCalled();
   });
 
   it("offers one button per team and carries only the chosen division", async () => {
-    db.getReadingTeamCarryoverOffer.mockResolvedValue(offer([TEAM3, TEAM6]));
+    db.getReadingTeamCarryStatus.mockResolvedValue(offer([TEAM3, TEAM6]));
     db.carryReadingTeamsToStage.mockResolvedValue({
       success: true,
       data: { teams: [{ division: 6, skippedMembers: [{ name: "小明", reason: "plan_requires_pastoral_zone" }] }], skippedTeams: [] }
@@ -77,13 +83,13 @@ describe("carry-over when joining the next plan", () => {
 
     buttons[1].click();
     await expect(choice).resolves.toBe("carried");
-    expect(db.carryReadingTeamsToStage).toHaveBeenCalledWith(OCT, 6);
+    expect(db.carryReadingTeamsToStage).toHaveBeenCalledWith(OCT, 6, null);
     expect(alert).toHaveBeenCalledWith(`已將「喜樂六人行」帶入「${OCT.name}」。\nskipped:小明`);
     expect(document.querySelector("#reading-team-carryover-join-dialog")).toBeNull();
   });
 
   it("lets the captain join alone, or close without doing anything", async () => {
-    db.getReadingTeamCarryoverOffer.mockResolvedValue(offer([TEAM3]));
+    db.getReadingTeamCarryStatus.mockResolvedValue(offer([TEAM3]));
     let choice = window.offerReadingTeamCarryoverOnJoin(OCT);
     await flush();
     document.querySelector("[data-carryover-solo]").click();
@@ -97,7 +103,7 @@ describe("carry-over when joining the next plan", () => {
   });
 
   it("stays open with an explanation when the captain can't join", async () => {
-    db.getReadingTeamCarryoverOffer.mockResolvedValue(offer([TEAM3]));
+    db.getReadingTeamCarryStatus.mockResolvedValue(offer([TEAM3]));
     db.carryReadingTeamsToStage.mockResolvedValue({
       success: true,
       data: { teams: [], skippedTeams: [{ division: 3, reason: "plan_requires_pastoral_zone" }] }
@@ -118,10 +124,11 @@ describe("carry-over at the top of the 我的團隊 dialog", () => {
   it("lists only divisions not joined yet, and shows the new team after carrying", async () => {
     const myTeam6 = { team: { id: "n6", division: 6, name: "新六人隊", captainId: "captain" }, members: [] };
     const myTeam3 = { team: { id: "n3", division: 3, name: "恩典同行隊", captainId: "captain" }, members: [] };
+    window.dispatchEvent(new CustomEvent("reading-team:changed"));
     db.getMyReadingTeam
       .mockResolvedValueOnce({ success: true, context: { teams: [myTeam6] } })
       .mockResolvedValue({ success: true, context: { teams: [myTeam3, myTeam6] } });
-    db.getReadingTeamCarryoverOffer.mockResolvedValue(offer([TEAM3, TEAM6]));
+    db.getReadingTeamCarryStatus.mockResolvedValue(offer([TEAM3, TEAM6]));
     db.carryReadingTeamsToStage.mockResolvedValue({
       success: true,
       data: { teams: [{ division: 3, skippedMembers: [] }], skippedTeams: [] }
@@ -141,7 +148,7 @@ describe("carry-over at the top of the 我的團隊 dialog", () => {
     await flush();
     await flush();
     expect(window.showConfirmDialog).toHaveBeenCalled();
-    expect(db.carryReadingTeamsToStage).toHaveBeenCalledWith(OCT, 3);
+    expect(db.carryReadingTeamsToStage).toHaveBeenCalledWith(OCT, 3, null);
     expect(alert).toHaveBeenCalledWith(`已將「恩典同行隊」帶入「${OCT.name}」。`);
     expect(db.getMyReadingTeam).toHaveBeenCalledTimes(2);
     expect(document.querySelector("[data-team-carryover]")).toBeNull();
@@ -149,7 +156,7 @@ describe("carry-over at the top of the 我的團隊 dialog", () => {
 
   it("stays hidden when there is nothing to carry", async () => {
     db.getMyReadingTeam.mockResolvedValue({ success: true, context: { teams: [] } });
-    db.getReadingTeamCarryoverOffer.mockResolvedValue(offer([]));
+    db.getReadingTeamCarryStatus.mockResolvedValue(offer([]));
     await window.openReadingTeamDialog(OCT);
     await flush();
     expect(document.querySelector("[data-team-carryover]").hidden).toBe(true);
@@ -157,7 +164,7 @@ describe("carry-over at the top of the 我的團隊 dialog", () => {
 
   it("does nothing when the captain cancels the confirmation", async () => {
     db.getMyReadingTeam.mockResolvedValue({ success: true, context: { teams: [] } });
-    db.getReadingTeamCarryoverOffer.mockResolvedValue(offer([TEAM3]));
+    db.getReadingTeamCarryStatus.mockResolvedValue(offer([TEAM3]));
     window.showConfirmDialog = vi.fn().mockResolvedValue(false);
     await window.openReadingTeamDialog(OCT);
     await flush();
