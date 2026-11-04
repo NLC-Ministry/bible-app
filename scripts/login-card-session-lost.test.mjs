@@ -1,13 +1,14 @@
 // #645：登入卡
 // - 背景確認發現會員中心阻擋狀態時，畫面跟冷啟動一樣（applyLoginGateView），不是「連線錯誤」卡。
 // - 缺姓名的畫面多一個換回原本登入方式的連結（#648 起文字是「找不到以前的進度？換回上次的登入方式」）。
-// - 一般登入畫面只有歡迎詞＋登入按鈕；紅點狀態只在真正的連線錯誤／登入失效時出現。
-// - 曾經登入過的人 token 失效時直接轉去 SSO，5 分鐘內只轉一次。
+// - 一般登入畫面是歡迎詞＋登入方式提醒（#677）＋登入按鈕；紅點狀態只在真正的連線錯誤／登入失效時出現。
+// - 曾經登入過的人 token 失效時直接轉去 SSO，5 分鐘內只轉一次；上次確認身分超過 14 天就先顯示登入卡（#677）。
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyLoginGateView, getLoginGateCopy } from "../js/login-onboarding-gate.mjs";
 import {
+  AUTO_SSO_MAX_IDLE_MS,
   AUTO_SSO_REDIRECT_COOLDOWN_MS,
   AUTO_SSO_REDIRECT_KEY,
   maybeAutoRedirectToSso,
@@ -39,10 +40,9 @@ function gateDom() {
 const hidden = (el) => !el || el.classList.contains("hidden");
 
 describe("login card copy and view (#645)", () => {
-  it("first-time visitors see only the welcome text and the sign-in button", () => {
+  it("first-time visitors see the welcome text and the sign-in button, without the switch link or status", () => {
     const { doc, els } = gateDom();
     applyLoginGateView({ block: null, hasTokens: false, ...els });
-    expect(doc.querySelector("[data-login-method-hint]")).toBeNull();
     expect(hidden(doc.querySelector("[data-login-switch-account]"))).toBe(true);
     expect(hidden(doc.getElementById("gate-status-container"))).toBe(true);
     expect(els.buttonEl.dataset.loginGateMode).toBe("sso");
@@ -97,10 +97,24 @@ describe("login card copy and view (#645)", () => {
 });
 
 describe("auto SSO redirect decision (#645)", () => {
-  const base = { hasIdentitySnapshot: true, embedded: false, online: true, lastRedirectAt: 0, now: 10_000_000 };
+  const base = {
+    hasIdentitySnapshot: true,
+    embedded: false,
+    online: true,
+    lastRedirectAt: 0,
+    now: 10_000_000_000,
+    lastVerifiedAt: 10_000_000_000 - 86_400_000
+  };
 
   it("redirects a returning member", () => {
     expect(shouldAutoRedirectToSso(base)).toBe(true);
+  });
+
+  it("shows the card first when identity was last confirmed more than 14 days ago (#677)", () => {
+    expect(AUTO_SSO_MAX_IDLE_MS).toBe(14 * 86_400_000);
+    expect(shouldAutoRedirectToSso({ ...base, lastVerifiedAt: base.now - AUTO_SSO_MAX_IDLE_MS })).toBe(true);
+    expect(shouldAutoRedirectToSso({ ...base, lastVerifiedAt: base.now - AUTO_SSO_MAX_IDLE_MS - 1 })).toBe(false);
+    expect(shouldAutoRedirectToSso({ ...base, lastVerifiedAt: NaN })).toBe(false);
   });
 
   it("never for first-time visitors, in-app browsers, or offline", () => {
@@ -123,7 +137,20 @@ describe("auto SSO redirect decision (#645)", () => {
       store
     };
   }
-  const snapshot = (now) => JSON.stringify({ verifiedAt: new Date(now - 86_400_000).toISOString(), profile: { id: "p1" } });
+  const snapshot = (now, verifiedDaysAgo = 1) => JSON.stringify({ verifiedAt: new Date(now - verifiedDaysAgo * 86_400_000).toISOString(), profile: { id: "p1" } });
+
+  it("the 14-day rule reads the snapshot: 15 days ago shows the card, 3 days ago redirects (#677)", () => {
+    const now = 50_000_000_000;
+    const launch = vi.fn(() => true);
+    const stale = memoryStorage({ [OFFLINE_IDENTITY_KEY]: snapshot(now, 15) });
+    expect(maybeAutoRedirectToSso({ storage: stale, online: true, embedded: false, now, launch })).toBe(false);
+    expect(launch).not.toHaveBeenCalled();
+    expect(stale.store.has(AUTO_SSO_REDIRECT_KEY)).toBe(false);
+
+    const recent = memoryStorage({ [OFFLINE_IDENTITY_KEY]: snapshot(now, 3) });
+    expect(maybeAutoRedirectToSso({ storage: recent, online: true, embedded: false, now, launch })).toBe(true);
+    expect(launch).toHaveBeenCalledTimes(1);
+  });
 
   it("records the attempt, then the second session loss within 5 minutes shows the card", () => {
     const now = 50_000_000;

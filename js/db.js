@@ -68,6 +68,7 @@ import {
   launchMemberHubContinue
 } from './login-onboarding-gate.mjs';
 import { maybeAutoRedirectToSso } from './login-auto-redirect.mjs';
+import { rememberLoginMethod, renderLoginMethodHint } from './login-method-memory.mjs';
 import { SESSION_EXPIRED_MESSAGE, isAuthExpiredError } from './copy/auth-messages.mjs';
 import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
 import {
@@ -761,7 +762,8 @@ const db = {
           }
         }
 
-        // #645：token 已失效（被拒時清掉了）但這台裝置登入過 → 直接轉 SSO，不先顯示登入卡。
+        // #645：token 已失效（被拒時清掉了）但這台裝置登入過 → 直接轉 SSO，不先顯示登入卡；
+        // 上次確認身分超過 14 天就先顯示登入卡（#677，見 login-auto-redirect.mjs）。
         // 剛從 Logto 回來（取消或失敗）不轉，免得又被送回去。
         if (!hasOAuthCallback && typeof auth !== "undefined" && !auth.isLoggedIn() && this.autoRedirectToSso()) {
           return false;
@@ -1463,6 +1465,7 @@ const db = {
     document.querySelector("#login-gate [data-login-switch-account]")?.classList.add("hidden");
     document.getElementById("login-gate-refresh-actions")?.classList.add("hidden");
     document.getElementById("gate-status-container")?.classList.remove("hidden");
+    renderLoginMethodHint(document.getElementById("login-gate"));
 
     const btnGoogleGate = document.getElementById("btn-gate-google-login");
     if (btnGoogleGate) {
@@ -2032,6 +2035,14 @@ const db = {
       } else {
         state.activePlan = null;
         state.activePlans = [];
+      }
+      // #677：計畫清單真的拿到了才記登入方式；要靠它判斷是不是分裂開出來的空帳號。
+      if (user.oidc && !fromSnapshot) {
+        rememberLoginMethod({
+          user: state.currentUser,
+          accountCreatedAt: state.currentUser?.account_created_at,
+          hasAnyPlan: state.activePlans.length > 0
+        });
       }
     }
 
