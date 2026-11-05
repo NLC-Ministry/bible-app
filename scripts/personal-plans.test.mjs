@@ -74,8 +74,10 @@ const PERSONAL_EXCLUDED = [
 ];
 // 之後的 migration 新增、同樣明確排除個人計畫的（不在 #473 那份 migration 裡，所以不跟上面一起檢查授權）。
 //   admin_api_reading_usage（#568）：每天章數和上面三支使用率函式同樣跳過個人計畫的打卡
+//   get_plan_stats_roster_summary（#673）：get_plan_stats_roster 的彙總版，一樣 NOT plan.is_personal
 const PERSONAL_EXCLUDED_LATER = [
-  "admin_api_reading_usage"
+  "admin_api_reading_usage",
+  "get_plan_stats_roster_summary"
 ];
 // 依某個教會計畫（global_plan_id）查：個人計畫的 global_plan_id 一定是空的。
 const SCOPED_TO_CHURCH_PLAN = [

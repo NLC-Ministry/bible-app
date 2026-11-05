@@ -48,6 +48,40 @@ export function buildPlanStatsRosterArgs(rawArgs: any, visibleIds: string[] | nu
   };
 }
 
+// 計畫統計名冊的彙總（#673）：範圍和別名的處理同 buildPlanStatsRosterArgs。比對尺只查格式、不部分採用：
+// 少幾章數字就會錯，格式不對就整份當沒有（SQL 回 makeup = null，前端看到就退回舊路徑）。
+export const PLAN_STATS_ROSTER_SUMMARY_RPC = "get_plan_stats_roster_summary";
+
+const TIMEZONE_PATTERN = /^[A-Za-z0-9_+\-/]{1,64}$/;
+// 整本聖經 1189 章 × 三遍疊在同一份 days，留一點餘裕
+const MAX_SCHEDULE_ENTRIES = 5000;
+
+function sanitizeRosterSchedule(rawSchedule: unknown): [number, string, number][] | null {
+  if (!Array.isArray(rawSchedule) || rawSchedule.length > MAX_SCHEDULE_ENTRIES) return null;
+  const isEntry = (entry: unknown) => Array.isArray(entry)
+    && entry.length === 3
+    && Number.isInteger(entry[0]) && entry[0] >= 0
+    && typeof entry[1] === "string" && entry[1].length > 0 && entry[1].length <= MAX_TEXT_LENGTH
+    && Number.isInteger(entry[2]) && entry[2] > 0;
+  return rawSchedule.every(isEntry) ? rawSchedule as [number, string, number][] : null;
+}
+
+export function buildPlanStatsRosterSummaryArgs(rawArgs: any, visibleIds: string[] | null, actorId: string) {
+  const { p_plan_aliases, p_pastoral_zone } = buildPlanStatsRosterArgs(rawArgs, visibleIds, actorId);
+  const timezone = rawArgs?.p_timezone;
+  const startDate = rawArgs?.p_start_date;
+  const validStart = typeof startDate === "string" && DATE_PATTERN.test(startDate);
+  return {
+    p_plan_aliases,
+    p_pastoral_zone,
+    p_timezone: typeof timezone === "string" && TIMEZONE_PATTERN.test(timezone) ? timezone : null,
+    p_start_date: validStart ? startDate : null,
+    p_schedule: validStart ? sanitizeRosterSchedule(rawArgs?.p_schedule) : null,
+    ...resolvePlanStatsScope(visibleIds, actorId),
+    p_actor_id: actorId,
+  };
+}
+
 // App 管理分頁（#551）的統計：範圍一樣只看 getVisibleProfileIds，計畫只收 uuid 與短字串。
 export const PASTORAL_OVERVIEW_RPC = "get_pastoral_overview";
 
