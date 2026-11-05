@@ -213,7 +213,6 @@ describe("daily church quiz", () => {
   // #308 起 dashboard 只回會友自己的 myQuiz，不再算各小組名單（0087 的 MATERIALIZED 優化跟著消失）
   it("loads the organization dashboard without per-group member subqueries", () => {
     expect(dashboardOptimization).toContain("CREATE OR REPLACE FUNCTION public.get_daily_quiz_dashboard");
-    expect(dashboardOptimization).toContain("idx_quiz_publications_plan_date_group");
     expect(dashboardOptimization).not.toContain("SELECT COUNT(*) FROM public.profiles member WHERE public.profile_belongs_to_quiz_group");
   });
 

@@ -2583,3 +2583,21 @@ describe("測驗統計 exam_get_stats（#675 特徵）", () => {
     });
   });
 });
+
+describe("測驗相關索引（#675）", () => {
+  it("新索引都建好；重複的都刪了，涵蓋它們的唯一索引都還在", async () => {
+    const { rows } = await db.query(`SELECT indexname FROM pg_indexes WHERE schemaname = 'public'`);
+    const names = new Set(rows.map(row => row.indexname));
+    for (const name of [
+      "idx_quiz_publications_quiz_id", "idx_reading_teams_carried_from_team_id",
+      "idx_exam_attempts_paper_is_test", "idx_exam_attempts_official_attempt_id",
+      "exam_questions_paper_id_section_position_key", "quiz_publications_global_plan_id_quiz_date_small_group_id_key",
+      "exam_answers_attempt_id_question_id_key", "lightning_quiz_attempts_question_id_user_id_key",
+      "verse_notes_user_id_book_chapter_verse_key", "highlights_user_id_book_chapter_verse_key"
+    ]) expect(names.has(name), name).toBe(true);
+    for (const name of [
+      "idx_exam_questions_paper", "idx_quiz_publications_plan_date_group", "idx_exam_answers_attempt",
+      "idx_lightning_quiz_attempts_question", "idx_verse_notes_user_chapter", "idx_highlights_user_chapter"
+    ]) expect(names.has(name), name).toBe(false);
+  });
+});
