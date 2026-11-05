@@ -11,6 +11,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BUCKET = "issue-report-shots";
+const PAGE_SIZE = 1000;
+const LIST_CONCURRENCY = 5;
+const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,41 +22,73 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-async function sweepOrphanShots(supabase: any): Promise<number> {
-  // DB 端所有還在用的路徑
-  const used = new Set<string>();
-  let from = 0;
-  const page = 1000;
-  for (;;) {
-    const { data, error } = await supabase
-      .from("issue_report_messages")
-      .select("attachment_path")
-      .not("attachment_path", "is", null)
-      .range(from, from + page - 1);
-    if (error) throw error;
-    (data || []).forEach((r: any) => {
-      if (r.attachment_path && r.attachment_path !== "pending") used.add(r.attachment_path);
+// 列出某一層的全部項目。一邊翻頁一邊刪會讓 offset 位移，所以呼叫端要全部列完才能開始刪。
+async function listAllEntries(supabase: any, prefix: string): Promise<any[]> {
+  const entries: any[] = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data, error } = await supabase.storage.from(BUCKET).list(prefix, {
+      limit: PAGE_SIZE,
+      offset,
+      sortBy: { column: "name", order: "asc" }
     });
-    if (!data || data.length < page) break;
-    from += page;
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error(`storage list returned no data: ${prefix || "(root)"}`);
+    entries.push(...data);
+    if (data.length < PAGE_SIZE) return entries;
+  }
+}
+
+// 上傳後才寫回 attachment_path，而且看不出時間的項目（子資料夾）也不是檔案：
+// 只有確定放超過寬限期的才算候選。
+function isPastGracePeriod(entry: any, now: number): boolean {
+  const uploadedAt = Math.max(Date.parse(entry?.created_at), Date.parse(entry?.updated_at));
+  return Number.isFinite(uploadedAt) && now - uploadedAt >= ORPHAN_MIN_AGE_MS;
+}
+
+// DB 端所有還在用的路徑。漏掉一筆就會誤刪檔案，所以：
+// - 用 id 當游標（不用 offset）：順序穩定，翻頁途中有列被刪也不會跳過後面的列（#351 同類問題）。
+// - 讀到空頁才算結束：伺服器每頁上限比 PAGE_SIZE 小時，短頁不代表讀完了。
+// - 讀取失敗一律往外丟，呼叫端就不會走到刪除。
+async function readUsedPaths(supabase: any): Promise<Set<string>> {
+  const used = new Set<string>();
+  let lastId: string | null = null;
+  for (;;) {
+    let query = supabase
+      .from("issue_report_messages")
+      .select("id, attachment_path")
+      .not("attachment_path", "is", null);
+    if (lastId !== null) query = query.gt("id", lastId);
+    const { data, error } = await query.order("id", { ascending: true }).limit(PAGE_SIZE);
+    if (error) throw error;
+    if (!Array.isArray(data)) throw new Error("issue_report_messages page returned no data");
+    if (data.length === 0) return used;
+    for (const row of data) {
+      if (row.attachment_path && row.attachment_path !== "pending") used.add(row.attachment_path);
+    }
+    lastId = data[data.length - 1].id;
+  }
+}
+
+async function sweepOrphanShots(supabase: any): Promise<number> {
+  // Storage 端：<report_id>/<file> 兩層。任何一頁失敗就整次放棄，下次排程再掃。
+  const now = Date.now();
+  const candidates: string[] = [];
+  const folders = (await listAllEntries(supabase, "")).filter((folder) => folder?.name);
+  for (let i = 0; i < folders.length; i += LIST_CONCURRENCY) {
+    const batch = folders.slice(i, i + LIST_CONCURRENCY);
+    const listed = await Promise.all(batch.map((folder) => listAllEntries(supabase, folder.name)));
+    listed.forEach((entries, index) => {
+      for (const entry of entries) {
+        if (entry?.name && isPastGracePeriod(entry, now)) {
+          candidates.push(`${batch[index].name}/${entry.name}`);
+        }
+      }
+    });
   }
 
-  // Storage 端：<report_id>/<file> 兩層
-  const orphans: string[] = [];
-  const { data: folders, error: folderErr } = await supabase.storage.from(BUCKET).list("", { limit: 1000 });
-  if (folderErr) throw folderErr;
-  for (const folder of folders || []) {
-    if (!folder?.name) continue;
-    const { data: files, error: fileErr } = await supabase.storage
-      .from(BUCKET)
-      .list(folder.name, { limit: 1000 });
-    if (fileErr) continue;
-    for (const f of files || []) {
-      if (!f?.name) continue;
-      const full = `${folder.name}/${f.name}`;
-      if (!used.has(full)) orphans.push(full);
-    }
-  }
+  // 列完才讀 DB：候選檔案都比這份路徑清單舊，不會把清掃途中新上傳的附件當孤兒。
+  const used = await readUsedPaths(supabase);
+  const orphans = candidates.filter((path) => !used.has(path));
 
   let removed = 0;
   for (let i = 0; i < orphans.length; i += 100) {
