@@ -331,7 +331,11 @@ const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
 const ADMIN_RPC_FUNCTIONS = new Set([
   "get_admin_registration_statistics",
   "set_profile_managed_scopes",
-  "create_region_stage_cohort"
+  "create_region_stage_cohort",
+  // 克勞斯店家名單（#679）：只給 role = admin；SQL 也重查，異動在 SQL 同一個交易寫稽核
+  "admin_list_voucher_merchants",
+  "admin_search_voucher_merchant_candidates",
+  "admin_set_voucher_merchant"
 ]);
 const QUIZ_RPC_FUNCTIONS = new Set([
   // 發佈只剩每天 00:00 的自動發佈（service role，#306）；審核、換版、手動／排程發佈
@@ -499,7 +503,15 @@ const LIGHTNING_QUIZ_RPC_FUNCTIONS = new Set([
   // 後台得獎與兌換總覽（#614）：改已發出的券的期限
   "admin_set_lightning_quiz_vouchers_expiry",
   // 開始後更正正解／詳解並重新判分（#616）
-  "admin_set_lightning_quiz_answer_key"
+  "admin_set_lightning_quiz_answer_key",
+  // 克勞斯店家查看紀錄（#679）：SQL 依注入的 p_actor_id 查授權名單，每次重查
+  "get_my_voucher_merchant_access",
+  "get_voucher_merchant_vouchers",
+  "lookup_voucher_merchant_code",
+  // 同上的管理員三支（也在 ADMIN_RPC_FUNCTIONS），在這裡才會注入 p_actor_id
+  "admin_list_voucher_merchants",
+  "admin_search_voucher_merchant_candidates",
+  "admin_set_voucher_merchant"
 ]);
 // 個人統計「累積閱讀章數」由伺服器算（#348）；已關閉計畫的已讀章節摘要（#474）。
 // 只算呼叫者自己的紀錄，所以一定要注入 p_actor_id，SQL 端不接受前端傳入的 user id。

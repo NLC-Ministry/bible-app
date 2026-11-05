@@ -1785,3 +1785,377 @@ describe("月初隊伍接不上：帶隊狀態、隊員接手、補帶、重名�
     rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
   });
 });
+
+describe("克勞斯店家查看兌換紀錄（#679）", () => {
+  const SEED_WEEK = "2026-09-21";
+  const NOT_ON_LIST_MS = 4567;
+  const MERCHANT_KEYS = ["amount", "code", "expiresOn", "name", "rank", "redeemedAt", "redeemedVia", "riseDate", "status"];
+  const one = async (tx, sql, params) => (await tx.query(sql, params)).rows[0];
+
+  // 登入過的帳號（有 user_identities）才能被指定；ids.other 預設沒有身分。
+  const addIdentity = (tx, profileId, sub) => tx.query(
+    `INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES ($1, 'logto', $2, TRUE)`,
+    [profileId, sub]
+  );
+  const setMerchant = async (tx, profileId, enabled, actorId = ids.admin) =>
+    (await one(tx, `SELECT public.admin_set_voucher_merchant($1, $2, $3) AS r`, [profileId, enabled, actorId])).r;
+  const access = async (tx, actorId) =>
+    (await one(tx, `SELECT public.get_my_voucher_merchant_access($1) AS r`, [actorId])).r;
+  const list = async (tx, actorId, month = null) =>
+    (await one(tx, `SELECT public.get_voucher_merchant_vouchers($1, $2) AS r`, [month, actorId])).r;
+  const lookup = async (tx, actorId, code) =>
+    (await one(tx, `SELECT public.lookup_voucher_merchant_code($1, $2) AS r`, [code, actorId])).r;
+  const candidates = async (tx, query, actorId = ids.admin) =>
+    (await one(tx, `SELECT public.admin_search_voucher_merchant_candidates($1, $2) AS r`, [query, actorId])).r;
+  const merchants = async (tx, actorId = ids.admin) =>
+    (await one(tx, `SELECT public.admin_list_voucher_merchants($1) AS r`, [actorId])).r;
+
+  // 四張券：可使用／已兌換（本人）／已過期／已作廢，都是 member 得的；店家是 other。
+  const seedVouchers = async tx => {
+    await tx.query(
+      `INSERT INTO public.lightning_quiz_week_rankings (week_start, entries, display_days, display_until)
+       VALUES ($1::date, $2::jsonb, 1, $1::date + 7)`,
+      [SEED_WEEK, JSON.stringify(["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24"].map(riseDate => ({
+        riseDate,
+        winners: [{ rank: 1, userId: ids.member, name: "得獎者甲", pastoralZone: "牧區 A-1", elapsedMs: NOT_ON_LIST_MS }]
+      })))]
+    );
+    const { rows } = await tx.query(`SELECT id, code, rise_date::text AS rise_date FROM public.lightning_quiz_vouchers ORDER BY rise_date`);
+    const [available, redeemed, expired, voided] = rows;
+    await tx.query(`UPDATE public.lightning_quiz_vouchers SET redeemed_at = NOW(), redeemed_by = $2, redeemed_via = 'self' WHERE id = $1`, [redeemed.id, ids.member]);
+    await tx.query(`UPDATE public.lightning_quiz_vouchers SET expires_on = (NOW() AT TIME ZONE 'Asia/Taipei')::date - 1 WHERE id = $1`, [expired.id]);
+    await tx.query(`UPDATE public.lightning_quiz_vouchers SET voided_at = NOW() WHERE id = $1`, [voided.id]);
+    return { available, redeemed, expired, voided };
+  };
+  const asMerchant = fn => asService(async tx => {
+    await addIdentity(tx, ids.other, "merchant-sub-other");
+    await setMerchant(tx, ids.other, true);
+    return fn(tx);
+  });
+  const auditRows = async (tx, actionLike) => {
+    await tx.exec("RESET ROLE");
+    const { rows } = await tx.query(
+      `SELECT action, result, actor_id, actor_role, source, target_user_id, target_id, changes, detail
+       FROM audit.admin_events WHERE action LIKE $1 ORDER BY id`,
+      [actionLike]
+    );
+    return rows;
+  };
+  const thisMonth = tx => one(tx, `SELECT to_char(NOW() AT TIME ZONE 'Asia/Taipei', 'YYYY-MM') AS m`).then(row => row.m);
+
+  describe("權限", () => {
+    it("一般會友沒有入口，直接呼叫清單與查碼都被拒絕", async () => {
+      expect(await asService(tx => access(tx, ids.member))).toEqual({ isMerchant: false });
+      await expect(asService(tx => list(tx, ids.member))).rejects.toThrow(/voucher_merchant_required/);
+      await expect(asService(tx => lookup(tx, ids.member, "ABCDEF"))).rejects.toThrow(/voucher_merchant_required/);
+    });
+
+    it("系統管理員沒有被指定也不算店家", async () => {
+      expect(await asService(tx => access(tx, ids.admin))).toEqual({ isMerchant: false });
+      await expect(asService(tx => list(tx, ids.admin))).rejects.toThrow(/voucher_merchant_required/);
+    });
+
+    it("沒有帶呼叫者一律拒絕", async () => {
+      await expect(asService(tx => tx.query(`SELECT public.get_voucher_merchant_vouchers(NULL, NULL)`))).rejects.toThrow(/profile_required/);
+      await expect(asService(tx => tx.query(`SELECT public.lookup_voucher_merchant_code('ABCDEF', NULL)`))).rejects.toThrow(/profile_required/);
+    });
+
+    it("指定後查得到；移除後立刻查不到", async () => {
+      const outcome = await asMerchant(async tx => {
+        const before = await access(tx, ids.other);
+        await seedVouchers(tx);
+        const listed = await list(tx, ids.other);
+        await setMerchant(tx, ids.other, false);
+        const after = await access(tx, ids.other);
+        await tx.query("SAVEPOINT s");
+        const listError = await list(tx, ids.other).then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        const lookupError = await lookup(tx, ids.other, "ABCDEF").then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        return { before, listed, after, listError, lookupError };
+      });
+      expect(outcome.before).toEqual({ isMerchant: true });
+      expect(outcome.listed.vouchers.length).toBeGreaterThan(0);
+      expect(outcome.after).toEqual({ isMerchant: false });
+      expect(outcome.listError).toMatch(/voucher_merchant_required/);
+      expect(outcome.lookupError).toMatch(/voucher_merchant_required/);
+    });
+
+    it("帳號停用的店家查不到", async () => {
+      await expect(asMerchant(async tx => {
+        await tx.query(`UPDATE public.profiles SET is_active = FALSE WHERE id = $1`, [ids.other]);
+        return list(tx, ids.other);
+      })).rejects.toThrow(/profile_required/);
+    });
+
+    it("函式與資料表只給 service_role：anon／authenticated 都不能直接碰", async () => {
+      const { rows } = await db.query(
+        `SELECT p.proname,
+                has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+                has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+                has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+         FROM pg_proc p
+         WHERE p.proname IN ('get_my_voucher_merchant_access', 'get_voucher_merchant_vouchers', 'lookup_voucher_merchant_code',
+                             'admin_list_voucher_merchants', 'admin_search_voucher_merchant_candidates', 'admin_set_voucher_merchant',
+                             '_lightning_quiz_voucher_merchant_json', '_lightning_quiz_require_voucher_merchant',
+                             '_voucher_merchant_assert_admin', '_voucher_merchant_list_json')`
+      );
+      expect(rows).toHaveLength(10);
+      rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
+
+      const { rows: tables } = await db.query(
+        `SELECT c.relname, c.relrowsecurity AS rls,
+                has_table_privilege('anon', c.oid, 'SELECT') AS anon,
+                has_table_privilege('authenticated', c.oid, 'SELECT') AS authenticated,
+                has_table_privilege('service_role', c.oid, 'SELECT') AS service
+         FROM pg_class c
+         WHERE c.relname IN ('lightning_quiz_voucher_merchants', 'lightning_quiz_voucher_lookup_limits') AND c.relkind = 'r'`
+      );
+      expect(tables).toHaveLength(2);
+      tables.forEach(row => expect(row, row.relname).toMatchObject({ rls: true, anon: false, authenticated: false, service: true }));
+    });
+  });
+
+  describe("清單", () => {
+    it("每張券只回白名單欄位，沒有牧區、秒數、會員 ID、管理員姓名", async () => {
+      const { result, redeemed } = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        return { result: await list(tx, ids.other), redeemed: seeded.redeemed };
+      });
+      expect(Object.keys(result).sort()).toEqual(["month", "months", "summary", "today", "truncated", "vouchers"]);
+      expect(result.vouchers.length).toBeGreaterThan(0);
+      result.vouchers.forEach(voucher => expect(Object.keys(voucher).sort()).toEqual(MERCHANT_KEYS));
+      const text = JSON.stringify(result);
+      for (const forbidden of ["牧區 A-1", ids.member, redeemed.id, "pastoralZone", "elapsedMs", "userId", "redeemedBy", "redeemedByName", "測試管理員", String(NOT_ON_LIST_MS)]) {
+        expect(text, forbidden).not.toContain(forbidden);
+      }
+    });
+
+    it("回可使用、已兌換、已過期；已作廢不回；月對帳只算已兌換", async () => {
+      const outcome = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        const month = await thisMonth(tx);
+        return { seeded, month, result: await list(tx, ids.other, month) };
+      });
+      const byCode = Object.fromEntries(outcome.result.vouchers.map(voucher => [voucher.code, voucher]));
+      expect(byCode[outcome.seeded.available.code].status).toBe("available");
+      expect(byCode[outcome.seeded.redeemed.code]).toMatchObject({ status: "redeemed", redeemedVia: "self", amount: 100, rank: 1, name: "得獎者甲" });
+      expect(byCode[outcome.seeded.expired.code].status).toBe("expired");
+      expect(byCode[outcome.seeded.voided.code]).toBeUndefined();
+      expect(outcome.result.vouchers.map(voucher => voucher.status)).not.toContain("void");
+      expect(outcome.result.summary).toEqual({ redeemedCount: 1, redeemedAmount: 100 });
+      expect(outcome.result.month).toBe(outcome.month);
+      expect(outcome.result.months).toContain(outcome.month);
+    });
+
+    it("已兌換的券算兌換月，其他算發券月；別的月份查不到", async () => {
+      const outcome = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        await tx.query(`UPDATE public.lightning_quiz_vouchers SET redeemed_at = '2026-08-31T16:30:00Z' WHERE id = $1`, [seeded.redeemed.id]); // 台灣 9/1 00:30
+        await tx.query(`UPDATE public.lightning_quiz_vouchers SET issued_at = '2026-07-15T00:00:00Z' WHERE id = $1`, [seeded.available.id]);
+        return {
+          seeded,
+          sept: await list(tx, ids.other, "2026-09"),
+          july: await list(tx, ids.other, "2026-07"),
+          empty: await list(tx, ids.other, "2020-01")
+        };
+      });
+      expect(outcome.sept.vouchers.map(v => v.code)).toEqual([outcome.seeded.redeemed.code]);
+      expect(outcome.sept.summary).toEqual({ redeemedCount: 1, redeemedAmount: 100 });
+      expect(outcome.july.vouchers.map(v => v.code)).toEqual([outcome.seeded.available.code]);
+      expect(outcome.july.summary).toEqual({ redeemedCount: 0, redeemedAmount: 0 });
+      expect(outcome.empty.vouchers).toEqual([]);
+      expect(outcome.sept.months).toEqual(expect.arrayContaining(["2026-09", "2026-07"]));
+      expect(outcome.empty.months).toContain("2020-01");
+    });
+
+    it("教會補記顯示 redeemedVia = admin，不帶管理員", async () => {
+      const voucher = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        await tx.query(`SELECT public.admin_set_lightning_quiz_voucher_redeemed($1, TRUE, $2)`, [seeded.available.id, ids.admin]);
+        return (await lookup(tx, ids.other, seeded.available.code)).voucher;
+      });
+      expect(voucher).toMatchObject({ status: "redeemed", redeemedVia: "admin" });
+      expect(Object.keys(voucher).sort()).toEqual(MERCHANT_KEYS);
+    });
+
+    it("月份格式不對就拒絕", async () => {
+      await expect(asMerchant(tx => list(tx, ids.other, "2026-13"))).rejects.toThrow(/voucher_merchant_invalid_month/);
+      await expect(asMerchant(tx => list(tx, ids.other, "x; DROP"))).rejects.toThrow(/voucher_merchant_invalid_month/);
+    });
+
+    it("看名單記一筆稽核（月份、筆數），不記內容", async () => {
+      const rows = await asMerchant(async tx => {
+        await seedVouchers(tx);
+        const month = await thisMonth(tx);
+        await list(tx, ids.other, month);
+        return auditRows(tx, "voucher_merchant.view_list");
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ result: "ok", actor_id: ids.other, actor_role: "member", source: "nlc-data" });
+      expect(rows[0].detail.rows).toBeGreaterThan(0);
+      expect(JSON.stringify(rows[0])).not.toContain("得獎者甲");
+    });
+  });
+
+  describe("查兌換碼", () => {
+    it("查得到可使用／已兌換／已過期，不受月份限制，只回白名單欄位", async () => {
+      const outcome = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        await tx.query(`UPDATE public.lightning_quiz_vouchers SET issued_at = '2020-01-01T00:00:00Z' WHERE id = $1`, [seeded.available.id]);
+        return {
+          available: await lookup(tx, ids.other, seeded.available.code),
+          redeemed: await lookup(tx, ids.other, seeded.redeemed.code),
+          expired: await lookup(tx, ids.other, seeded.expired.code)
+        };
+      });
+      expect(outcome.available).toMatchObject({ found: true, rateLimited: false, voucher: { status: "available" } });
+      expect(outcome.redeemed.voucher.status).toBe("redeemed");
+      expect(outcome.expired.voucher.status).toBe("expired");
+      Object.values(outcome).forEach(result => {
+        expect(Object.keys(result.voucher).sort()).toEqual(MERCHANT_KEYS);
+        expect(JSON.stringify(result)).not.toContain("牧區 A-1");
+      });
+    });
+
+    it("已作廢和不存在的回應一模一樣", async () => {
+      const outcome = await asMerchant(async tx => {
+        const { voided } = await seedVouchers(tx);
+        return { voided: await lookup(tx, ids.other, voided.code), missing: await lookup(tx, ids.other, "ZZZZZZ") };
+      });
+      expect(outcome.voided).toEqual({ found: false, rateLimited: false, voucher: null });
+      expect(outcome.missing).toEqual(outcome.voided);
+    });
+
+    it("小寫、空白、連字號都認得；格式不對不查也不算失敗次數", async () => {
+      const outcome = await asMerchant(async tx => {
+        const { available } = await seedVouchers(tx);
+        const spaced = `${available.code.slice(0, 3)}- ${available.code.slice(3).toLowerCase()}`;
+        const found = await lookup(tx, ids.other, spaced);
+        const badFormat = [];
+        for (const code of ["ABC", "ABCDEFG", "ABCDE0", "ABCDEI", "ABCDEL", "ABCDEO", "ABCDE1", "%%%%%%", "______", "", "A".repeat(500)]) {
+          badFormat.push(await lookup(tx, ids.other, code));
+        }
+        const nullCode = await lookup(tx, ids.other, null);
+        const limit = (await tx.query(`SELECT failed_count FROM public.lightning_quiz_voucher_lookup_limits WHERE profile_id = $1`, [ids.other])).rows[0];
+        return { found, badFormat, nullCode, limit };
+      });
+      expect(outcome.found.found).toBe(true);
+      outcome.badFormat.forEach(result => expect(result).toEqual({ found: false, rateLimited: false, voucher: null }));
+      expect(outcome.nullCode).toEqual({ found: false, rateLimited: false, voucher: null });
+      expect(outcome.limit?.failed_count ?? 0).toBe(0);
+    });
+
+    it("每小時猜錯 20 次就鎖住，連對的碼也查不到；時段過了才恢復；查到不算次數", async () => {
+      const outcome = await asMerchant(async tx => {
+        const { available, voided } = await seedVouchers(tx);
+        // 查到的不算失敗
+        for (let i = 0; i < 5; i += 1) await lookup(tx, ids.other, available.code);
+        // 已作廢的算失敗（和不存在一樣）
+        await lookup(tx, ids.other, voided.code);
+        for (let i = 0; i < 17; i += 1) await lookup(tx, ids.other, "ZZZZZZ");
+        const nineteenth = await lookup(tx, ids.other, "ZZZZZZ");
+        const stillOk = await lookup(tx, ids.other, available.code);
+        const twentieth = await lookup(tx, ids.other, "ZZZZZY");
+        const locked = await lookup(tx, ids.other, available.code);
+        const lockedBad = await lookup(tx, ids.other, "ABC");
+        await tx.query(`UPDATE public.lightning_quiz_voucher_lookup_limits SET window_started_at = NOW() - INTERVAL '61 minutes' WHERE profile_id = $1`, [ids.other]);
+        const reset = await lookup(tx, ids.other, available.code);
+        return { nineteenth, stillOk, twentieth, locked, lockedBad, reset };
+      });
+      expect(outcome.nineteenth.found).toBe(false);
+      expect(outcome.nineteenth.rateLimited).toBe(false);
+      expect(outcome.stillOk.found).toBe(true);
+      expect(outcome.twentieth).toEqual({ found: false, rateLimited: false, voucher: null });
+      expect(outcome.locked).toEqual({ found: false, rateLimited: true, voucher: null });
+      expect(outcome.lockedBad).toEqual({ found: false, rateLimited: true, voucher: null });
+      expect(outcome.reset.found).toBe(true);
+    });
+
+    it("每次查詢記稽核：查到、查不到、被鎖；格式不對不記", async () => {
+      const rows = await asMerchant(async tx => {
+        const { available, voided } = await seedVouchers(tx);
+        await lookup(tx, ids.other, available.code);
+        await lookup(tx, ids.other, voided.code);
+        await lookup(tx, ids.other, "ABC");
+        await tx.query(`INSERT INTO public.lightning_quiz_voucher_lookup_limits (profile_id, window_started_at, failed_count)
+                        VALUES ($1, NOW(), 20) ON CONFLICT (profile_id) DO UPDATE SET failed_count = 20`, [ids.other]);
+        await lookup(tx, ids.other, available.code);
+        return auditRows(tx, "voucher_merchant.lookup");
+      });
+      expect(rows.map(row => [row.result, row.detail.found])).toEqual([["ok", true], ["ok", false], ["denied", false]]);
+      rows.forEach(row => expect(row.actor_id).toBe(ids.other));
+    });
+  });
+
+  describe("管理員增刪", () => {
+    it("只有系統管理員能查、搜尋、指定", async () => {
+      await expect(asService(tx => merchants(tx, ids.member))).rejects.toThrow(/lightning_quiz_admin_required/);
+      await expect(asService(tx => candidates(tx, "測試", ids.member))).rejects.toThrow(/lightning_quiz_admin_required/);
+      await expect(asService(tx => setMerchant(tx, ids.member, true, ids.member))).rejects.toThrow(/lightning_quiz_admin_required/);
+      // 牧者（雲柱其他管理函式放行）也不行
+      await expect(asService(async tx => {
+        await tx.query(`UPDATE public.profiles SET role_id = (SELECT id FROM public.role_definitions WHERE code = 'pastor') WHERE id = $1`, [ids.member]);
+        return setMerchant(tx, ids.other, true, ids.member);
+      })).rejects.toThrow(/lightning_quiz_admin_required/);
+    });
+
+    it("沒登入過（沒有 user_identities）、帳號停用、不存在的都不能指定", async () => {
+      await expect(asService(tx => setMerchant(tx, ids.other, true))).rejects.toThrow(/voucher_merchant_not_eligible/);
+      await expect(asService(async tx => {
+        await addIdentity(tx, ids.other, "merchant-sub-other");
+        await tx.query(`UPDATE public.profiles SET is_active = FALSE WHERE id = $1`, [ids.other]);
+        return setMerchant(tx, ids.other, true);
+      })).rejects.toThrow(/voucher_merchant_not_eligible/);
+      await expect(asService(tx => setMerchant(tx, "21000000-0000-4000-8000-0000000000fe", true))).rejects.toThrow(/voucher_merchant_not_eligible/);
+    });
+
+    it("搜尋只找登入過、啟用中的帳號，email 遮罩，標出已指定", async () => {
+      const outcome = await asService(async tx => {
+        const none = await candidates(tx, "測試會友 0002");
+        await addIdentity(tx, ids.other, "merchant-sub-other");
+        await tx.query(`UPDATE public.profiles SET email = 'merchant-shop@example.invalid' WHERE id = $1`, [ids.other]);
+        const before = await candidates(tx, "測試會友 0002");
+        const byEmail = await candidates(tx, "merchant-shop");
+        await setMerchant(tx, ids.other, true);
+        const after = await candidates(tx, "測試會友 0002");
+        await tx.query("SAVEPOINT s");
+        const tooShortError = await candidates(tx, "a").then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        const wildcardError = await candidates(tx, "%%").then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        return { none, before, byEmail, after, tooShortError, wildcardError };
+      });
+      expect(outcome.none.candidates).toEqual([]);
+      expect(outcome.before.candidates).toHaveLength(1);
+      expect(outcome.before.candidates[0]).toMatchObject({ profileId: ids.other, name: "測試會友 0002", isMerchant: false });
+      expect(outcome.byEmail.candidates[0].emailMasked).toBeTruthy();
+      expect(outcome.byEmail.candidates[0].emailMasked).not.toContain("merchant-shop");
+      expect(outcome.after.candidates[0].isMerchant).toBe(true);
+      expect(outcome.tooShortError).toMatch(/voucher_merchant_query_too_short/);
+      expect(outcome.wildcardError).toMatch(/voucher_merchant_query_too_short/);
+    });
+
+    it("增刪都寫稽核（同一個交易）；重複加入、重複移除不多記", async () => {
+      const outcome = await asService(async tx => {
+        await addIdentity(tx, ids.other, "merchant-sub-other");
+        const added = await setMerchant(tx, ids.other, true);
+        const addedAgain = await setMerchant(tx, ids.other, true);
+        const listed = await merchants(tx);
+        const removed = await setMerchant(tx, ids.other, false);
+        const removedAgain = await setMerchant(tx, ids.other, false);
+        return { added, addedAgain, listed, removed, removedAgain, rows: await auditRows(tx, "voucher_merchant.%") };
+      });
+      expect(outcome.added.changed).toBe(true);
+      expect(outcome.added.merchants.map(row => row.profileId)).toEqual([ids.other]);
+      expect(outcome.addedAgain.changed).toBe(false);
+      expect(outcome.listed.merchants[0]).toMatchObject({ profileId: ids.other, name: "測試會友 0002" });
+      expect(outcome.removed).toMatchObject({ changed: true, merchants: [] });
+      expect(outcome.removedAgain.changed).toBe(false);
+      expect(outcome.rows.map(row => row.action)).toEqual(["voucher_merchant.add", "voucher_merchant.remove"]);
+      outcome.rows.forEach(row => expect(row).toMatchObject({ result: "ok", actor_id: ids.admin, actor_role: "admin", source: "nlc-data", target_user_id: ids.other }));
+      expect(outcome.rows[0].changes).toEqual({ merchant: { before: false, after: true } });
+      expect(outcome.rows[1].changes).toEqual({ merchant: { before: true, after: false } });
+    });
+  });
+});

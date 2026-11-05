@@ -7210,6 +7210,11 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_ranking_no_questions: "這週沒有已排程的雲柱測驗，無法公布。",
     lightning_quiz_ranking_week_not_ended: "這週還有題目沒結束，等全部結束後才能公布。",
     lightning_quiz_ranking_not_published: "這週的名次目前沒有公布。",
+    voucher_merchant_required: "你的帳號目前沒有查看權限。",
+    voucher_merchant_invalid_month: "月份不正確，請重新選擇。",
+    voucher_merchant_query_too_short: "請輸入中文，或至少兩個英文或數字。",
+    voucher_merchant_not_eligible: "這個帳號還不能指定：要先登入過速讀 App 一次，且帳號是啟用中。",
+    voucher_merchant_invalid: "沒有選到帳號，請重新整理後再試。",
     lightning_quiz_voucher_not_found: "找不到這張兌換券，請重新整理後再試。",
     lightning_quiz_voucher_already_redeemed: "這張兌換券已經兌換過了。",
     lightning_quiz_voucher_expired: "這張兌換券已經過期了。",
@@ -7432,6 +7437,43 @@ db.adminSetLightningQuizVouchersExpiry = async function(voucherIds, expiresOn) {
   return this._callLightningQuizRpc("admin_set_lightning_quiz_vouchers_expiry", {
     p_voucher_ids: ids,
     p_expires_on: expiresOn
+  });
+};
+
+// 克勞斯店家（#679）。入口判斷要安靜：migration 或 nlc-data 還沒部署時，就是沒有入口。
+db.getVoucherMerchantAccess = async function() {
+  if (!state.isSupabaseMode || !state.supabase) return { success: false, isMerchant: false };
+  try {
+    const { data, error } = await state.supabase.rpc("get_my_voucher_merchant_access", {});
+    if (error) return { success: false, isMerchant: false };
+    return { success: true, isMerchant: data?.isMerchant === true };
+  } catch (_error) {
+    return { success: false, isMerchant: false };
+  }
+};
+
+db.getVoucherMerchantVouchers = async function(month) {
+  return this._callLightningQuizRpc("get_voucher_merchant_vouchers", { p_month: month || null });
+};
+
+db.lookupVoucherMerchantCode = async function(code) {
+  return this._callLightningQuizRpc("lookup_voucher_merchant_code", { p_code: code });
+};
+
+// 後台「得獎與兌換」的店家帳號（#679）。
+db.adminListVoucherMerchants = async function() {
+  return this._callLightningQuizRpc("admin_list_voucher_merchants", {});
+};
+
+db.adminSearchVoucherMerchantCandidates = async function(query) {
+  return this._callLightningQuizRpc("admin_search_voucher_merchant_candidates", { p_query: query });
+};
+
+db.adminSetVoucherMerchant = async function(profileId, enabled) {
+  if (!profileId) return { success: false, message: "沒有選到帳號，請重新整理後再試。" };
+  return this._callLightningQuizRpc("admin_set_voucher_merchant", {
+    p_profile_id: profileId,
+    p_enabled: enabled === true
   });
 };
 
