@@ -3473,7 +3473,7 @@ export async function renderAdminLightningQuizAwards({ weekStart = null } = {}) 
     showToast,
     confirm: options => window.showConfirmDialog(options),
     host: host.querySelector('[data-lq-voucher-merchants]')
-  }).load();
+  }).load().catch(error => console.warn('店家帳號區塊載入失敗', error));
   await Promise.all([loadWeek(), loadOverview()]);
 }
 
