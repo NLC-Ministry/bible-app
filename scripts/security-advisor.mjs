@@ -1,27 +1,44 @@
-// Supabase Security Advisor（Splinter）對 staging／正式站跑一次，只列資安類、不在允許清單裡的項目（#594）。
+// Supabase Security Advisor 對 staging／正式站跑一次，只列資安類、不在允許清單裡的項目（#594）。
 //
 //   node scripts/security-advisor.mjs                  staging
 //   node scripts/security-advisor.mjs --env production
 //
 // 由整合者在本機跑（需要先 `npx supabase login`）：CI 不放 Supabase 金鑰（#593／#594 定案）。
-// Splinter 的 repo 沒有授權檔，不能把 SQL 複製進這個公開 repo，所以每次從固定的 commit
-// 下載、比對 sha256 後才執行。它是唯讀的查詢（只有一個 set_config 給自己用的 session 變數）。
-// 要升級 Splinter：改 SPLINTER_COMMIT／SPLINTER_SHA256，先讀過新版的 diff。
+// 用 CLI 內建的 `db advisors`（#680）：唯讀，代理程式模式下也不用使用者同意。
 //
 // 有不在允許清單（supabase/security-allowlist.json 的 security_advisor）裡的項目時 exit code 1。
 
-import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { PROD_REF, STAGING_REF, runSqlFile } from "./lib/supabase-cli-query.mjs";
+import { PROD_REF, STAGING_REF, remoteFlag, supabaseCommand } from "./lib/supabase-cli-query.mjs";
 import { loadAllowlist } from "./lib/db-security-checks.mjs";
 
-export const SPLINTER_COMMIT = "fccca4b1c4d8b48b8ccd69bd6b30e84adcb92975"; // 2026-09-29
-export const SPLINTER_SHA256 = "d8d558baad3e03832e521c527907fa50a9a172fabd899dd0f5c2504a5a0e9349";
-const SPLINTER_URL = `https://raw.githubusercontent.com/supabase/splinter/${SPLINTER_COMMIT}/splinter.sql`;
 const ENVIRONMENTS = { staging: STAGING_REF, production: PROD_REF };
+
+// 分級和 exit code 由允許清單決定，所以要全部項目（--level info），CLI 自己不判失敗（--fail-on none）
+export function buildAdvisorsCommand(ref) {
+  return supabaseCommand(["db", "advisors", remoteFlag(ref), "--type", "security", "--level", "info", "--fail-on", "none", "-o", "json"]);
+}
+
+/**
+ * 解析 `db advisors` 的輸出。零筆時 stdout 是空的，「No issues found」印在 stderr。
+ * 這是安全檢查：看不懂就報錯，不能當成沒問題。
+ */
+export function parseAdvisorOutput(stdout, stderr) {
+  const text = String(stdout || "").trim();
+  if (!text && /No issues found/.test(String(stderr || ""))) return [];
+  const rows = text.startsWith("[") ? JSON.parse(text) : null;
+  if (!rows) throw new Error(`看不懂 db advisors 的輸出（CLI 改版了？）：${text.slice(0, 300)}`);
+  return rows;
+}
+
+function runAdvisors(ref) {
+  const result = spawnSync(buildAdvisorsCommand(ref), { encoding: "utf8", shell: true, maxBuffer: 256 * 1024 * 1024 });
+  if (result.status !== 0) {
+    throw new Error(`db advisors 失敗：\n${`${result.stderr || ""}${result.stdout || ""}`.split(ref).join("<ref>").slice(0, 1500)}`);
+  }
+  return parseAdvisorOutput(result.stdout, result.stderr);
+}
 
 /** 只留資安類；依允許清單分成「已接受」與「要處理」。 */
 export function classifyFindings(rows, { lints = {}, cache_keys: cacheKeys = {} } = {}) {
@@ -53,42 +70,26 @@ export function renderFindings({ envLabel, ref, accepted, unexpected }) {
   return lines.join("\n");
 }
 
-async function downloadSplinter() {
-  const response = await fetch(SPLINTER_URL);
-  if (!response.ok) throw new Error(`下載 Splinter 失敗：HTTP ${response.status}`);
-  const sql = await response.text();
-  const hash = createHash("sha256").update(sql).digest("hex");
-  if (hash !== SPLINTER_SHA256) throw new Error(`Splinter 的 sha256 不符（${hash}），不執行`);
-  return sql;
-}
-
 export function parseArgs(argv) {
   if (!argv.length) return { env: "staging" };
   if (argv.length === 2 && argv[0] === "--env" && ENVIRONMENTS[argv[1]]) return { env: argv[1] };
   throw new Error("用法：node scripts/security-advisor.mjs [--env staging|production]");
 }
 
-async function main(argv) {
+function main(argv) {
   const { env } = parseArgs(argv);
   const ref = ENVIRONMENTS[env];
-  const sql = await downloadSplinter();
-  const dir = mkdtempSync(join(tmpdir(), "splinter-"));
-  let rows;
-  try {
-    const file = join(dir, "splinter.sql");
-    writeFileSync(file, sql);
-    rows = runSqlFile(ref, file.replace(/\\/g, "/"));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  const rows = runAdvisors(ref);
   const { accepted, unexpected } = classifyFindings(rows, loadAllowlist().security_advisor);
   console.log(renderFindings({ envLabel: env === "staging" ? "staging" : "正式站", ref, accepted, unexpected }));
   return unexpected.length ? 1 : 0;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2)).then(code => { process.exitCode = code; }, error => {
+  try {
+    process.exitCode = main(process.argv.slice(2));
+  } catch (error) {
     console.error(error.message);
     process.exitCode = 2;
-  });
+  }
 }

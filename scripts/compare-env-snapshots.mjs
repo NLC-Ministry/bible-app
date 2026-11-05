@@ -2,7 +2,7 @@
 //
 //   node scripts/compare-env-snapshots.mjs --run
 //       直接用 Supabase CLI 查正式環境和 staging 再比對（需要先 `supabase login`）。
-//       一律用 --project-ref 明確指定環境，不依賴 `supabase link`。
+//       一律用 --remote=<ref> 明確指定環境，不依賴 `supabase link`；查詢是唯讀的。
 //   node scripts/compare-env-snapshots.mjs <prod 檔案> <staging 檔案>
 //       比對兩份輸出。可以是 `supabase db query` 的 JSON，或 SQL Editor 匯出的 CSV。
 //

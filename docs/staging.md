@@ -20,7 +20,9 @@
 
 - ⛔ **不要在 Supabase 網頁上按 staging 分支的「Merge」**。它會把 staging 的結構差異直接套到正式環境，然後**刪掉 staging 分支**（2026-09-28 發生過一次，見 `20260928102521_branch_merge.sql`）。上線一律走 staging → main 的 PR，再用 `supabase db push` 套 migration。
 - 已知的結構差異（2026-09-28）：正式環境的 `auth.users` 少了 `0001` 建的 `on_auth_user_created` trigger（被上面那次 Merge 刪掉）。這個 trigger 只在 Google／Email 登入時建 profile，正式環境只用 NLC 登入，**決定不補回**。正式環境 `reading_plans` 殘留的 `level` 欄位由 `20260928113656_drop_leftover_reading_plans_level.sql` 刪掉。
-- **Supabase CLI 一律明確指定環境**：用 `node scripts/supabase-env.mjs staging …` 或 `… production …`（等同帶對應的 `--project-ref`，ref 從 `.env` 讀，不寫進指令與文件）。不要依賴 `supabase link`；`supabase/.temp/` 已加進 `.gitignore`。
+- **Supabase CLI 一律明確指定環境**：用 `node scripts/supabase-env.mjs staging …` 或 `… production …`（等同用釘住版本的 CLI 帶對應的 `--remote=<ref>`，ref 從 `.env` 讀，不寫進指令與文件）。不要依賴 `supabase link`；`supabase/.temp/` 已加進 `.gitignore`。CLI 每次都會印 `Target: project <ref>`，原始輸出不要貼到公開的 issue／PR。
+- **CLI 版本釘在 `scripts/lib/supabase-cli-query.mjs` 的 `SUPABASE_CLI`**（#680）：沒釘的話 `npx supabase` 會自己升級。要升級就改這裡，先讀 release notes，用 staging 跑一次 `check-env-drift` 和 `security-advisor`，再重跑 `backup-production.ps1 -Install`。
+- **代理程式模式**：CLI 不接受沒帶 `--yes` 的託管環境寫入（`db push`、`functions deploy`、`secrets set`、會寫入的 `db query`）。代理程式要先逐項問過維護者（哪個環境、哪個 migration／函式）才能加，每次都要問。唯讀查詢用 `db query --read-only -f <檔案>`，不用同意。
 - **每個 secret 在兩個環境都不同**，不能沿用正式環境的值。
 - **對外有副作用的設定，staging 預設不啟用**：`GEMINI_API_KEY`、兩個 Google Sheet webhook（`ISSUE_REPORT_SHEET_WEBHOOK_*`、`REGISTRATION_STATS_SHEET_WEBHOOK_*`）、各排程的 cron secret、pg_cron 排程。要測到那個功能時才設定，並接到測試用的目的地。
 - **Staging 的防護跟正式環境一樣**：之後會有 Logto 同步進來的真實個資（#265）。
@@ -30,7 +32,7 @@
 
 > **2026-09-28 重建**：原本的分支 建立時是「非永久」（persistent: false），被 Supabase 清掉了。新分支已設成**永久**（`supabase branches update <id> --persistent`；網頁上建分支時找不到這個選項，要用指令）。重建步驟：套用 staging 分支的全部 migration → 設 Vault `project_url` → 移除建分支時一起重建出來的 pg_cron 排程 → 設 secrets、部署 8 支 Edge Function → 改 Vercel Preview 的 `SUPABASE_URL`／`SUPABASE_ANON_KEY` → 用正式環境的結構重建 staging 的 public schema（見下）→ 匯入樣本資料。
 >
-> **為什麼要用正式環境的結構重建**：Supabase 建分支時是把 migration 一支支重跑，但正式環境早期有些權限、函式設定是在網頁上手動改的、沒寫進 migration，重跑出來跟正式環境差了 168 項。做法：`node scripts/supabase-env.mjs production db dump --linked --schema public`（只有結構，需要 Docker）→ 在 staging 用一個 transaction 執行 `DROP SCHEMA public CASCADE;` 加上這份結構 → 重新匯入樣本資料。之後 `compare-env-snapshots.mjs --run` 只剩 4 項無關緊要的差異：`lightning_quiz_settings_weekdays_check` 括號寫法不同（意思一樣）已由 migration `20260929041515` 在兩個環境重建成一致（#333）；另外 3 項是正式環境才有的 `supabase_admin` 預設權限（`public supabase_admin f/r/S`，平台帳號的設定）——`postgres` 不是 superuser 也不是 `supabase_admin` 成員，在正式環境執行 REVOKE 會 permission denied，而且只影響 `supabase_admin` 建的物件（我們的物件都屬於 `postgres`），**決定永久忽略**，比對腳本會把它們歸為預期差異（#333）。
+> **為什麼要用正式環境的結構重建**：Supabase 建分支時是把 migration 一支支重跑，但正式環境早期有些權限、函式設定是在網頁上手動改的、沒寫進 migration，重跑出來跟正式環境差了 168 項。做法：`node scripts/supabase-env.mjs production db dump --schema public`（只有結構，需要 Docker）→ 在 staging 用一個 transaction 執行 `DROP SCHEMA public CASCADE;` 加上這份結構 → 重新匯入樣本資料。之後 `compare-env-snapshots.mjs --run` 只剩 4 項無關緊要的差異：`lightning_quiz_settings_weekdays_check` 括號寫法不同（意思一樣）已由 migration `20260929041515` 在兩個環境重建成一致（#333）；另外 3 項是正式環境才有的 `supabase_admin` 預設權限（`public supabase_admin f/r/S`，平台帳號的設定）——`postgres` 不是 superuser 也不是 `supabase_admin` 成員，在正式環境執行 REVOKE 會 permission denied，而且只影響 `supabase_admin` 建的物件（我們的物件都屬於 `postgres`），**決定永久忽略**，比對腳本會把它們歸為預期差異（#333）。
 
 - 結構：和正式環境一致（含 0211–0214）。
 - Vault：只有 `project_url` = staging 專案的網址（見 `supabase/functions/README.md`）。
@@ -87,14 +89,14 @@ npx supabase migration new add_xxx
 
 ```bash
 # 1. staging：先看會跑哪些，再真的套用
-node scripts/supabase-env.mjs staging db push --linked --dry-run
-node scripts/supabase-env.mjs staging db push --linked
+node scripts/supabase-env.mjs staging db push --dry-run
+node scripts/supabase-env.mjs staging db push
 
 # 2. 在 staging 驗證功能
 
 # 3. 正式環境
-node scripts/supabase-env.mjs production db push --linked --dry-run
-node scripts/supabase-env.mjs production db push --linked
+node scripts/supabase-env.mjs production db push --dry-run
+node scripts/supabase-env.mjs production db push
 
 # 4. 確認兩邊還是一致
 node scripts/compare-env-snapshots.mjs --run
@@ -133,7 +135,7 @@ node scripts/check-env-drift.mjs --pr <上線 PR>    # 上線 PR：兩個環境�
 node scripts/security-advisor.mjs                  # staging；--env production 查正式站
 ```
 
-跑 Supabase Security Advisor（[Splinter](https://github.com/supabase/splinter)）的資安類 lint，不在允許清單 `security_advisor` 裡的就列出來、exit code 1。Splinter 沒有授權檔，不能複製進這個公開 repo，所以每次從固定 commit 下載、比對 sha256 才執行（唯讀查詢）。
+用 CLI 的 `db advisors` 跑 Supabase Security Advisor（[Splinter](https://github.com/supabase/splinter)）的資安類 lint，不在允許清單 `security_advisor` 裡的就列出來、exit code 1。唯讀，代理程式模式也不用同意。它走 Management API 的 `/advisors/security`（官方文件標為 deprecated，且只列付費方案）；哪天不能用，備案是下載固定 commit 的 Splinter、比對 sha256，在記憶體裡去掉 `set local` 和 `DO` 後用 `db query --read-only` 跑（2026-11-05 在 staging 比對過，結果相同，#680）。Splinter 沒有授權檔，SQL 不能複製進這個公開 repo。
 
 **CodeQL**：用 GitHub 的 default setup（repo 公開後免費），在 repo 的 Settings → Code security 開啟，不寫 workflow。
 
@@ -153,11 +155,11 @@ node scripts/security-advisor.mjs                  # staging；--env production 
 ```bash
 node scripts/staging-sample-data.mjs export ../staging-sample.json   # 只讀正式環境，約 6 分鐘
 node scripts/staging-sample-data.mjs check  ../staging-sample.json   # 個資檢查，有錯誤就不要匯入
-node scripts/staging-sample-data.mjs import ../staging-sample.json   # 只會寫入 staging，約 10 分鐘
+node scripts/staging-sample-data.mjs import ../staging-sample.json --yes   # 只會寫入 staging，約 10 分鐘
 ```
 
 - **匯出檔不要 commit**（`staging-sample*.json` 已加進 `.gitignore`），放在 repo 以外，匯入後就刪除。
-- `import` 的目標寫死為 staging；匯入前會自動跑個資檢查，沒通過就拒絕。
+- `import` 沒帶 `--yes` 會直接拒絕（代理程式要先問過維護者）；目標寫死為 staging；匯入前會自動跑個資檢查，沒通過就拒絕。
 - 可以重複執行：先刪掉 email 結尾是 `@example.invalid` 的樣本會員（連帶刪除他們的資料），再匯入。之後用 Logto 登入 staging 的真人帳號不受影響；教會內容已存在的列會略過（`ON CONFLICT DO NOTHING`）。
 - 匯入時暫時關閉 trigger 和 FK 檢查（`session_replication_role = replica`），匯入後會檢查主要的外鍵關聯。
 

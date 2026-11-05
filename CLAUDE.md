@@ -69,12 +69,13 @@ Tables, Edge Function inventory, and the incident history behind these rules: `d
 
 - **Migrations**: timestamp names only — create with `npx supabase migration new <name>` (`scripts/migration-naming.test.mjs`). Apply to staging, verify, then production, always against an explicit environment via `scripts/supabase-env.mjs` (never rely on `supabase link`). Never pass `--include-all` to production. Read a migration's header for ordering requirements before pushing.
   ```bash
-  node scripts/supabase-env.mjs staging db push --linked --dry-run   # staging: check what will run
-  node scripts/supabase-env.mjs staging db push --linked
-  node scripts/supabase-env.mjs production db push --linked --dry-run   # then production
-  node scripts/supabase-env.mjs production db push --linked
+  node scripts/supabase-env.mjs staging db push --dry-run   # staging: check what will run
+  node scripts/supabase-env.mjs staging db push
+  node scripts/supabase-env.mjs production db push --dry-run   # then production
+  node scripts/supabase-env.mjs production db push
   node scripts/compare-env-snapshots.mjs --run                                 # both environments still match
   ```
+- **Supabase CLI in agent mode**: the version is pinned (`SUPABASE_CLI` in `scripts/lib/supabase-cli-query.mjs`); use the wrapper, not bare `npx supabase`, for anything hosted. Writes to a hosted project (`db push`, `functions deploy`, `secrets set`, a writing `db query`) refuse to run without `--yes`: ask the maintainer item by item (environment + which migration/function) before adding it, every time. Reads use `db query --read-only -f <file>` and need no consent. Never get past this with `--agent no` or `SUPABASE_YES`.
 - `supabase/migrations_legacy/` and `supabase/migrations/legacy/` are reference only — never replay them.
 - **Every new SQL function** (`CREATE` or `CREATE OR REPLACE`) gets explicit grants in the same migration — Postgres grants PUBLIC by default and Supabase's default privileges grant `anon`/`authenticated` directly, so `FROM PUBLIC` alone is not enough:
   ```sql
@@ -86,7 +87,7 @@ Tables, Edge Function inventory, and the incident history behind these rules: `d
 - **Forced scope**: `nlc-data` uses the service role, so RLS does not apply in production. Writes/deletes through it must enforce `user_id`/`plan_id` via `applyForcedScope`, and RPCs must filter explicitly — never a cross-tenant unfiltered mutation.
 - **Edge Functions**: never trust a decoded-but-unverified token claim for identity (`scripts/logto-jwt-verify.test.mjs`). A new function whose cron/webhook caller sends no `Authorization` header needs its `verify_jwt = false` entry in `supabase/config.toml` in the same change — a Dashboard-only toggle drifts back on the next CLI deploy.
 - Keep the `profiles`/`user_identities` split (it prevents data loss when a user switches login method). The first admin is promoted manually via SQL (`supabase/README_clean_setup.md`).
-- Environments: production and staging are separate Supabase projects (staging site: https://bible-speed-reading-staging.vercel.app) — see `docs/staging.md`. **The repo is public: never write a Supabase project ref, spreadsheet ID, key or other identifier into a file, PR, issue, comment or commit message.** Refs live in the git-ignored `.env` (`SUPABASE_PRODUCTION_REF`, `SUPABASE_STAGING_REF`); run the CLI as `node scripts/supabase-env.mjs <staging|production> <supabase args>` instead of passing `--project-ref`. `scripts/no-project-ref.test.mjs` fails on a ref-shaped value.
+- Environments: production and staging are separate Supabase projects (staging site: https://bible-speed-reading-staging.vercel.app) — see `docs/staging.md`. **The repo is public: never write a Supabase project ref, spreadsheet ID, key or other identifier into a file, PR, issue, comment or commit message.** Refs live in the git-ignored `.env` (`SUPABASE_PRODUCTION_REF`, `SUPABASE_STAGING_REF`); run the CLI as `node scripts/supabase-env.mjs <staging|production> <supabase args>` instead of passing `--project-ref`/`--remote` yourself. The CLI prints `Target: project <ref>` on every run, so don't paste its raw output anywhere public. `scripts/no-project-ref.test.mjs` fails on a ref-shaped value.
 
 ## Design system
 

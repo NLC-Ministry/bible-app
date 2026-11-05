@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { PROD_REF, STAGING_REF, runSql } from "./lib/supabase-cli-query.mjs";
+import { PROD_REF, STAGING_REF, remoteFlag, runSql, supabaseCommand } from "./lib/supabase-cli-query.mjs";
 
 export const COMMENT_MARKER = "<!-- bible-app-env-drift-check -->";
 export const ENVIRONMENTS = {
@@ -184,8 +184,8 @@ function readGitTree(gitRef) {
 function fetchEnvironment(env) {
   const applied = runSql(env.ref, "select version from supabase_migrations.schema_migrations order by version;")
     .map(row => String(row.version));
-  // Windows 的 npx 是 .cmd，必須透過 shell；ref 是寫死的常數
-  const output = run(`npx supabase functions list --project-ref ${env.ref} -o json`, [], { shell: true });
+  // Windows 的 npx 是 .cmd，必須透過 shell；remoteFlag 驗證過 ref
+  const output = run(supabaseCommand(["functions", "list", remoteFlag(env.ref), "-o", "json"]), [], { shell: true });
   const start = output.indexOf("[");
   if (start === -1) throw new Error(`讀不到 ${env.label} 的函式清單：${output.slice(0, 500)}`);
   return { applied, remote: JSON.parse(output.slice(start)) };

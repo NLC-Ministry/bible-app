@@ -119,6 +119,9 @@ describe("renderReport", () => {
     expect(report).toContain("要重新部署的 Edge Function：");
     expect(report).toContain("`nlc-data`：部署於 2026-10-16 09:00（v176），repo 最後修改 2026-10-19 10:00（abc1234）");
     expect(report).toContain("--pr 605");
+    // 這份報告會貼到公開的 PR（#680）
+    expect(report).not.toContain(ENVIRONMENTS.staging.ref);
+    expect(report).not.toContain(ENVIRONMENTS.production.ref);
   });
 
   it("says so when an environment is up to date", () => {
