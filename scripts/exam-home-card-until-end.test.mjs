@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 // 第 2 批上線前修正（#297／#298）：結束的測驗不能永遠留在首頁。
 //   · 還沒結束：所有人看得到
@@ -7,7 +8,7 @@ import { readFileSync } from "node:fs";
 //   · 沒作答的人：結束後就看不到
 //   · 我的測驗：自己作答過的永遠查得到，另外列出還沒結束的卷
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const migration = read("supabase/migrations/20260928043848_exam_home_card_until_exam_ends.sql");
+const migration = currentMigrationSql("20260928043848_exam_home_card_until_exam_ends.sql").replace(/\r\n/g, "\n");
 
 const fnBody = name => {
   const start = migration.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
