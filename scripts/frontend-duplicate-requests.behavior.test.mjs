@@ -261,8 +261,8 @@ describe("首頁只有在畫面上才重整（第 1 項）", () => {
     expect(dbCalls).toEqual([]);
     globalThis.appRouter.currentTab = "dashboard-view";
     home.updateDashboardView();
-    await wait(30);
-    expect(dbCalls.length).toBeGreaterThan(0);
+    // 次要讀取排在瀏覽器閒置時才做，機器忙的時候不只 30ms，所以等到發生為止。
+    await vi.waitFor(() => expect(dbCalls.length).toBeGreaterThan(0), { timeout: 3000 });
   });
 
   it("在首頁時第一次立刻重整，500ms 內連續的只再補一次", async () => {
