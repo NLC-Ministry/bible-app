@@ -6,6 +6,7 @@ import {
   keptOrgFields,
   shouldKeepAccountMember
 } from "../_shared/account-member-guard.mjs";
+import { createOrgPruneGate, createTtlCache } from "../_shared/edge-cache.mjs";
 
 // >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
@@ -481,6 +482,12 @@ function projectCanonicalMemberJourney(memberContext: any) {
 
 const MEMBER_ROLE_ID = "10000000-0000-4000-8000-000000000001";
 
+// 模組層快取（#674），兩個都不分人：
+//   角色定義：幾乎不變，每次登入都讀整張表不划算。改了權限對應後，最久 60 秒內登入的人還照舊對應算。
+//   清組織節點：原本每次登入都跑；孤兒節點只是多留一陣子，晚一點清沒有關係。
+const ROLE_DEFINITIONS_CACHE = createTtlCache({ ttlMs: 60000, maxEntries: 1 });
+const ORG_PRUNE_GATE = createOrgPruneGate({ minIntervalMs: 60 * 60 * 1000, probability: 0.05 });
+
 function normalizePermissionSignal(value: unknown) {
   return String(value || "").trim().toLocaleLowerCase();
 }
@@ -526,11 +533,16 @@ async function resolveSyncedRoleId(
   if (!strong) return MEMBER_ROLE_ID;
   if (!memberContext) return existingRoleId || MEMBER_ROLE_ID;
 
-  const { data: definitions, error } = await supabaseAdmin
-    .from("role_definitions")
-    .select("id, code, label, sort_order, hub_permission_keys, hub_permission_labels")
-    .order("sort_order", { ascending: true });
-  if (error) throw error;
+  let definitions = ROLE_DEFINITIONS_CACHE.get("all");
+  if (!definitions) {
+    const { data, error } = await supabaseAdmin
+      .from("role_definitions")
+      .select("id, code, label, sort_order, hub_permission_keys, hub_permission_labels")
+      .order("sort_order", { ascending: true });
+    if (error) throw error;
+    definitions = data || [];
+    ROLE_DEFINITIONS_CACHE.set("all", definitions);
+  }
 
   const signals = collectHubPermissionSignals(memberContext);
   const matched = (definitions || [])
@@ -602,7 +614,8 @@ function isMemberHubContextNotFound(err: any) {
 async function resolveLocalOrgLinks(
   supabaseAdmin: any,
   profilePayload: { great_region?: string | null; pastoral_zone?: string | null; small_group?: string | null },
-  memberContext: any
+  memberContext: any,
+  existingProfile: any = null
 ) {
   let great_region_id: string | null = null;
   let pastoral_zone_id: string | null = null;
@@ -623,10 +636,23 @@ async function resolveLocalOrgLinks(
     };
   };
 
+  // 沒變就不寫（#674）：同一大區的人每次登入都 DO UPDATE 同一列，會互相搶鎖。帳號已連到這個節點、
+  // 名稱也相同才沿用；上一層換過就不算沒變，因為牧區、小組的唯一鍵包含上一層。
+  // 帳號連著的節點 prune 不會刪（NOT EXISTS），外鍵也是 ON DELETE SET NULL，所以 id 有值就一定存在。
+  const unchangedId = (field: "great_region" | "pastoral_zone" | "small_group", parentUnchanged: boolean) => {
+    const id = existingProfile?.[`${field}_id`];
+    return parentUnchanged && id && existingProfile?.[field] === profilePayload[field] ? id : null;
+  };
+
   try {
     // Rebuild the organization tree from authoritative Member Hub data as
     // members sign in. A degraded sync must never recreate stale local data.
-    if (memberContext && profilePayload.great_region) {
+    const regionUnchanged = unchangedId("great_region", true);
+    const zoneUnchanged = unchangedId("pastoral_zone", Boolean(regionUnchanged));
+    const groupUnchanged = unchangedId("small_group", Boolean(zoneUnchanged));
+    if (memberContext && profilePayload.great_region && regionUnchanged) {
+      great_region_id = regionUnchanged;
+    } else if (memberContext && profilePayload.great_region) {
       const { data: regionData, error: regionError } = await supabaseAdmin
         .from("great_regions")
         .upsert(
@@ -638,7 +664,9 @@ async function resolveLocalOrgLinks(
       if (regionError) return failed(regionError);
       great_region_id = regionData.id;
     }
-    if (memberContext && profilePayload.pastoral_zone && great_region_id) {
+    if (memberContext && profilePayload.pastoral_zone && zoneUnchanged) {
+      pastoral_zone_id = zoneUnchanged;
+    } else if (memberContext && profilePayload.pastoral_zone && great_region_id) {
       const { data: zoneData, error: zoneError } = await supabaseAdmin
         .from("pastoral_zones")
         .upsert(
@@ -653,7 +681,9 @@ async function resolveLocalOrgLinks(
       if (zoneError) return failed(zoneError);
       pastoral_zone_id = zoneData.id;
     }
-    if (memberContext && profilePayload.small_group && pastoral_zone_id) {
+    if (memberContext && profilePayload.small_group && groupUnchanged) {
+      small_group_id = groupUnchanged;
+    } else if (memberContext && profilePayload.small_group && pastoral_zone_id) {
       const { data: groupData, error: groupError } = await supabaseAdmin
         .from("small_groups")
         .upsert(
@@ -728,6 +758,10 @@ Deno.serve(async (req: Request) => {
       Accept: "application/json"
     };
 
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+
     let userinfo: any = null;
     let freshUserinfo: any = null;
     // 身分以驗過的 access token 為準（#646，跟 nlc-data 同一套驗證）。
@@ -777,30 +811,46 @@ Deno.serve(async (req: Request) => {
     userinfo = picked.userinfo;
 
     let memberContext: any = null;
-    let memberContextError: string | null = null;
-    try {
-      const memberResponse = await fetchJson(`${memberHubUrl}/api/me/context`, {
-        headers: bearerHeaders
-      });
-      mark("member_hub_context");
-      const validEnvelope = memberResponse?.ok === true
-        && memberResponse.context
-        && typeof memberResponse.context === "object"
-        && !Array.isArray(memberResponse.context);
-      memberContext = validEnvelope ? memberResponse.context : null;
-      if (!validEnvelope) {
-        memberContextError = "member_hub_context_invalid_envelope";
+    let memberContextError = null as string | null;
+    // 這裡的 sub 已由 pickSessionUserinfo 確認過，身分查詢和會員中心互不依賴，一起查（#674）。
+    // 會員中心的失敗在下面自己接住，不會讓這個 Promise.all reject；身分查詢失敗照舊整個登入失敗。
+    const fetchMemberContext = async () => {
+      try {
+        const memberResponse = await fetchJson(`${memberHubUrl}/api/me/context`, {
+          headers: bearerHeaders
+        });
+        mark("member_hub_context");
+        const validEnvelope = memberResponse?.ok === true
+          && memberResponse.context
+          && typeof memberResponse.context === "object"
+          && !Array.isArray(memberResponse.context);
+        memberContext = validEnvelope ? memberResponse.context : null;
+        if (!validEnvelope) {
+          memberContextError = "member_hub_context_invalid_envelope";
+        }
+      } catch (err) {
+        if (isMemberHubContextNotFound(err)) {
+          // 會員中心確定沒有這個帳號（沒註冊過）：固定代碼，前端靠它顯示「請先到會員中心註冊」（#650）。
+          console.warn("Member Hub has no context for this account (not registered).");
+          memberContextError = MEMBER_HUB_CONTEXT_NOT_FOUND;
+        } else {
+          console.error("Member Hub context fetch failed:", err);
+          memberContextError = `member_hub_context_failed: ${err instanceof Error ? err.message : String(err)}`;
+        }
       }
-    } catch (err) {
-      if (isMemberHubContextNotFound(err)) {
-        // 會員中心確定沒有這個帳號（沒註冊過）：固定代碼，前端靠它顯示「請先到會員中心註冊」（#650）。
-        console.warn("Member Hub has no context for this account (not registered).");
-        memberContextError = MEMBER_HUB_CONTEXT_NOT_FOUND;
-      } else {
-        console.error("Member Hub context fetch failed:", err);
-        memberContextError = `member_hub_context_failed: ${err instanceof Error ? err.message : String(err)}`;
-      }
-    }
+    };
+    const lookupIdentity = async () => {
+      const result = await supabaseAdmin
+        .from("user_identities")
+        .select("profile_id")
+        .eq("provider", "logto")
+        .eq("provider_user_id", userinfo.sub)
+        .maybeSingle();
+      mark("identity_lookup");
+      return result;
+    };
+    const [{ data: existingIdentity, error: identityError }] = await Promise.all([lookupIdentity(), fetchMemberContext()]);
+    if (identityError) throw identityError;
 
     if (!memberContext) {
       memberContextError = memberContextError || "member_hub_context_missing";
@@ -818,8 +868,10 @@ Deno.serve(async (req: Request) => {
     let platformOrgFields = { great_region: null as string | null, pastoral_zone: null as string | null, small_group: null as string | null };
 
     // 「失敗」跟「成功但沒有歸屬」要分開（#654）：失敗時，會員中心沒給的層沿用舊值。
-    let platformOrgStatus: "ok" | "failed" | "skipped" = "skipped";
-    if (memberId) {
+    let platformOrgStatus = "skipped" as "ok" | "failed" | "skipped";
+    // 跟下面的 profile 查詢一起跑（#674）；自己接住所有錯，所以提早 return 也不會有沒人接的 rejection。
+    const platformOrgTask = (async () => {
+      if (!memberId) return;
       try {
         const platformResponse = await fetchJson(
           `${platformApiUrl}/members/${encodeURIComponent(memberId)}/organization`,
@@ -835,29 +887,7 @@ Deno.serve(async (req: Request) => {
         console.warn("Platform organization fetch failed; keeping existing org levels Member Hub did not supply.", err);
       }
       mark("platform_org");
-    }
-
-    let placementOrgFields = { great_region: null as string | null, pastoral_zone: null as string | null, small_group: null as string | null };
-
-    const contextOrgFields = orgFromMemberContext(organization);
-    const mergedOrg = mergeOrgSources(platformOrgFields, placementOrgFields, organization);
-    const orgResolutionSource = hasAnyOrgField(placementOrgFields)
-      ? "member_hub_org_placement"
-      : (hasAnyOrgField(contextOrgFields) ? "member_hub_context" : (hasAnyOrgField(platformOrgFields) ? "platform_organization" : "none"));
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-
-    const { data: existingIdentity, error: identityError } = await supabaseAdmin
-      .from("user_identities")
-      .select("profile_id")
-      .eq("provider", "logto")
-      .eq("provider_user_id", userinfo.sub)
-      .maybeSingle();
-
-    if (identityError) throw identityError;
-    mark("identity_lookup");
+    })();
 
     let profileId = existingIdentity?.profile_id || null;
     let existingProfile: any = null;
@@ -944,6 +974,15 @@ Deno.serve(async (req: Request) => {
       profileId = crypto.randomUUID();
     }
 
+    await platformOrgTask;
+
+    let placementOrgFields = { great_region: null as string | null, pastoral_zone: null as string | null, small_group: null as string | null };
+
+    const contextOrgFields = orgFromMemberContext(organization);
+    const mergedOrg = mergeOrgSources(platformOrgFields, placementOrgFields, organization);
+    const orgResolutionSource = hasAnyOrgField(placementOrgFields)
+      ? "member_hub_org_placement"
+      : (hasAnyOrgField(contextOrgFields) ? "member_hub_context" : (hasAnyOrgField(platformOrgFields) ? "platform_organization" : "none"));
 
     // #665：帳號合併後用另一種方式登入，這次的會員沒有牧區就不拿來覆寫帳號。
     const keepAccountMember = shouldKeepAccountMember({
@@ -1068,7 +1107,7 @@ Deno.serve(async (req: Request) => {
       small_group_id,
       orgLinkStatus,
       orgLinkError
-    } = await resolveLocalOrgLinks(supabaseAdmin, profilePayload, keepAccountMember ? null : memberContext);
+    } = await resolveLocalOrgLinks(supabaseAdmin, profilePayload, keepAccountMember ? null : memberContext, existingProfile);
     mark("org_links");
 
     profilePayload.great_region_id = (great_region_id || (profilePayload.great_region === existingProfile?.great_region ? existingProfile?.great_region_id : null)) || null;
@@ -1091,15 +1130,19 @@ Deno.serve(async (req: Request) => {
     let orgCleanupResult: any = null;
     let orgCleanupError: string | null = null;
     if (memberContext) {
-      const { data: cleanupData, error: cleanupError } = await supabaseAdmin
-        .rpc("prune_orphaned_church_org_nodes", {});
-      if (cleanupError) {
-        orgCleanupStatus = "failed";
-        orgCleanupError = cleanupError.message || String(cleanupError);
-        console.warn("Orphaned organization cleanup failed; continuing session sync.", cleanupError);
+      if (!ORG_PRUNE_GATE.allow()) {
+        orgCleanupStatus = "throttled";
       } else {
-        orgCleanupStatus = "success";
-        orgCleanupResult = cleanupData;
+        const { data: cleanupData, error: cleanupError } = await supabaseAdmin
+          .rpc("prune_orphaned_church_org_nodes", {});
+        if (cleanupError) {
+          orgCleanupStatus = "failed";
+          orgCleanupError = cleanupError.message || String(cleanupError);
+          console.warn("Orphaned organization cleanup failed; continuing session sync.", cleanupError);
+        } else {
+          orgCleanupStatus = "success";
+          orgCleanupResult = cleanupData;
+        }
       }
     }
     mark("org_prune");

@@ -264,7 +264,7 @@ describe("nlc-data plan_summary / plan_roster (leader view)", () => {
   it("uses the server's visible ids and ignores any scope the client sends", async () => {
     const d = deps();
     const forged = { p_global_plan_id: PLAN_ID, p_whole_church: true, p_visible_ids: null, p_actor_id: "someone-else", p_preset_key: "forged" };
-    const res = await runPlanReport("plan_roster", forged, ["p1", "p2"], ADMIN_ID, d);
+    const res = await runPlanReport("plan_roster", forged, async () => ["p1", "p2"], ADMIN_ID, d);
     expect(res.status).toBe(200);
     expect(d.rpc).toHaveBeenCalledWith("get_pastoral_overview", {
       p_global_plan_id: PLAN_ID, p_preset_key: PLAN_ID, p_whole_church: false, p_visible_ids: ["p1", "p2"], p_actor_id: ADMIN_ID
@@ -275,30 +275,30 @@ describe("nlc-data plan_summary / plan_roster (leader view)", () => {
 
   it("whole church only when getVisibleProfileIds returned null", async () => {
     const d = deps();
-    await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID }, null, ADMIN_ID, d);
+    await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID }, async () => null, ADMIN_ID, d);
     expect(d.rpc.mock.calls[0][1]).toMatchObject({ p_whole_church: true, p_visible_ids: null });
   });
 
   it("an empty managed scope never widens to the whole church (only the leader themself)", async () => {
     const d = deps(overview([]));
-    const res = await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID }, [], ADMIN_ID, d);
+    const res = await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID }, async () => [], ADMIN_ID, d);
     expect(d.rpc.mock.calls[0][1]).toMatchObject({ p_whole_church: false, p_visible_ids: [ADMIN_ID] });
     expect(res.body.data.funnel.inScope).toBe(0);
   });
 
   it("validates the plan id and scope, and 404s an unknown plan", async () => {
     const d = deps();
-    expect(await runPlanReport("plan_summary", { p_global_plan_id: "nope" }, null, ADMIN_ID, d)).toEqual({ status: 400, body: { error: "invalid_plan_id" } });
-    expect(await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID, scope: { pastoralZone: [] } }, null, ADMIN_ID, d))
+    expect(await runPlanReport("plan_summary", { p_global_plan_id: "nope" }, async () => null, ADMIN_ID, d)).toEqual({ status: 400, body: { error: "invalid_plan_id" } });
+    expect(await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID, scope: { pastoralZone: [] } }, async () => null, ADMIN_ID, d))
       .toEqual({ status: 400, body: { error: "invalid_org_filter" } });
     expect(d.fetchPlanRow).not.toHaveBeenCalled();
     const missing = { fetchPlanRow: vi.fn(async () => ({ data: null, error: null })), rpc: vi.fn() };
-    expect(await runPlanReport("plan_roster", { p_global_plan_id: PLAN_ID }, null, ADMIN_ID, missing)).toEqual({ status: 404, body: { error: "plan_not_found" } });
+    expect(await runPlanReport("plan_roster", { p_global_plan_id: PLAN_ID }, async () => null, ADMIN_ID, missing)).toEqual({ status: 404, body: { error: "plan_not_found" } });
     expect(missing.rpc).not.toHaveBeenCalled();
   });
 
   it("gives the same numbers as the admin console for the same people", async () => {
-    const leader = await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID }, null, ADMIN_ID, deps());
+    const leader = await runPlanReport("plan_summary", { p_global_plan_id: PLAN_ID }, async () => null, ADMIN_ID, deps());
     const { deps: adminDeps } = setupAdmin();
     const admin = await json(await handleAdminRequest(post({ action: "plan_summary", params: { global_plan_id: PLAN_ID } }), adminDeps));
     expect(leader.body.data).toEqual(admin.body.data);
@@ -310,8 +310,8 @@ describe("nlc-data plan_summary / plan_roster (leader view)", () => {
     expect(start).toBeGreaterThan(0);
     const block = src.slice(start, src.indexOf("return jsonResponse(result.body, result.status);", start));
     expect(block).toContain("if (!canManagePlans(profile)) return jsonResponse({ error: \"forbidden\" }, 403);");
-    expect(block).toContain("const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);");
-    expect(block).toContain("runPlanReport(action, body.args, visibleIds, profile.id,");
+    expect(block).toContain("const loadVisibleIds = () => requestVisibleProfileIds(supabaseAdmin, profile, requestCache);");
+    expect(block).toContain("runPlanReport(action, body.args, loadVisibleIds, profile.id,");
     expect(block).toContain("p_action: \"view_plan_roster\"");
     expect(block).toContain("if (action === \"plan_roster\" && result.status === 200) {");
   });

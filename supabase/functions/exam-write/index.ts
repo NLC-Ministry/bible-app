@@ -12,7 +12,7 @@
 // 權限刻意很窄：
 //   · 只能呼叫 exam_save_progress / exam_submit_attempt 兩支，actor 固定是 attempt 的主人。
 //   · 截止時間、狀態（已送出 / 已鎖）等規則全部照 DB 函式原本的檢查，這裡不另外放寬。
-//   · 功能開關 speed_reading_exam 關閉時一樣擋。
+//   · 功能開關 speed_reading_exam 關閉時一樣擋（模組快取 30 秒，後台關掉後最久 30 秒生效，#674）。
 //
 // 回應：成功 200 { data }；RPC 業務錯誤 400 { error, code }（跟 nlc-data 同形狀，前端照常處理）；
 //       憑證不符 401；其他 4xx/5xx。前端遇到 401 / 404 / 5xx / 連不上會退回 nlc-data 路徑。
@@ -23,6 +23,7 @@
 // supabase/config.toml：[functions.exam-write] verify_jwt = false（憑證不是 Supabase JWT）。
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createFeatureFlagCache } from "../_shared/edge-cache.mjs";
 
 // >>> exam-write-token（nlc-data 與 exam-write 兩支 index.ts 內此區塊逐字相同；scripts/exam-write-path.test.mjs 會比對）
 // 大測驗「作答專用寫入憑證」：nlc-data 簽發、exam-write 驗證。直接內嵌、不 import 共用檔，
@@ -110,6 +111,8 @@ function corsHeadersFor(req: Request): Record<string, string> {
 const MAX_BODY_BYTES = 512 * 1024;   // 整份卷含簡答也遠小於此；擋異常大 payload
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SUBMIT_REASONS = new Set(["manual", "timeout"]);
+// 考試期間數百人同時自動暫存，開關不分人，共用就好（#674）
+const FEATURE_FLAG_CACHE = createFeatureFlagCache({ ttlMs: 30000 });
 
 Deno.serve(async (req: Request) => {
   const corsHeaders = corsHeadersFor(req);
@@ -142,23 +145,18 @@ Deno.serve(async (req: Request) => {
   });
 
   try {
-    const { data: attempt, error: attemptErr } = await admin
-      .from("exam_attempts")
-      .select("id, user_id")
-      .eq("id", attemptId)
-      .maybeSingle();
+    // 一起查、照原本的順序判斷：憑證不符一律先回 401，不透露開關狀態。snapshot 不會 reject（讀不到＝全部關閉）。
+    const [{ data: attempt, error: attemptErr }, flags] = await Promise.all([
+      admin.from("exam_attempts").select("id, user_id").eq("id", attemptId).maybeSingle(),
+      FEATURE_FLAG_CACHE.snapshot(admin)
+    ]);
     if (attemptErr) return json({ error: "lookup_failed" }, 500);
     // 找不到跟憑證不符回同一個錯，不透露 attempt 存不存在
     if (!attempt || !(await verifyExamWriteToken(secret, attempt.id, attempt.user_id, body?.token))) {
       return json({ error: "invalid_exam_write_token" }, 401);
     }
 
-    const { data: feature, error: featureErr } = await admin
-      .from("app_feature_settings")
-      .select("enabled")
-      .eq("key", "speed_reading_exam")
-      .maybeSingle();
-    if (featureErr || feature?.enabled !== true) return json({ error: "speed_reading_exam_feature_disabled" }, 403);
+    if (flags.get("speed_reading_exam") !== true) return json({ error: "speed_reading_exam_feature_disabled" }, 403);
 
     const { data, error } = action === "save"
       ? await admin.rpc("exam_save_progress", {

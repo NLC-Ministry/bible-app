@@ -68,14 +68,34 @@ const post = (body) => new Request("https://example.supabase.co/functions/v1/adm
 const json = async (response) => ({ status: response.status, body: await response.json() });
 const sqlCalls = (calls) => calls.filter((call) => /^admin_api_(plan|home)_/.test(call.fn));
 
+describe("home_summary 同時查（#674）", () => {
+  it("計畫報告和首頁數字一起開始：報告要等數字開始查才放行，依序跑會卡住", async () => {
+    const { deps } = setup();
+    const inner = deps.rpc;
+    let countsStarted;
+    const countsStartedPromise = new Promise((resolve) => { countsStarted = resolve; });
+    deps.rpc = vi.fn(async (fn, args) => {
+      if (fn === "admin_api_home_counts") countsStarted();
+      if (fn === "admin_api_plan_info") await countsStartedPromise;
+      return inner(fn, args);
+    });
+    const { status, body } = await json(await handleAdminRequest(post({ action: "home_summary" }), deps));
+    expect(status).toBe(200);
+    expect(body.data.reports.open).toBe(3);
+    expect(body.data.plan.funnel).toBeTruthy();
+  });
+});
+
 describe("admin-api home_summary (#569)", () => {
   it("default plan → the same summary rules as the plan overview → the other counts; nothing audited", async () => {
     const { deps, calls } = setup();
     const res = await json(await handleAdminRequest(post({ action: "home_summary", params: {} }), deps));
     expect(res.status).toBe(200);
-    expect(sqlCalls(calls).map((call) => call.fn)).toEqual([
-      "admin_api_plan_options", "admin_api_plan_info", "admin_api_plan_people", "admin_api_home_counts"
-    ]);
+    // 預設計畫要先查出來；後面的報告和數字同時跑（#674），先後不固定
+    const fns = sqlCalls(calls).map((call) => call.fn);
+    expect(fns[0]).toBe("admin_api_plan_options");
+    expect([...fns.slice(1)].sort()).toEqual(["admin_api_home_counts", "admin_api_plan_info", "admin_api_plan_people"]);
+    expect(fns.indexOf("admin_api_plan_info")).toBeLessThan(fns.indexOf("admin_api_plan_people"));
     const people = calls.find((call) => call.fn === "admin_api_plan_people");
     expect(people.args).toMatchObject({ p_actor_id: ADMIN_ID, p_global_plan_id: PLAN_ID, p_audit: false });
     expect(calls.find((call) => call.fn === "admin_api_home_counts").args).toEqual({ p_actor_id: ADMIN_ID, p_global_plan_id: PLAN_ID });

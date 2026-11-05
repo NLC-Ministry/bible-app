@@ -22,7 +22,7 @@ describe("nlc-data: batch action (Edge Function)", () => {
     expect(branch).toMatch(/queries\.length > 25/);
     // every slot runs through the shared pipeline at the same time (#631), results kept in request order
     expect(branch).toMatch(/await Promise\.all\(queries\.map\(/);
-    expect(branch).toContain("await runSelectPipeline(spec || {}, profile, supabaseAdmin)");
+    expect(branch).toContain("await runSelectPipeline(spec || {}, profile, supabaseAdmin, requestCache)");
     expect(branch).toContain("return jsonResponse({ data: results })");
     // resolveProfile / auth verification happens once, before the action dispatch
     expect(edge.indexOf("const profile = await resolveProfile")).toBeLessThan(edge.indexOf('if (action === "batch")'));
@@ -39,20 +39,20 @@ describe("nlc-data: batch action (Edge Function)", () => {
   it("lets only the home page's read-only RPCs into a batch, through the same path as action:'rpc' (#631)", () => {
     const branch = edge.slice(edge.indexOf('if (action === "batch")'), edge.indexOf('if (action === "send_care_reminder")'));
     expect(branch).toContain('if (!BATCH_RPC_FUNCTIONS.has(String(spec.function || ""))) return { error: "batch_read_only" }');
-    expect(branch).toContain("await runRpcRequest(spec, profile, supabaseAdmin, requestId)");
+    expect(branch).toContain("await runRpcRequest(spec, profile, supabaseAdmin, requestId, requestCache)");
     // the single-request path checks retired plans before dispatch; every batch slot must too
     expect(branch).toContain("isRetiredPlanRequest(spec || {})");
     const single = edge.slice(edge.indexOf('    if (action === "rpc") {'), edge.indexOf('if (action === "batch")'));
-    expect(single).toContain("await runRpcRequest(body, profile, supabaseAdmin, requestId)");
+    expect(single).toContain("await runRpcRequest(body, profile, supabaseAdmin, requestId, requestCache)");
   });
 
   it("runSelectPipeline mirrors the single-query select pipeline (allowlist + forced scope + options)", () => {
     const fn = edge.slice(edge.indexOf("async function runSelectPipeline("), edge.indexOf("Deno.serve(async (req"));
     expect(fn).toContain('READ_TABLES.has(table) || canReportOwnSelect');
     expect(fn).toContain('return { error: "forbidden" }');
-    expect(fn).toContain('isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall")');
+    expect(fn).toContain('isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall", requestCache)');
     expect(fn).toContain('applyFilters(query, spec.filters || [])');
-    expect(fn).toContain('await applyForcedScope(query, table, "select", profile, supabaseAdmin)');
+    expect(fn).toContain('await applyForcedScope(query, table, "select", profile, supabaseAdmin, requestCache)');
     expect(fn).toContain("rangeFrom + MAX_ROWS_PER_REQUEST - 1");
     expect(fn).toContain("Math.min(MAX_ROWS_PER_REQUEST, Math.max(1, Number(spec.limit)");
     expect(fn).toMatch(/spec\.returning === "single"/);
