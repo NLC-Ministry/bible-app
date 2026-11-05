@@ -14,7 +14,6 @@
     "test:changed": "node scripts/test-changed.mjs"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.5.3",
     "@radix-ui/react-avatar": "^1.1.0",
     "@radix-ui/react-slot": "^1.1.0",
     "class-variance-authority": "^0.7.0",
@@ -26,8 +25,7 @@
     "react-hook-form": "^7.83.0",
     "sweetalert2": "^11.26.25",
     "tailwind-merge": "^2.6.1",
-    "vaul": "^1.1.2",
-    "zod": "^4.6.7"
+    "vaul": "^1.1.2"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
