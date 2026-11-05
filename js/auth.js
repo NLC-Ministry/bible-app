@@ -319,6 +319,7 @@ const auth = {
     state.activePlan = null;
     state.currentProfileId = null;
     state.profileLockedFields = [];
+    state.supabase?.invalidateReads?.();
     if (typeof db !== "undefined" && typeof db.resetOrgStructure === "function") {
       db.resetOrgStructure();
     }
