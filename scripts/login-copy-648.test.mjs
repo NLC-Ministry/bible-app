@@ -20,7 +20,7 @@ describe("login card wording (#648)", () => {
   it("the sign-in button just says 登入, and first-timers know to start here", () => {
     const copy = getLoginGateCopy(null, { hasTokens: false });
     expect(copy.button).toBe("登入");
-    expect(copy.subtitle).toBe("跟弟兄姊妹一起速讀聖經。登入後，換手機也能接著讀。第一次使用也從這裡開始。");
+    expect(copy.subtitle).toBe("跟弟兄姊妹一起速讀聖經。登入後，換裝置也能接著讀。第一次使用也從這裡開始。");
     const dom = new JSDOM(`<!doctype html><body>${loginCard}</body>`);
     const doc = dom.window.document;
     expect(doc.getElementById("btn-gate-nlc-login").textContent.trim()).toBe("登入");

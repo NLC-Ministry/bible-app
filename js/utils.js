@@ -2795,7 +2795,7 @@ export function initSpeechPreferencesControls() {
     if (filteredVoices.length === 0) {
       const opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "找不到可用的中文語音，請確認手機已安裝中文語音包";
+      opt.textContent = "找不到可用的中文語音，請確認裝置已安裝中文語音包";
       voiceSelect.appendChild(opt);
       return;
     }
