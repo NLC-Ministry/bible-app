@@ -172,9 +172,34 @@
       arm();
     })();
   </script>
+  <!-- 經文卡片背景圖提早下載（#668）：同一天再開 App 時網址已知，解析 HTML 就開始抓，
+       之後 home.js 的 preloadVerseCardImage 抓同一個網址會命中快取。開機一定是經文模式
+       （verseCardMode 沒有存），所以只看 daily_verse_*。新的一天網址還沒抽，不預抓。
+       要在外部 stylesheet 之前：前面有還沒載完的 stylesheet 時，inline script 會等它。 -->
+  <script id="verse-card-preload">
+    (function () {
+      try {
+        if (location.pathname !== "/" && location.pathname !== "/index.html") return;
+        if (location.search || location.hash) return;
+        if (localStorage.getItem("quick_launch_bible_enabled") === "true") return;
+        var today = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+        if (localStorage.getItem("daily_verse_saved_date") !== today) return;
+        var url = localStorage.getItem("daily_verse_bg");
+        if (!url) return;
+        var link = document.createElement("link");
+        link.setAttribute("rel", "preload");
+        link.setAttribute("as", "image");
+        link.setAttribute("href", url);
+        link.setAttribute("fetchpriority", "high");
+        document.head.appendChild(link);
+      } catch (e) { /* 讀不到 localStorage 就照常開機 */ }
+    })();
+  </script>
   <!-- Google Fonts: Inter & Outfit & Noto Sans TC -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- 經文卡片背景圖（#668）：圖片以 no-cors 載入，所以不加 crossorigin -->
+  <link rel="preconnect" href="https://images.unsplash.com">
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=Outfit:wght@400;500;600;700&display=swap"
     rel="stylesheet">
@@ -426,7 +451,7 @@
             style="position: relative; width: 100%; min-height: 320px; overflow: hidden; border-radius: 1rem; cursor: default;">
 
             <!-- Bottom Layer: Image (Absolute positioned backdrop) -->
-            <img id="card-bg" class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
+            <img id="card-bg" fetchpriority="high" class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500"
               style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; transition: opacity 0.5s; opacity: 0;"
               src="" alt="" />
 
