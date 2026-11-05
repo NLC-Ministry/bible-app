@@ -169,7 +169,8 @@ describe("nlc-data wiring", () => {
   // 新增會改資料的管理 RPC 時，要嘛加進 AUDITED_ADMIN_RPCS，要嘛在這裡寫明為什麼不記
   const NOT_AUDITED = {
     create_reading_team: "會友自己建隊（隊伍有 0149 事件表）",
-    exam_reset_my_rehearsal: "管理員重設自己的預演，不影響別人"
+    exam_reset_my_rehearsal: "管理員重設自己的預演，不影響別人",
+    admin_set_voucher_merchant: "稽核在 SQL 同一個交易（voucher_merchant.add／remove，#679），不走盡力而為的補記"
   };
   const MUTATOR_RE = /^(admin_(upsert|set|delete|save|import|publish|revoke|clear)_|exam_(upsert|delete|publish|set|reset|recompute|save_announcement|finalize|assign)|set_|issue_admin_set|publish_|resubmit_|create_|swap_)/;
   it("audits every admin RPC that changes data", () => {

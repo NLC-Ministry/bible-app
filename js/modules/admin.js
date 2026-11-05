@@ -1,5 +1,6 @@
 // js/modules/admin.js
 
+import { createAdminVoucherMerchants } from "./admin-voucher-merchants.mjs";
 import {
   sendBulkPlanInvitations,
   wasPlanInviteRemindedToday
@@ -3417,6 +3418,7 @@ export async function renderAdminLightningQuizAwards({ weekStart = null } = {}) 
     </div>
     <h4 class="admin-lq-awards__overview-title">跨週總覽</h4>
     <div data-lq-awards-overview class="admin-lq-awards"></div>
+    <div data-lq-voucher-merchants></div>
   `;
   const thisWeek = weekStartOf(formatTaiwanDate());
   const clamp = week => (week && week < thisWeek ? weekStartOf(week) : thisWeek);
@@ -3464,6 +3466,14 @@ export async function renderAdminLightningQuizAwards({ weekStart = null } = {}) 
     onChanged: () => { if (refreshVouchers) void refreshVouchers(); }
   });
   adminLightningQuizAwards = { setWeek, reloadOverview: () => loadOverview() };
+  // 店家帳號（#679）載入失敗只影響這一塊
+  void createAdminVoucherMerchants({
+    db,
+    escapeHTML,
+    showToast,
+    confirm: options => window.showConfirmDialog(options),
+    host: host.querySelector('[data-lq-voucher-merchants]')
+  }).load();
   await Promise.all([loadWeek(), loadOverview()]);
 }
 
