@@ -27,11 +27,14 @@ export function rememberLoginMethod({
   user,
   accountCreatedAt,
   hasAnyPlan,
+  profileId,
   storage = defaultStorage(),
   now = Date.now()
 } = {}) {
   if (!storage || !shouldRemember({ accountCreatedAt, hasAnyPlan, now })) return null;
   const record = currentLoginMethod(user);
+  // 帳號 ID 只用來判斷「現在這個帳號是不是裝置記得的那個」（#664），不是憑證，伺服器完全不看。
+  if (profileId) record.profileId = String(profileId);
   try {
     storage.setItem(LAST_LOGIN_METHOD_KEY, JSON.stringify(record));
   } catch (_) {
@@ -44,7 +47,9 @@ function parseRecord(raw) {
   try {
     const parsed = JSON.parse(raw);
     if (parsed && (parsed.method === "phone" || parsed.method === "email") && parsed.masked) {
-      return { method: parsed.method, masked: String(parsed.masked) };
+      const record = { method: parsed.method, masked: String(parsed.masked) };
+      if (parsed.profileId) record.profileId = String(parsed.profileId);
+      return record;
     }
     return parsed && parsed.method === "" ? { method: "", masked: "" } : null;
   } catch (_) {
@@ -70,6 +75,7 @@ function seedFromIdentitySnapshot(storage, now) {
     user: profile,
     accountCreatedAt: profile.created_at,
     hasAnyPlan: hasStoredPlans(storage),
+    profileId: profile.id,
     storage,
     now
   });

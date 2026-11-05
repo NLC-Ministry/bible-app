@@ -40,3 +40,7 @@ verify_jwt = false
 # 大測驗作答寫入：憑證是 nlc-data 簽的作答專用 HMAC，不是 Supabase JWT
 [functions.exam-write]
 verify_jwt = false
+
+# 真正的憑證是 body 裡的 Logto token（#664）
+[functions.recover-plan]
+verify_jwt = false

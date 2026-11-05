@@ -77,6 +77,7 @@ import {
 } from './login-onboarding-gate.mjs';
 import { maybeAutoRedirectToSso } from './login-auto-redirect.mjs';
 import { rememberLoginMethod, renderLoginMethodHint } from './login-method-memory.mjs';
+import { abandonPlanRecovery, finishPlanRecoveryAfterCallback } from './plan-recovery.mjs';
 import { SESSION_EXPIRED_MESSAGE, isAuthExpiredError } from './copy/auth-messages.mjs';
 import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
 import {
@@ -675,11 +676,14 @@ const db = {
         statusBadge.querySelector(".status-text").textContent = "線上模式";
         if (placeholder) placeholder.classList.add("hidden");
 
+        const hasOAuthCallback = urlParams.has("code") || urlParams.has("state") || urlParams.has("error") || urlParams.has("error_description");
+        // 上次按了找回計畫卻沒有回來（#664）：這次的登入流程不留到下一步。
+        if (!hasOAuthCallback) abandonPlanRecovery();
+
         if (navigator.onLine === false && this.tryRestoreOfflineSession()) {
           return true;
         }
 
-        const hasOAuthCallback = urlParams.has("code") || urlParams.has("state") || urlParams.has("error") || urlParams.has("error_description");
         if (!hasOAuthCallback && typeof authLaunch !== "undefined" && typeof authLaunch.maybeResumeInteractiveAuthFromBridge === "function") {
           const resumed = await authLaunch.maybeResumeInteractiveAuthFromBridge();
           if (resumed) {
@@ -697,6 +701,9 @@ const db = {
           if (callbackHandled) {
             console.log("Logto OIDC callback handled successfully.");
           }
+          // 找回計畫（#664）：顯示確認畫面，不等會友回答，開機照原本的登入狀態走下去，
+          // 否則開機保底會在 20 秒後蓋上來。確認並找回後會重新載入。不會丟例外。
+          void finishPlanRecoveryAfterCallback();
 
           // Sync Logto login through the Edge Function so Supabase RLS can resolve profiles.
           if (auth.isLoggedIn()) {
@@ -2070,7 +2077,8 @@ const db = {
         rememberLoginMethod({
           user: state.currentUser,
           accountCreatedAt: state.currentUser?.account_created_at,
-          hasAnyPlan: state.activePlans.length > 0
+          hasAnyPlan: state.activePlans.length > 0,
+          profileId: state.currentProfileId
         });
       }
     }

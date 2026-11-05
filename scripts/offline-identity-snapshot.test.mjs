@@ -143,7 +143,8 @@ describe("Logto refresh rejection keeps the identity snapshot", () => {
 
   it("an intentional logout still deletes the snapshot", () => {
     const start = authSource.indexOf("async logout()");
-    const body = authSource.slice(start, authSource.indexOf("\n  },", start));
+    expect(authSource.slice(start, authSource.indexOf("\n  },", start))).toContain("await this.clearAccountLocalData()");
+    const body = authSource.slice(authSource.indexOf("async clearAccountLocalData()"), start);
     expect(body).toContain('localStorage.removeItem("offline_trusted_identity");');
   });
 });

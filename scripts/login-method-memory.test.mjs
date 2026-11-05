@@ -110,7 +110,7 @@ describe("readLastLoginMethod", () => {
     const storage = memoryStorage({
       [OFFLINE_IDENTITY_KEY]: snapshot({ ...PHONE_ACCOUNT, created_at: daysAgo(200) }, 90)
     });
-    expect(readLastLoginMethod({ storage, now: NOW })).toEqual({ method: "phone", masked: "0912-***-678" });
+    expect(readLastLoginMethod({ storage, now: NOW })).toEqual({ method: "phone", masked: "0912-***-678", profileId: "p1" });
     expect(JSON.parse(storage.store.get(LAST_LOGIN_METHOD_KEY)).method).toBe("phone");
   });
 
@@ -200,7 +200,7 @@ describe("db records the method after the plan list loads", () => {
 
   it("an old account is recorded once the plan list arrives", async () => {
     await load(ok([]));
-    expect(JSON.parse(stored())).toEqual({ method: "phone", masked: "0912-***-678" });
+    expect(JSON.parse(stored())).toEqual({ method: "phone", masked: "0912-***-678", profileId: "profile-a" });
   });
 
   it("a new empty account is not recorded", async () => {

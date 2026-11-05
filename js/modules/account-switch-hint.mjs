@@ -90,8 +90,33 @@ export function currentLoginMethod(user) {
   return { method: "", masked: "" };
 }
 
-export function accountSwitchHintMarkup(currentUser) {
+// #664：裝置記得上次是用哪個方式登入：改成驗證那個方式就能找回。文案不提帳號、合併。
+function recoverPlanMarkup(offer, copy) {
+  const label = offer.method === "phone" ? "手機" : "Email";
+  const fill = template => template
+    .replace(/\{method\}/g, () => label)
+    .replace("{account}", () => `<span class="account-switch-hint__account">${escapeText(offer.masked)}</span>`);
+  const body = fill(copy.recoverBody || "你之前在這台裝置上是用 {method}（{account}）登入的，你的計畫和閱讀紀錄都在那裡。用 {method} 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。");
+  const cta = (copy.recoverCta || "用 {method} 找回我的計畫").replace("{method}", () => label);
+  return `
+    <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">
+      <h3 class="account-switch-hint__title" id="account-switch-hint-title">
+        <span class="nlc-icon nlc-icon--sm" data-icon="info" aria-hidden="true"></span>
+        <span>${copy.title || "找不到你的讀經計畫嗎？"}</span>
+      </h3>
+      <p class="account-switch-hint__body">${body}</p>
+      <p class="account-switch-hint__status hidden" data-account-recover-status role="status"></p>
+      <div class="account-switch-hint__actions">
+        <button type="button" class="primary-btn account-switch-hint__switch" data-account-recover-plan>${cta}</button>
+        <button type="button" class="secondary-btn" data-account-switch-dismiss>${copy.recoverDismissCta || "不是我／我是第一次參加"}</button>
+      </div>
+    </section>
+  `;
+}
+
+export function accountSwitchHintMarkup(currentUser, recoveryOffer = null) {
   const copy = (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.accountSwitchHint) || {};
+  if (recoveryOffer) return recoverPlanMarkup(recoveryOffer, copy);
   const { method, masked } = currentLoginMethod(currentUser);
   const account = `<span class="account-switch-hint__account">${escapeText(masked)}</span>`;
   let body;
@@ -120,7 +145,7 @@ export function accountSwitchHintMarkup(currentUser) {
   `;
 }
 
-export function bindAccountSwitchHint(container, { profileId, onSwitch } = {}) {
+export function bindAccountSwitchHint(container, { profileId, onSwitch, onRecover } = {}) {
   const card = container && container.querySelector("[data-account-switch-hint]");
   if (!card) return;
   if (typeof window !== "undefined" && typeof window.hydrateIcons === "function") window.hydrateIcons(card);
@@ -129,6 +154,23 @@ export function bindAccountSwitchHint(container, { profileId, onSwitch } = {}) {
     switchBtn.onclick = () => {
       switchBtn.disabled = true;
       if (typeof onSwitch === "function") onSwitch();
+    };
+  }
+  const recoverBtn = card.querySelector("[data-account-recover-plan]");
+  if (recoverBtn) {
+    const statusEl = card.querySelector("[data-account-recover-status]");
+    recoverBtn.onclick = async () => {
+      recoverBtn.disabled = true;
+      statusEl.classList.add("hidden");
+      // 從 Logto 按返回、瀏覽器直接還原這一頁（bfcache）：頁面不會重新跑，按鈕要自己恢復
+      window.addEventListener("pageshow", event => {
+        if (event.persisted) recoverBtn.disabled = false;
+      }, { once: true });
+      const result = typeof onRecover === "function" ? await onRecover() : null;
+      if (result && result.ok) return; // 正在跳轉
+      recoverBtn.disabled = false;
+      statusEl.textContent = (result && result.message) || "";
+      statusEl.classList.toggle("hidden", !statusEl.textContent);
     };
   }
   const dismissBtn = card.querySelector("[data-account-switch-dismiss]");
