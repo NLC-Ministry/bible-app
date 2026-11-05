@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
 const app = readFileSync("js/app.js", "utf8");
@@ -203,5 +203,90 @@ describe("web fonts: no unused Light (300) face downloaded (C)", () => {
   it("plan.js / plan-stats.js chart tick labels no longer request the unloaded weight 300", () => {
     expect(planModule).not.toMatch(/weight:\s*['"]300['"]/);
     expect(planStatsModule).not.toMatch(/weight:\s*['"]300['"]/);
+  });
+});
+
+// #668：同一天再開 App，背景圖在解析 HTML 時就開始下載，不等 app.js／home chunk。
+describe("verse card image preload", () => {
+  const IMAGE_URL = "https://images.unsplash.com/photo-1?auto=format&fit=crop&w=800&q=80";
+  const preloadScript = (() => {
+    const open = indexHtml.indexOf('<script id="verse-card-preload">');
+    if (open < 0) return "";
+    const start = indexHtml.indexOf(">", open) + 1;
+    return indexHtml.slice(start, indexHtml.indexOf("</script>", start));
+  })();
+
+  afterEach(() => vi.useRealTimers());
+
+  // 回傳這次開機被加進 <head> 的 preload link（沒有預抓就是空陣列）
+  function run({ pathname = "/", search = "", hash = "", store = {}, now = "2026-11-05T04:00:00Z", storage } = {}) {
+    vi.useFakeTimers({ now: new Date(now), toFake: ["Date"] });
+    const appended = [];
+    const document = {
+      createElement: (tag) => {
+        const attrs = { tag };
+        return { setAttribute: (key, value) => { attrs[key] = value; }, attrs };
+      },
+      head: { appendChild: (el) => appended.push(el.attrs) },
+    };
+    const localStorage = storage || { getItem: (key) => (key in store ? store[key] : null) };
+    new Function("location", "localStorage", "document", preloadScript)({ pathname, search, hash }, localStorage, document);
+    return appended;
+  }
+
+  const sameDay = { daily_verse_saved_date: "2026-11-05", daily_verse_bg: IMAGE_URL };
+
+  it("preloads today's saved image at high priority when it is the same day", () => {
+    for (const pathname of ["/", "/index.html"]) {
+      expect(run({ pathname, store: sameDay })).toEqual([
+        { tag: "link", rel: "preload", as: "image", href: IMAGE_URL, fetchpriority: "high" },
+      ]);
+    }
+  });
+
+  it("compares against the Taipei date, in the same format fetchRandomVerse saves", () => {
+    // UTC 11/05 16:30 已經是台北 11/06
+    const now = "2026-11-05T16:30:00Z";
+    expect(run({ now, store: sameDay })).toEqual([]);
+    expect(run({ now, store: { ...sameDay, daily_verse_saved_date: "2026-11-06" } })).toHaveLength(1);
+    // 兩邊格式一分歧，同一天也永遠比對不到，預抓就默默失效。
+    const dateExpression = "new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\\//g, '-')";
+    const saved = home.slice(home.indexOf("async function fetchRandomVerse"));
+    expect(saved).toContain(dateExpression);
+    expect(preloadScript).toContain(dateExpression);
+  });
+
+  it("does not fetch anything on a new day, so the day's random pick stays one request", () => {
+    expect(run({ store: { ...sameDay, daily_verse_saved_date: "2026-11-04" } })).toEqual([]);
+    expect(run({ store: { daily_verse_saved_date: "2026-11-05" } })).toEqual([]);
+    expect(run({ store: {} })).toEqual([]);
+  });
+
+  it("does not preload on deep links, return URLs or quick launch", () => {
+    expect(run({ pathname: "/read", store: sameDay })).toEqual([]);
+    expect(run({ search: "?from=notification", store: sameDay })).toEqual([]);
+    expect(run({ hash: "#/plan", store: sameDay })).toEqual([]);
+    expect(run({ store: { ...sameDay, quick_launch_bible_enabled: "true" } })).toEqual([]);
+  });
+
+  it("does nothing when localStorage cannot be read", () => {
+    const storage = { getItem: () => { throw new Error("blocked"); } };
+    expect(run({ storage })).toEqual([]);
+  });
+
+  it("runs before anything that can make the parser wait", () => {
+    const head = indexHtml.slice(0, indexHtml.indexOf("</head>"));
+    const script = head.indexOf('id="verse-card-preload"');
+    expect(script).toBeGreaterThan(head.indexOf('id="quick-launch-redirect"'));
+    expect(script).toBeLessThan(head.indexOf('rel="stylesheet"'));
+    expect(script).toBeLessThan(head.indexOf("<script src="));
+  });
+
+  it("preconnects to the image host without crossorigin, because the images load as no-cors", () => {
+    expect(indexHtml).toContain('<link rel="preconnect" href="https://images.unsplash.com">');
+  });
+
+  it("marks #card-bg as high priority", () => {
+    expect(indexHtml).toMatch(/<img id="card-bg"[^>]*\sfetchpriority="high"/);
   });
 });
