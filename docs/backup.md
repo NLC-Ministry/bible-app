@@ -28,7 +28,7 @@
 
 ## 一次性設定
 
-0. **Supabase CLI 保持登入**（`npx supabase login`；平常跑 `db push` 就已經登入了）。備份**不存 DB 密碼**：每一步連線前，程式在專案主資料夾跑 `node scripts/supabase-env.mjs production db dump --dry-run --linked`，拿 CLI 發的臨時帳號（`cli_login_postgres`，跟 `db push` 同一套機制），連上後 `SET ROLE postgres` 並設成唯讀。CLI 登入過期或改版導致格式看不懂時，備份會失敗並跳通知。
+0. **Supabase CLI 保持登入**（`npx supabase login`；平常跑 `db push` 就已經登入了）。備份**不存 DB 密碼**：每一步連線前，程式在專案主資料夾跑 `node scripts/supabase-env.mjs production db dump --dry-run`，拿 CLI 發的臨時帳號（`cli_login_postgres`，跟 `db push` 同一套機制），連上後 `SET ROLE postgres` 並設成唯讀。CLI 登入過期或改版導致格式看不懂時，備份會失敗並跳通知。
 1. **PostgreSQL 17 指令列工具**（`pg_dump`、`psql`；正式站是 17.x，工具版本不能比它舊，而且要 17.6 以上才有 `--restrict-key`）。只裝 Command Line Tools：
    ```powershell
    winget install --id PostgreSQL.PostgreSQL.17 --override "--mode unattended --unattendedmodeui minimal --enable-components commandlinetools --disable-components server,pgAdmin,stackbuilder"
@@ -46,7 +46,7 @@
    ```powershell
    .\scripts\backup-production.ps1 -Install
    ```
-   把腳本複製到 `<備份目錄>\bin\scripts\`（排程不受專案 repo 切換分支影響），在 `backup.config.json` 記下專案主資料夾（不是 task worktree，`npx supabase` 在那裡跑），註冊工作排程器「BibleSpeedReading-ProductionBackup」：每週二 00:00，錯過了（電腦沒開、沒登入）會在下次登入後補跑。**改了 `backup-production.mjs` 之後要重跑 `-Install`。**
+   把腳本和它用到的 `lib\` 複製到 `<備份目錄>\bin\scripts\`（排程不受專案 repo 切換分支影響），把正式站 ref 那一行寫到 `<備份目錄>\bin\.env`（副本讀不到專案的 `.env`），在 `backup.config.json` 記下專案主資料夾（不是 task worktree，`npx supabase` 在那裡跑），註冊工作排程器「BibleSpeedReading-ProductionBackup」：每週二 00:00，錯過了（電腦沒開、沒登入）會在下次登入後補跑。**改了 `backup-production.mjs`、`scripts/lib/supabase-cli-query.mjs`（含 CLI 版本）或 `project-refs.mjs` 之後要重跑 `-Install`。**
 5. 手動跑第一次：`& "$HOME\Documents\bible-speed-reading-backups\bin\scripts\backup-production.ps1"`。
 
 連線走 CLI 給的 Supabase Session pooler（目前是 `aws-1-ap-northeast-1.pooler.supabase.com:5432`，IPv4）；程式會檢查帳號屬於正式站、主機是 `*.pooler.supabase.com`。

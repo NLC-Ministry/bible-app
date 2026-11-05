@@ -12,9 +12,9 @@
 | 2. 翻譯輸入檔 | `node scripts/commentary-import/prepare.mjs <書名> [--write-glossary]` | `.cache/commentary/input/<書>.json`（不進版控） |
 | 3. 翻譯 | 照輸入檔的 `instructions` 把每則譯進步驟 1 的 JSON（`zh`、跨章總覽的 `title`） | |
 | 4. 對齊 | `node scripts/commentary-import/align.mjs <書名>` | 出處標籤對齊譯文寫法、片語填上和合本字句 |
-| 5. 匯入 | `node scripts/commentary-import/build-sql.mjs content/commentary/tosn/<書>.json > 匯入.sql`，再 `npx supabase db query --linked --project-ref <ref> -f 匯入.sql` | 待審、未發布；先 staging 再正式站 |
+| 5. 匯入 | `node scripts/commentary-import/build-sql.mjs content/commentary/tosn/<書>.json > 匯入.sql`，再 `node scripts/supabase-env.mjs <環境> db query -f 匯入.sql`（環境是 staging 或 production；這是寫入，代理程式要先問過維護者才加 `--yes`） | 待審、未發布；先 staging 再正式站 |
 | 6. 審核 | 後台「經文注釋」指派審核者 → 我的審核 → 最終發布 | |
-| 7. 匯出 | `node scripts/commentary-import/export.mjs <書名> --project-ref <ref>` | `content/commentary/reviewed/<書>.json`（審核通過＋已發布） |
+| 7. 匯出 | `node scripts/commentary-import/export.mjs <書名> --env <環境>` | `content/commentary/reviewed/<書>.json`（審核通過＋已發布） |
 
 StudyNotes.xml 在 https://tyndaleopenresources.com/ 的 `tyndale_open-studynotes.zip`；壓縮檔不要放進 repo。
 

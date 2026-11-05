@@ -8,7 +8,7 @@
 #
 # 不存 DB 密碼：備份程式每次連線前用已登入的 Supabase CLI 換一組臨時帳號。
 # 備份目錄預設 %USERPROFILE%\Documents\bible-speed-reading-backups，可用環境變數 BACKUP_ROOT 改。
-# 改了 backup-production.mjs 之後要重跑 -Install，排程才會用到新版。
+# 改了 backup-production.mjs 或它用到的 lib（含 CLI 版本）之後要重跑 -Install，排程才會用到新版。
 
 param(
   [switch]$SetSecrets,
@@ -90,9 +90,17 @@ if ($Install) {
   $gitCommon = (& git -C $PSScriptRoot rev-parse --path-format=absolute --git-common-dir).Trim()
   $ProjectDir = (Split-Path -Parent $gitCommon) -replace '/', '\'
   $BinScripts = Join-Path $Root 'bin\scripts'
-  New-Item -ItemType Directory -Force -Path $BinScripts | Out-Null
+  # 排程跑的是這份副本：backup-production.mjs 用到的 lib 也要複製，少一個下次備份就會失敗（#680）
+  New-Item -ItemType Directory -Force -Path (Join-Path $BinScripts 'lib') | Out-Null
   Copy-Item -Force (Join-Path $PSScriptRoot 'backup-production.mjs') $BinScripts
   Copy-Item -Force (Join-Path $PSScriptRoot 'backup-production.ps1') $BinScripts
+  Copy-Item -Force (Join-Path $PSScriptRoot 'lib\supabase-cli-query.mjs') (Join-Path $BinScripts 'lib')
+  Copy-Item -Force (Join-Path $PSScriptRoot 'lib\project-refs.mjs') (Join-Path $BinScripts 'lib')
+
+  # 副本不在 git 裡，讀不到專案的 .env：只把正式站 ref 那一行放到 bin\.env（lib\project-refs.mjs 會讀）
+  $refLine = Get-Content (Join-Path $ProjectDir '.env') -ErrorAction SilentlyContinue | Where-Object { $_ -match '^\s*SUPABASE_PRODUCTION_REF\s*=' } | Select-Object -First 1
+  if (-not $refLine) { throw "專案主資料夾的 .env 沒有 SUPABASE_PRODUCTION_REF（見 docs/staging.md）" }
+  Set-Content -Path (Join-Path $Root 'bin\.env') -Value $refLine -Encoding ascii
 
   $ConfigFile = Join-Path $Root 'backup.config.json'
   $config = if (Test-Path $ConfigFile) { Get-Content $ConfigFile -Raw | ConvertFrom-Json } else { New-Object PSObject }

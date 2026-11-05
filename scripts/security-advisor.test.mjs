@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { classifyFindings, parseArgs, renderFindings } from "./security-advisor.mjs";
+import { buildAdvisorsCommand, classifyFindings, parseAdvisorOutput, parseArgs, renderFindings } from "./security-advisor.mjs";
+import { SUPABASE_CLI } from "./lib/supabase-cli-query.mjs";
 
-// #594：Security Advisor（Splinter）結果只留資安類，依允許清單分類。
+// #594：Security Advisor 結果只留資安類，依允許清單分類。
 
 const finding = (name, cacheKey, categories = ["SECURITY"]) => ({
   name, cache_key: cacheKey, categories, level: "WARN",
@@ -47,6 +48,33 @@ describe("renderFindings", () => {
 
   it("says so when nothing needs handling", () => {
     expect(renderFindings({ envLabel: "staging", ref: "x", unexpected: [], accepted: [] })).toContain("✅");
+  });
+});
+
+describe("buildAdvisorsCommand", () => {
+  it("只查資安類，exit code 交給允許清單決定（#680）", () => {
+    const ref = "a".repeat(20);
+    expect(buildAdvisorsCommand(ref)).toBe(
+      `npx ${SUPABASE_CLI} db advisors --remote=${ref} --type security --level info --fail-on none -o json`
+    );
+  });
+});
+
+describe("parseAdvisorOutput", () => {
+  const row = finding("rls_enabled_no_policy", "t1");
+
+  it("reads the JSON array", () => {
+    expect(parseAdvisorOutput(JSON.stringify([row]), "Target: project x\n")).toEqual([row]);
+  });
+
+  it("treats an empty stdout as no findings only when the CLI says so", () => {
+    expect(parseAdvisorOutput("", "Target: project x\nNo issues found\n")).toEqual([]);
+    expect(() => parseAdvisorOutput("", "Target: project x\n")).toThrow(/看不懂/);
+  });
+
+  it("refuses output it cannot read instead of reporting all clear", () => {
+    expect(() => parseAdvisorOutput("oops", "")).toThrow(/看不懂/);
+    expect(() => parseAdvisorOutput('{"rows":[]}', "")).toThrow(/看不懂/);
   });
 });
 

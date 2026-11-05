@@ -2,7 +2,7 @@
 //
 //   node scripts/commentary-import/build-sql.mjs content/commentary/tosn/leviticus.json > 匯入.sql
 //   node scripts/commentary-import/build-sql.mjs content/commentary/tosn/leviticus.json --structure > 補結構.sql
-//   npx supabase db query --linked --project-ref <ref> -f 匯入.sql
+//   node scripts/supabase-env.mjs <staging|production> db query -f 匯入.sql（寫入；代理程式要先問過維護者才加 --yes）
 //
 // 先匯入 staging 確認，再匯入正式站。重跑安全：source_ref 已存在的會略過。
 // --structure：已經匯入的書卷補上 #542 的新欄位（結束章、交叉引用、片語、來源版本、指紋），

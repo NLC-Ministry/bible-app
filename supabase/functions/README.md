@@ -66,7 +66,7 @@ APP_ORIGIN=https://bible.newlife.org.tw
 **會友 App、`admin-api`、`nlc-data` 執行同一份**（App 由 `js/data/*`、`js/modules/pastoral-metrics.mjs` 轉出）。
 這些檔案只能 import 彼此（不能有 `npm:`、網址、`window`），`scripts/edge-function-deploy-graph.test.mjs` 會擋。
 
-- **部署一律用 CLI**（`npx supabase functions deploy <name> --project-ref <ref>`）：CLI 會跟著相對路徑的 import
+- **部署一律用 CLI**（`node scripts/supabase-env.mjs <staging|production> functions deploy <name>`）：CLI 會跟著相對路徑的 import
   把 `../_shared/...` 一起上傳／打包。只上傳函式自己資料夾的方式（Dashboard 編輯器等）會 `Module not found`
   ——打包失敗時線上照跑舊版，不會半套上線。
 - 改了 `_shared/progress` 的任何檔案，**`admin-api` 與 `nlc-data` 都要重新部署**，App 也要重新 build。
@@ -105,9 +105,9 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 - **會友 App 版本**（#567 個人頁的「App 是最新版」）：讀會友 App 的 `/version.json`（2 秒逾時、快取 60 秒，讀不到就是「無法判斷」）；預設讀 staging 網址；正式站要設 secret `ADMIN_API_MEMBER_APP_URL=https://bible.newlife.org.tw`（#609 起不從 Supabase 專案判斷）。
 
 ```bash
-npx supabase secrets set --project-ref <ref> ADMIN_API_ALLOWED_CLIENT_IDS=<後台 Logto client id>
+node scripts/supabase-env.mjs <staging|production> secrets set ADMIN_API_ALLOWED_CLIENT_IDS=<後台 Logto client id>
 node scripts/supabase-env.mjs staging secrets set ADMIN_API_ALLOW_LOCALHOST=true   # 只有 staging
-npx supabase functions deploy admin-api --project-ref <ref>
+node scripts/supabase-env.mjs <staging|production> functions deploy admin-api
 ```
 
 呼叫格式：`POST /functions/v1/admin-api`，`Authorization: Bearer <後台 access token>`，body `{ "action": "user_search", "params": { "q": "王" } }`；回 `{ data, request_id }` 或 `{ error, request_id }`。

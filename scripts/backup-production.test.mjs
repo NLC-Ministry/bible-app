@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { posix } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CATALOG_SQL,
@@ -8,6 +9,7 @@ import {
   buildExportScript,
   buildRestoreScript,
   cloudArchiveName,
+  credentialsCliArgs,
   dataFileName,
   filesToRotate,
   monthlyDumpName,
@@ -16,9 +18,10 @@ import {
   parseCatalog,
   parsePgMajor,
   psqlPath,
-  resolvePaths
+  resolvePaths,
+  secretsCliArgs
 } from "./backup-production.mjs";
-import { PROD_REF as LIB_PROD_REF } from "./lib/supabase-cli-query.mjs";
+import { PROD_REF as LIB_PROD_REF, SUPABASE_CLI } from "./lib/supabase-cli-query.mjs";
 
 // #345：正式站每週備份到本機 git 倉庫＋OneDrive 加密副本。
 const tables = [
@@ -31,6 +34,41 @@ const dirs = { dataDir: "C:\\backups\\repo\\data", metaDir: "C:\\backups\\repo\\
 describe("project ref", () => {
   it("is the production project, same as the shared CLI helper", () => {
     expect(PROD_REF).toBe(LIB_PROD_REF);
+  });
+});
+
+describe("Supabase CLI calls (#680)", () => {
+  it("use the pinned version and --remote", () => {
+    expect(credentialsCliArgs()).toEqual([SUPABASE_CLI, "db", "dump", "--dry-run", `--remote=${PROD_REF}`]);
+    expect(secretsCliArgs()).toEqual([SUPABASE_CLI, "secrets", "list", `--remote=${PROD_REF}`, "-o", "json"]);
+  });
+});
+
+describe("backup-production.ps1 -Install (#680)", () => {
+  const ps1 = readFileSync("scripts/backup-production.ps1", "utf8");
+
+  // 排程跑的是安裝目錄的副本：少複製一個檔，下一次備份就會在 import 時失敗
+  function relativeImports(file, seen = new Set()) {
+    for (const [, spec] of readFileSync(file, "utf8").matchAll(/^import [^;]*?from "(\.[^"]+)"/gms)) {
+      const target = posix.normalize(posix.join(posix.dirname(file), spec));
+      if (!seen.has(target)) {
+        seen.add(target);
+        relativeImports(target, seen);
+      }
+    }
+    return seen;
+  }
+
+  it("copies every file backup-production.mjs imports", () => {
+    const needed = [...relativeImports("scripts/backup-production.mjs")];
+    expect(needed).toContain("scripts/lib/supabase-cli-query.mjs");
+    for (const file of needed) {
+      expect(ps1, file).toContain(file.replace(/^scripts\//, "").replace(/\//g, "\\"));
+    }
+  });
+
+  it("gives the installed copy the production ref from the main folder's .env", () => {
+    expect(ps1).toContain("SUPABASE_PRODUCTION_REF");
   });
 });
 

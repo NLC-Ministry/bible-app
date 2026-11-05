@@ -35,7 +35,7 @@ const GIT_PUSH = /\bgit(?:\s+-[Cc]\s+\S+)*\s+push\b/;
 const GH_PR_CREATE = /\bgh\s+pr\s+create\b/;
 const GH_PR_MERGE = /\bgh\s+pr\s+merge\b/;
 // 直接用 supabase CLI，或經過 scripts/supabase-env.mjs <環境> 的包裝（#609）
-const DB_PUSH = /\bsupabase\s+db\s+push\b|\bsupabase-env\.mjs\s+\S+\s+db\s+push\b/;
+const DB_PUSH = /\bsupabase(?:@\S+)?\s+db\s+push\b|\bsupabase-env\.mjs\s+\S+\s+db\s+push\b/;
 
 // Returns null (allow), { needsLock: reason } or { deny: reason }.
 export function classify(command) {
