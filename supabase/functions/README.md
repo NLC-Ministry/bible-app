@@ -91,13 +91,16 @@ Both functions must have `verify_jwt = false` because the incoming bearer token 
 流程（前端 `js/plan-recovery.mjs`、`js/auth.js` 的 `startPlanRecoveryLogin`）：
 
 1. `POST {action:"start", source_token}`：驗過新帳號的 access token，回一次性 `nonce`。資料庫只存雜湊，15 分鐘到期。
-2. 前端把新帳號 token 暫存在 `sessionStorage`，帶 nonce、`prompt=login` 跳 Logto。中途取消或失敗：清掉暫存，本機登入狀態不變。
-3. `POST {action:"complete", source_token, target_access_token, target_id_token}`：兩張 token 都驗過，`id_token` 的 nonce 要對上這個來源的 challenge，用完就消耗。
+2. 前端帶 nonce、`prompt=login`、`max_age=0` 跳 Logto，本機的登入不動。回來後舊方式的 token 只放記憶體，先顯示確認畫面。取消、失敗、重新整理或離開：它就消失了，本機登入狀態不變。
+3. 會友按「確認找回」才 `POST {action:"complete", source_token, target_access_token, target_id_token}`：兩張 token 都驗過，`id_token` 的 nonce 要對上這個來源的 challenge，用完就消耗。成功後才換成舊方式的 token 並重新載入。
 
 - **驗證**：內嵌同一段 `logto-jwt-verify`，**一律**驗簽章／發行者／到期，不看 `NLC_JWT_VERIFY_MODE`。access token 的 `client_id` 要在 `RECOVER_PLAN_ALLOWED_CLIENT_IDS`，`id_token` 的 `aud` 也要是它；**沒設定就全部拒絕**（503 `recovery_not_configured`）。身分只取自驗過的 token，前端不能指定帳號 ID。
 - **Secret**：`RECOVER_PLAN_ALLOWED_CLIENT_IDS`（逗號分隔，填會友 App 的 client id；每個環境各設一次）。沿用 `NLC_LOGTO_ISSUER`、選填 `NLC_LOGTO_AUDIENCE`。刻意不用 `NLC_LOGTO_CLIENT_ID`，那支 secret 會影響後台的 id token（見 `docs/admin-console.md`）。
 - **來源（要被併掉的帳號）**：存在且啟用、建立未滿 30 天、沒參與過合併、角色是一般會友、沒有管理範圍、只有一個登入方式，而且除了回報與通知之外沒有任何資料（動態掃所有參照 `profiles` 的外鍵，新表預設算實質資料，fail closed）。
 - **目標（舊帳號）**：存在且啟用、不是被併掉的、比來源舊、沒有管理計畫或權限的角色、沒有管理範圍、至少有一個計畫。
+- **這次登入要是新的**：`id_token` 一定要有 `auth_time`，而且晚於 challenge 發出的時間。`prompt`、`max_age` 是前端決定的，不能當證據。沒有 `auth_time` 回 `not_eligible`，log 的 `reason` 是 `auth_time_missing`；太舊記在 `account_recovery_challenges.outcome = target_login_stale`。
+- **牧區**：兩邊都有牧區而且不同就拒絕（`outcome = pastoral_zone_mismatch`），這最可能是不同的人。只有一邊有牧區或牧區相同仍允許。
+- **合併當下還在跑的同步**：資料庫的觸發器 `keep_identity_on_merge_target`、`keep_merged_profile_inactive` 擋住 `nlc-session` 把身分和啟用狀態寫回被併掉的帳號（手動合併也適用）。要手動復原合併，先刪掉 `profile_merges` 那一列。
 - **回應**：`not_eligible`（403）不說是哪個條件、不回另一個帳號的任何資料；`same_account` 409、`challenge_invalid` 409、`rate_limited` 429（每個帳號每小時 5 次，被拒也算）、`busy` 503（全站同時只跑一個合併，等鎖 3 秒；可重試、不消耗 nonce）、`merge_failed` 500（整筆回滾）。
 - **稽核**：`profile_merges.report` 帶 `trigger: { source: "self_service_recovery", function: "recover-plan", challengeId, requestId }`，查法 `SELECT * FROM profile_merges WHERE report->'trigger'->>'source' = 'self_service_recovery'`。token 不寫 log、不進資料庫；log 也不含 sub 與 nonce。
 

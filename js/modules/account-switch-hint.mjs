@@ -96,7 +96,7 @@ function recoverPlanMarkup(offer, copy) {
   const fill = template => template
     .replace(/\{method\}/g, () => label)
     .replace("{account}", () => `<span class="account-switch-hint__account">${escapeText(offer.masked)}</span>`);
-  const body = fill(copy.recoverBody || "你之前在這支手機上是用 {method}（{account}）登入的，你的計畫和閱讀紀錄都在那裡。用 {method} 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。");
+  const body = fill(copy.recoverBody || "你之前在這台裝置上是用 {method}（{account}）登入的，你的計畫和閱讀紀錄都在那裡。用 {method} 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。");
   const cta = (copy.recoverCta || "用 {method} 找回我的計畫").replace("{method}", () => label);
   return `
     <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">

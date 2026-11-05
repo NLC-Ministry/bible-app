@@ -229,8 +229,8 @@ Deno.serve(async (req: Request) => {
   const respond = (status: number, body: Record<string, unknown>) =>
     new Response(JSON.stringify({ ...body, request_id: requestId }), { status, headers });
   // 不記 sub、profile ID、token：要查原因看 account_recovery_challenges.outcome
-  const finish = (status: number, body: Record<string, unknown>, action: string) => {
-    console.info(JSON.stringify({ event: "recover_plan_request", request_id: requestId, action, status, code: body.error ?? "ok" }));
+  const finish = (status: number, body: Record<string, unknown>, action: string, reason?: string) => {
+    console.info(JSON.stringify({ event: "recover_plan_request", request_id: requestId, action, status, code: body.error ?? "ok", reason }));
     return respond(status, body);
   };
 
@@ -305,10 +305,13 @@ Deno.serve(async (req: Request) => {
     if (idResult.payload.sub !== target.sub || !nonce || !audiences.some((aud) => allowedClients.includes(aud))) {
       return finish(401, { error: "invalid_token" }, action);
     }
-    // Logto 有給 auth_time 才比對（要在 staging 確認 Logto 會不會給）；沒給時靠一次性的 nonce。
-    const authTime = typeof idResult.payload.auth_time === "number"
-      ? new Date(idResult.payload.auth_time * 1000).toISOString()
-      : null;
+    // prompt=login 是前端決定的，有人自己組授權網址就能略過重新登入，所以一定要有 auth_time：
+    // 沒給就拒絕（reason 只進 log，查 staging 有沒有給時看這裡），比 challenge 舊的由 SQL 擋。
+    const rawAuthTime = idResult.payload.auth_time;
+    if (typeof rawAuthTime !== "number" || !Number.isFinite(rawAuthTime)) {
+      return finish(403, { error: "not_eligible" }, action, "auth_time_missing");
+    }
+    const authTime = new Date(rawAuthTime * 1000).toISOString();
 
     // 單獨一句：admin_merge_profiles 會 ALTER TABLE 暫停觸發器，同一句又讀那些表會報 55006。
     const { data, error } = await supabaseAdmin.rpc("account_recovery_merge", {

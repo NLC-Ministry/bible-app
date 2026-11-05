@@ -1242,11 +1242,15 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
     targetSub: "recovery-sub-phone"
   };
   const NONCE = "a".repeat(64);
+  // challenge 的時間是交易開始的 now()，這裡一定比它晚
+  const FRESH_LOGIN = () => new Date(Date.now() + 60_000).toISOString();
   const one = async (tx, sql, params = []) => (await tx.query(sql, params)).rows[0];
   const roleId = async (tx, code) => (await one(tx, `SELECT id FROM public.role_definitions WHERE code = $1`, [code])).id;
   const disabledProfileTriggers = async tx => (await one(tx,
     `SELECT count(*)::int AS n FROM pg_trigger WHERE NOT tgisinternal AND tgenabled = 'D' AND tgrelid = 'public.profiles'::regclass`
   )).n;
+
+  const setProfile = (id, sql) => tx => tx.query(`UPDATE public.profiles SET ${sql} WHERE id = $1`, [id]);
 
   /** 建好一空一舊兩個帳號，prepare 先動手腳（用資料庫擁有者身分），fn 以 service_role 呼叫 RPC，最後一律 rollback。 */
   async function withRecovery({ prepare, fn }) {
@@ -1285,7 +1289,7 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
             tx,
             start: (nonce = NONCE, sub = R.sourceSub) =>
               service(`SELECT public.account_recovery_start($1, $2) AS r`, [sub, nonce]),
-            merge: ({ source = R.sourceSub, target = R.targetSub, nonce = NONCE, authTime = null } = {}) =>
+            merge: ({ source = R.sourceSub, target = R.targetSub, nonce = NONCE, authTime = FRESH_LOGIN() } = {}) =>
               service(`SELECT public.account_recovery_merge($1, $2, $3, $4, 'req-1') AS r`, [source, target, nonce, authTime]),
             challenge: (nonce = NONCE) => one(tx, `SELECT * FROM public.account_recovery_challenges WHERE nonce_hash = $1`, [nonce]),
             unmerged: async () => {
@@ -1390,7 +1394,6 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
     expect(moved).toEqual({ reminders: 1, reports: 1 });
   });
 
-  const setProfile = (id, sql) => tx => tx.query(`UPDATE public.profiles SET ${sql} WHERE id = $1`, [id]);
   const setRole = (id, code) => async tx => tx.query(`UPDATE public.profiles SET role_id = $2 WHERE id = $1`, [id, await roleId(tx, code)]);
   const addOrphanLog = tx => tx.query(`INSERT INTO public.reading_logs (user_id, plan_id, book, chapter) VALUES ($1, NULL, '創世記', 1)`, [R.source]);
 
@@ -1463,7 +1466,7 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
     });
   });
 
-  it("challenge 綁定來源帳號：沒開始過、別人的、用過的、過期的、目標登入太舊都不行", async () => {
+  it("challenge 綁定來源帳號：沒開始過、別人的、用過的、過期的都不行", async () => {
     await withRecovery({
       fn: async ({ tx, start, merge, unmerged }) => {
         expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
@@ -1477,12 +1480,101 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
         await tx.query(`UPDATE public.account_recovery_challenges SET expires_at = now() - INTERVAL '1 second' WHERE nonce_hash = $1`, [expiring]);
         expect(await merge({ nonce: expiring })).toEqual({ ok: false, code: "challenge_invalid" });
 
-        // 目標的登入比 challenge 早：不是為了這次找回才登入的
-        const stale = "c".repeat(64);
-        await start(stale);
-        expect(await merge({ nonce: stale, authTime: new Date(Date.now() - 3600 * 1000).toISOString() })).toEqual({ ok: false, code: "not_eligible" });
-
         expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("auth_time 必填，而且要晚於 challenge：沒給、比它舊、和它同時都不行，用過就失效", async () => {
+    await withRecovery({
+      fn: async ({ start, merge, challenge, unmerged }) => {
+        for (const [nonce, authTime, outcome] of [
+          ["d".repeat(64), () => null, "target_auth_time_missing"],
+          ["e".repeat(64), () => new Date(Date.now() - 3600 * 1000).toISOString(), "target_login_stale"],
+          ["f".repeat(64), created => created, "target_login_stale"]
+        ]) {
+          await start(nonce);
+          const issued = (await challenge(nonce)).created_at;
+          expect(await merge({ nonce, authTime: authTime(issued) })).toEqual({ ok: false, code: "not_eligible" });
+          expect((await challenge(nonce)).outcome).toBe(outcome);
+          expect(await merge({ nonce })).toEqual({ ok: false, code: "challenge_invalid" });
+        }
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  describe("牧區", () => {
+    const zones = (source, target) => async tx => {
+      await setProfile(R.source, `pastoral_zone = '${source}'`)(tx);
+      await setProfile(R.target, `pastoral_zone = '${target}'`)(tx);
+    };
+
+    it("兩邊都有而且不同：最可能是不同的人，拒絕，用固定代碼", async () => {
+      await withRecovery({
+        prepare: zones("牧區 B-2", "牧區 A-1"),
+        fn: async ({ start, merge, challenge, unmerged }) => {
+          expect(await start()).toEqual({ ok: true });
+          expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+          expect((await challenge()).outcome).toBe("pastoral_zone_mismatch");
+          expect(await unmerged()).toBe(true);
+        }
+      });
+    });
+
+    it("開始之後才變成不同：用合併當下重查的值", async () => {
+      await withRecovery({
+        fn: async ({ tx, start, merge, unmerged }) => {
+          await start();
+          await zones("牧區 B-2", "牧區 A-1")(tx);
+          expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+          expect(await unmerged()).toBe(true);
+        }
+      });
+    });
+
+    it.each([
+      ["牧區相同（前後空白不算不同）", " 牧區 A-1 ", "牧區 A-1"],
+      ["只有來源有（會員中心已核准的本人）", "牧區 B-2", ""],
+      ["只有目標有", "", "牧區 A-1"],
+      ["只有空白不算有", "   ", "牧區 A-1"]
+    ])("%s：允許", async (_label, source, target) => {
+      await withRecovery({
+        prepare: zones(source, target),
+        fn: async ({ start, merge }) => {
+          await start();
+          expect(await merge()).toEqual({ ok: true });
+        }
+      });
+    });
+  });
+
+  it("合併當下還在跑的 nlc-session 晚到：身分導回目標，來源維持停用，不影響其他帳號", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        await start();
+        await merge();
+        // nlc-session 合併前查到來源，合併後才寫入：upsert 帶著來源的 ID 和啟用狀態
+        await tx.query(
+          `UPDATE public.profiles SET is_active = TRUE, email = 'new@example.invalid', nlc_member_id = $2 WHERE id = $1`,
+          [R.source, R.sourceMember]
+        );
+        await tx.query(
+          `INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary)
+           VALUES ($1, 'logto', $2, TRUE)
+           ON CONFLICT (provider, provider_user_id) DO UPDATE SET profile_id = EXCLUDED.profile_id, is_primary = EXCLUDED.is_primary`,
+          [R.source, R.sourceSub]
+        );
+        expect(await one(tx, `SELECT profile_id, is_primary FROM public.user_identities WHERE provider_user_id = $1`, [R.sourceSub]))
+          .toEqual({ profile_id: R.target, is_primary: false });
+        expect(await one(tx, `SELECT is_active, email, nlc_member_id FROM public.profiles WHERE id = $1`, [R.source]))
+          .toEqual({ is_active: false, email: null, nlc_member_id: null });
+        // 被併掉的帳號才會被導回：一般帳號停用再啟用、搬身分都照舊
+        await tx.query(`UPDATE public.profiles SET is_active = FALSE WHERE id = $1`, [ids.other]);
+        await tx.query(`UPDATE public.profiles SET is_active = TRUE WHERE id = $1`, [ids.other]);
+        expect((await one(tx, `SELECT is_active FROM public.profiles WHERE id = $1`, [ids.other])).is_active).toBe(true);
+        await tx.query(`UPDATE public.user_identities SET profile_id = $1 WHERE provider_user_id = $2`, [ids.other, R.targetSub]);
+        expect((await one(tx, `SELECT profile_id FROM public.user_identities WHERE provider_user_id = $1`, [R.targetSub])).profile_id).toBe(ids.other);
       }
     });
   });
@@ -1559,10 +1651,11 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
               has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
               has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
               has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
-       FROM pg_proc p WHERE p.proname LIKE 'account_recovery_%'`
+       FROM pg_proc p WHERE p.proname LIKE 'account_recovery_%' OR p.proname IN ('keep_identity_on_merge_target', 'keep_merged_profile_inactive')`
     )).rows;
     expect(rows.map(row => row.proname).sort()).toEqual([
-      "account_recovery_merge", "account_recovery_source_refusal", "account_recovery_start", "account_recovery_target_refusal"
+      "account_recovery_merge", "account_recovery_source_refusal", "account_recovery_start", "account_recovery_target_refusal",
+      "keep_identity_on_merge_target", "keep_merged_profile_inactive"
     ]);
     rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
     const table = (await db.query(

@@ -512,7 +512,7 @@ const auth = {
     }
   },
 
-  async _redirectToAuthorization(continuation, { prompt = "", nonce = "", planRecovery = false } = {}) {
+  async _redirectToAuthorization(continuation, { prompt = "", nonce = "", planRecovery = false, maxAge = null } = {}) {
     const safeContinuation = this._normalizeAuthContinuationInput(continuation);
     const stateVal = this._generateCodeVerifier();
     const verifierVal = this._generateCodeVerifier();
@@ -554,6 +554,7 @@ const auth = {
     // 平常不帶 prompt：會友在其他 NLC App 已登入就直接通過（SSO）。
     // 只有「換回原本的帳號」時帶 prompt=login，否則 Logto 會沿用剛才的登入狀態又進到同一個帳號。
     if (prompt) authParams.set("prompt", prompt);
+    if (maxAge !== null) authParams.set("max_age", String(maxAge));
 
     this._navigateToAuthorization(`${endpoints.authorizationEndpoint}?${authParams}`);
   },
@@ -561,22 +562,39 @@ const auth = {
   // #664：驗證舊的登入方式來找回計畫。和一般登入不同：
   //   · 不清本機的登入狀態。會友在 Logto 中途取消、按返回，都要回到原本的狀態。
   //   · nonce 由伺服器發，舊帳號的 id_token 會帶著它，證明這次登入是為了這次找回做的。
+  //   · max_age=0 要 Logto 重新登入並在 id_token 放 auth_time，伺服器沒看到新的 auth_time 就拒絕。
   // 失敗就丟例外，由呼叫端（js/plan-recovery.mjs）顯示訊息。
   async startPlanRecoveryLogin({ nonce } = {}) {
     if (!this.config.clientId || !nonce) throw new Error("plan_recovery_login_unavailable");
     try {
       localStorage.removeItem(SIGN_IN_PROMPT_KEY);
     } catch (_) {}
-    await this._redirectToAuthorization({ intent: "login", returnTo: "/" }, { prompt: "login", nonce, planRecovery: true });
+    await this._redirectToAuthorization({ intent: "login", returnTo: "/" }, { prompt: "login", maxAge: 0, nonce, planRecovery: true });
   },
 
-  // 這次登入回來的結果：signed_in（換到剛登入的 token）／cancelled（token 沒動）／null（不是找回流程）。
+  // 這次登入回來的結果：signed_in（拿到舊方式的 token，還沒存）／cancelled／null（不是找回流程）。
+  // 兩種結果本機的登入都沒動：舊方式的 token 只放記憶體，會友按「確認找回」而且成功了才存。
+  // 取消、失敗、重新整理或離開，它就消失了，會友還是原本的登入狀態。
   _planRecoveryOutcome: null,
+  _planRecoveryHeldTokens: null,
 
   consumePlanRecoveryOutcome() {
     const outcome = this._planRecoveryOutcome;
     this._planRecoveryOutcome = null;
     return outcome;
+  },
+
+  takePlanRecoveryTokens() {
+    const tokens = this._planRecoveryHeldTokens;
+    this._planRecoveryHeldTokens = null;
+    return tokens;
+  },
+
+  // 已經找回了：換成舊方式的 token。先清掉再存，否則回應沒帶 refresh token 時，
+  // 新的 access token 會配到上一個登入的 refresh token。
+  commitPlanRecoveryTokens(tokens) {
+    this._clearStoredTokens();
+    this._saveTokens(tokens);
   },
 
   // 會友沒回來就放棄了（按返回、關掉重開）：清掉這次的登入流程，token 沒動過。
@@ -660,13 +678,14 @@ const auth = {
     try {
       // 換 token 用軟逾時（#415）：等太久就先顯示登入卡，但請求繼續跑——
       // 登入碼只能用一次，中斷後重送一定失敗。晚到的成功結果照樣存 token，再重新進入。
-      const exchange = this._exchangeAuthorizationCode({ code, verifier, nonce, replaceSession: planRecovery });
+      const exchange = this._exchangeAuthorizationCode({ code, verifier, nonce, hold: planRecovery });
       const result = await withSoftTimeout(exchange, TOKEN_SOFT_TIMEOUT_MS, { timedOut: true });
       if (result.timedOut) {
-        exchange.then((late) => {
+        // 找回流程不等晚到的結果：拿到也不用，畫面上說的「沒有變動」才是真的。
+        if (!planRecovery) exchange.then((late) => {
           if (!late || !late.ok) return;
           const target = returnTo && returnTo !== "/" ? returnTo : "/" + window.location.hash;
-          window.location.replace(target);
+          this._enterAfterLateLogin(target);
         }).catch(() => {});
         return fail("\u6559\u6703\u7cfb\u7d71\u56de\u61c9\u8f03\u6162\uff0c\u5b8c\u6210\u5f8c\u6703\u81ea\u52d5\u9032\u5165\uff1b\u4e5f\u53ef\u4ee5\u91cd\u65b0\u767b\u5165\u3002", { tokenExchange: "timed_out" });
       }
@@ -676,10 +695,11 @@ const auth = {
       }
 
       this._cleanCallbackUrl();
-      this._applyTokenProfileFallback();
       if (planRecovery) {
+        this._planRecoveryHeldTokens = result.tokens;
         this._planRecoveryOutcome = "signed_in";
       } else {
+        this._applyTokenProfileFallback();
         this._showMessage("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u6210\u529f\u3002");
       }
       if (returnTo && returnTo !== "/" && returnTo !== window.location.pathname + window.location.search) {
@@ -695,11 +715,14 @@ const auth = {
     }
   },
 
+  _enterAfterLateLogin(target) {
+    window.location.replace(target);
+  },
+
   // 用登入碼換 token。不論呼叫端等不等，這個 promise 都會跑完：成功就存 token。
   // 回傳 { ok: true } / { ok: false, detail }（驗證失敗）/ { error }（網路或伺服器錯誤），不丟例外。
-  // replaceSession：找回流程沒有先清本機（#664），存新 token 前要把上一個登入的 token 與快取清掉，
-  // 否則回應沒帶 refresh token 時，新的 access token 會配到上一個人的 refresh token。
-  async _exchangeAuthorizationCode({ code, verifier, nonce, replaceSession = false }) {
+  // hold：找回流程（#664）不存 token，放在回傳值裡（{ ok: true, tokens }），由 handleCallback 留在記憶體。
+  async _exchangeAuthorizationCode({ code, verifier, nonce, hold = false }) {
     try {
       const endpoints = await this._getEndpoints();
       const tokenParams = {
@@ -733,7 +756,7 @@ const auth = {
         };
       }
 
-      if (replaceSession) this._clearStoredTokens();
+      if (hold) return { ok: true, tokens: data };
       this._saveTokens(data);
       return { ok: true };
     } catch (error) {
@@ -978,7 +1001,7 @@ const auth = {
     window.location.replace(cleanUrl);
   },
 
-  // 上一個登入者留在這台裝置的資料。登出時清；找回計畫換到舊的登入方式時也清（#664）。
+  // 上一個登入者留在這台裝置的資料。登出時清；找回計畫成功、換到舊的登入方式時也清（#664）。
   async clearAccountLocalData() {
     localStorage.removeItem("active_reading_plans");
     localStorage.removeItem("reading_logs");

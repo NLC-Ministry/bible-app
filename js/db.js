@@ -670,7 +670,7 @@ const db = {
         if (placeholder) placeholder.classList.add("hidden");
 
         const hasOAuthCallback = urlParams.has("code") || urlParams.has("state") || urlParams.has("error") || urlParams.has("error_description");
-        // 上次按了找回計畫卻沒有回來（#664）：暫存的 token 不留到下一步。
+        // 上次按了找回計畫卻沒有回來（#664）：這次的登入流程不留到下一步。
         if (!hasOAuthCallback) abandonPlanRecovery();
 
         if (navigator.onLine === false && this.tryRestoreOfflineSession()) {
@@ -694,8 +694,9 @@ const db = {
           if (callbackHandled) {
             console.log("Logto OIDC callback handled successfully.");
           }
-          // 找回計畫（#664）：在同步之前做，同步拿到的就是合併後的帳號。不會丟例外。
-          await finishPlanRecoveryAfterCallback();
+          // 找回計畫（#664）：顯示確認畫面，不等會友回答，開機照原本的登入狀態走下去，
+          // 否則開機保底會在 20 秒後蓋上來。確認並找回後會重新載入。不會丟例外。
+          void finishPlanRecoveryAfterCallback();
 
           // Sync Logto login through the Edge Function so Supabase RLS can resolve profiles.
           if (auth.isLoggedIn()) {

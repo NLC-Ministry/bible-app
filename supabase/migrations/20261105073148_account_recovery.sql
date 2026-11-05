@@ -13,6 +13,12 @@
 --     鎖住 challenge 與兩個帳號、重查條件、呼叫 admin_merge_profiles，在 profile_merges
 --     記下觸發來源。全部在同一個交易，一句 SELECT 呼叫，沒有先讀那些表（否則 55006）。
 --
+-- 三個擋「不是本人剛剛同意」的條件都在這裡判斷（獨立安全審查）：
+--   · auth_time 必填，而且要晚於 challenge 發出的時間。prompt=login、max_age=0 是前端決定的，
+--     有人自己組授權網址就能略過重新登入；伺服器只信 id_token 裡驗過簽的 auth_time。
+--   · 兩邊都有牧區而且不同：最可能是不同的人，拒絕。只有一邊有牧區，或牧區相同仍允許，
+--     否則會擋到已被會員中心核准的本人（新帳號也可能很快就有牧區）。
+--
 -- 合併方向：來源＝新的空帳號、目標＝舊帳號，和維護者 2026-11-02 手動合併的 4 位相反
 -- （那 4 位已在新帳號讀了一陣子，所以保留新帳號）。這裡來源一定是空的，保留舊帳號才對：
 -- 舊帳號的 ID、團隊、組織與會員 ID 都不動，會友回到的就是原本的帳號。#665 的保留邏輯也靠這個方向：
@@ -200,7 +206,7 @@ CREATE OR REPLACE FUNCTION public.account_recovery_merge(
   p_source_sub TEXT,
   p_target_sub TEXT,
   p_nonce_hash TEXT,
-  p_target_auth_time TIMESTAMPTZ DEFAULT NULL,
+  p_target_auth_time TIMESTAMPTZ,
   p_request_id TEXT DEFAULT NULL
 )
 RETURNS JSONB
@@ -214,6 +220,8 @@ DECLARE
   v_source_id UUID;
   v_target_id UUID;
   v_source_created_at TIMESTAMPTZ;
+  v_source_zone TEXT;
+  v_target_zone TEXT;
   v_refusal TEXT;
   v_left INTEGER;
 BEGIN
@@ -247,7 +255,9 @@ BEGIN
     v_refusal := 'target_missing';
   ELSIF v_target_id = v_source_id THEN
     v_refusal := 'same_account';
-  ELSIF p_target_auth_time IS NOT NULL AND p_target_auth_time < v_challenge.created_at - INTERVAL '60 seconds' THEN
+  ELSIF p_target_auth_time IS NULL THEN
+    v_refusal := 'target_auth_time_missing';
+  ELSIF p_target_auth_time <= v_challenge.created_at THEN
     v_refusal := 'target_login_stale';
   END IF;
 
@@ -264,6 +274,15 @@ BEGIN
       IF v_refusal IS NULL THEN
         SELECT p.created_at INTO v_source_created_at FROM public.profiles p WHERE p.id = v_source_id;
         v_refusal := public.account_recovery_target_refusal(v_target_id, v_source_created_at);
+      END IF;
+
+      -- 上面已經鎖住兩個帳號，這裡讀到的就是合併當下的值
+      IF v_refusal IS NULL THEN
+        SELECT NULLIF(BTRIM(p.pastoral_zone), '') INTO v_source_zone FROM public.profiles p WHERE p.id = v_source_id;
+        SELECT NULLIF(BTRIM(p.pastoral_zone), '') INTO v_target_zone FROM public.profiles p WHERE p.id = v_target_id;
+        IF v_source_zone <> v_target_zone THEN
+          v_refusal := 'pastoral_zone_mismatch';
+        END IF;
       END IF;
 
       IF v_refusal IS NULL THEN
@@ -310,3 +329,62 @@ END;
 $account_recovery_merge$;
 REVOKE ALL ON FUNCTION public.account_recovery_merge(TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.account_recovery_merge(TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT) TO service_role;
+
+-- 合併的當下，另一台裝置的 nlc-session 可能還在跑：它先查到來源帳號，合併後才寫入（一次 3～5 秒），
+-- 會把身分和啟用狀態寫回來源。身分回到來源後，那個登入方式又看不到計畫，重試也會被 source_merged 擋住。
+-- 手動的 admin_merge_profiles 也有同樣的窗口，所以放在資料庫：不用改 nlc-session、不多一次查詢的來回。
+-- 要手動復原一筆合併，先刪掉 profile_merges 那一列，否則身分寫回來源時會被導回目標。
+CREATE OR REPLACE FUNCTION public.keep_identity_on_merge_target()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $keep_identity_on_merge_target$
+DECLARE
+  v_target UUID;
+BEGIN
+  LOOP
+    -- admin_merge_profiles 不接受已被併掉的目標，所以這條鏈不會繞圈
+    SELECT m.target_profile_id INTO v_target FROM public.profile_merges m WHERE m.source_profile_id = NEW.profile_id;
+    EXIT WHEN NOT FOUND;
+    NEW.profile_id := v_target;
+    NEW.is_primary := FALSE;
+  END LOOP;
+  RETURN NEW;
+END;
+$keep_identity_on_merge_target$;
+REVOKE ALL ON FUNCTION public.keep_identity_on_merge_target() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.keep_identity_on_merge_target() TO service_role;
+
+CREATE TRIGGER keep_identity_on_merge_target_insert
+  BEFORE INSERT ON public.user_identities
+  FOR EACH ROW EXECUTE FUNCTION public.keep_identity_on_merge_target();
+CREATE TRIGGER keep_identity_on_merge_target_update
+  BEFORE UPDATE OF profile_id ON public.user_identities
+  FOR EACH ROW WHEN (OLD.profile_id IS DISTINCT FROM NEW.profile_id)
+  EXECUTE FUNCTION public.keep_identity_on_merge_target();
+
+-- 同一個窗口也會把來源寫回啟用，並帶回會員 ID、email、手機。只有「停用變啟用」才查，平常的更新不多花時間。
+CREATE OR REPLACE FUNCTION public.keep_merged_profile_inactive()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $keep_merged_profile_inactive$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.profile_merges m WHERE m.source_profile_id = NEW.id) THEN
+    NEW.is_active := FALSE;
+    NEW.nlc_member_id := NULL;
+    NEW.email := NULL;
+    NEW.phone := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$keep_merged_profile_inactive$;
+REVOKE ALL ON FUNCTION public.keep_merged_profile_inactive() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.keep_merged_profile_inactive() TO service_role;
+
+CREATE TRIGGER keep_merged_profile_inactive
+  BEFORE UPDATE OF is_active ON public.profiles
+  FOR EACH ROW WHEN (OLD.is_active IS DISTINCT FROM TRUE AND NEW.is_active IS TRUE)
+  EXECUTE FUNCTION public.keep_merged_profile_inactive();

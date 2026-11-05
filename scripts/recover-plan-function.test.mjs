@@ -49,7 +49,8 @@ const sign = (claims, { key = keys.privateKey, exp = "10m", issuer = ISSUER } = 
     .setExpirationTime(exp)
     .sign(key);
 const access = (sub, overrides = {}, options) => sign({ sub, client_id: CLIENT, aud: PLATFORM, ...overrides }, options);
-const idToken = (sub, nonce = "server-nonce", overrides = {}, options) => sign({ sub, aud: CLIENT, nonce, ...overrides }, options);
+const AUTH_TIME = 1_800_000_000;
+const idToken = (sub, nonce = "server-nonce", overrides = {}, options) => sign({ sub, aud: CLIENT, nonce, auth_time: AUTH_TIME, ...overrides }, options);
 const forge = (claims) => {
   const enc = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
   return `${enc({ alg: "ES384", kid: "k1" })}.${enc({ iss: ISSUER, exp: 9999999999, client_id: CLIENT, aud: CLIENT, ...claims })}.${Buffer.from("x").toString("base64url")}`;
@@ -142,16 +143,22 @@ describe("recover-plan：complete", () => {
         p_source_sub: "sub-new",
         p_target_sub: "sub-old",
         p_nonce_hash: await sha256("server-nonce"),
-        p_target_auth_time: null,
+        p_target_auth_time: new Date(AUTH_TIME * 1000).toISOString(),
         p_request_id: res.body.request_id
       }
     }]);
   });
 
-  it("id_token 有 auth_time 就交給 SQL 比對 challenge 的時間", async () => {
-    const authTime = 1_800_000_000;
-    await complete({ target_id_token: await idToken("sub-old", "server-nonce", { auth_time: authTime }) });
-    expect(globalThis.__recoverPlan.rpc[0].args.p_target_auth_time).toBe(new Date(authTime * 1000).toISOString());
+  it.each([
+    ["沒有", undefined],
+    ["不是數字", "1800000000"],
+    ["是 null", null]
+  ])("id_token 的 auth_time %s：拒絕，不碰資料庫，原因記在 log", async (_label, authTime) => {
+    const res = await complete({ target_id_token: await idToken("sub-old", "server-nonce", { auth_time: authTime }) });
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "not_eligible", request_id: expect.any(String) });
+    expect(globalThis.__recoverPlan.rpc).toEqual([]);
+    expect(logs.join("\n")).toContain("auth_time_missing");
   });
 
   it.each([

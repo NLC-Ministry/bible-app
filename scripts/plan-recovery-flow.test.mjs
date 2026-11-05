@@ -10,9 +10,9 @@ import {
 } from "../js/modules/account-switch-hint.mjs";
 import { LAST_LOGIN_METHOD_KEY, readLastLoginMethod, rememberLoginMethod } from "../js/login-method-memory.mjs";
 import {
-  PLAN_RECOVERY_STASH_KEY,
   abandonPlanRecovery,
   finishPlanRecoveryAfterCallback,
+  planRecoveryConfirmBody,
   planRecoveryOffer,
   startPlanRecovery
 } from "../js/plan-recovery.mjs";
@@ -24,7 +24,11 @@ const SOURCE = { access: "source-access-token", refresh: "source-refresh-token",
 const SERVER_NONCE = "server-issued-nonce";
 
 const jwt = payload => `h.${btoa(JSON.stringify(payload)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}.s`;
-const TARGET = { access: "target-access-token", refresh: "target-refresh-token", id: jwt({ sub: "sub-old", nonce: SERVER_NONCE }) };
+const TARGET = {
+  access: "target-access-token",
+  refresh: "target-refresh-token",
+  id: jwt({ sub: "sub-old", nonce: SERVER_NONCE, phone_number: "886912345678" })
+};
 
 let auth;
 
@@ -71,10 +75,13 @@ async function returnFromLogto() {
   return auth.handleCallback();
 }
 
+// 預設是按了「確認找回」；要看確認畫面或按取消就換掉 confirm。
 const finish = (overrides = {}) => {
   const showResult = vi.fn();
-  return finishPlanRecoveryAfterCallback({ auth, config: CONFIG, sleep: async () => {}, showResult, ...overrides })
-    .then(result => ({ result, showResult, message: showResult.mock.calls[0]?.[0] }));
+  const confirm = vi.fn(async () => true);
+  const reload = vi.fn();
+  return finishPlanRecoveryAfterCallback({ auth, config: CONFIG, sleep: async () => {}, confirm, showResult, reload, ...overrides })
+    .then(result => ({ result, showResult, confirm, reload, message: showResult.mock.calls[0]?.[0] }));
 };
 
 const allStoredValues = () => [
@@ -99,6 +106,7 @@ beforeEach(() => {
   auth.metadata = { authorization_endpoint: "https://sso.test/oidc/auth", token_endpoint: TOKEN_URL };
   auth.config.clientId = "test-client";
   auth._planRecoveryOutcome = null;
+  auth._planRecoveryHeldTokens = null;
   vi.spyOn(auth, "_navigateToAuthorization").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -162,7 +170,7 @@ describe("提示卡", () => {
     const card = render();
     expect(card.querySelector(".account-switch-hint__title").textContent.trim()).toBe("找不到你的讀經計畫嗎？");
     expect(card.querySelector(".account-switch-hint__body").textContent).toBe(
-      "你之前在這支手機上是用 Email（ab***@gmail.com）登入的，你的計畫和閱讀紀錄都在那裡。用 Email 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。"
+      "你之前在這台裝置上是用 Email（ab***@gmail.com）登入的，你的計畫和閱讀紀錄都在那裡。用 Email 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。"
     );
     expect(card.querySelector("[data-account-recover-plan]").textContent).toBe("用 Email 找回我的計畫");
     expect(card.querySelector("[data-account-switch-dismiss]").textContent).toBe("不是我／我是第一次參加");
@@ -182,8 +190,9 @@ describe("提示卡", () => {
     const texts = block.slice(0, block.indexOf("loginMethodHint:"));
     expect(texts).not.toMatch(/帳號|合併/);
     const hintSource = readFileSync("js/modules/account-switch-hint.mjs", "utf8");
-    expect(hintSource).toContain("你之前在這支手機上是用 {method}（{account}）登入的");
-    expect(texts).toContain("你之前在這支手機上是用 {method}（{account}）登入的");
+    expect(hintSource).toContain("你之前在這台裝置上是用 {method}（{account}）登入的");
+    expect(texts).toContain("你之前在這台裝置上是用 {method}（{account}）登入的");
+    expect(hintSource + texts).not.toContain("這支手機");
   });
 
   it("遮罩值會跳脫", () => {
@@ -228,7 +237,7 @@ describe("提示卡", () => {
 });
 
 describe("按下主按鈕", () => {
-  it("向伺服器拿 nonce，帶 prompt=login 跳到 Logto；登入狀態不動，token 只暫存在 sessionStorage", async () => {
+  it("向伺服器拿 nonce，帶 prompt=login 和 max_age=0 跳到 Logto；登入狀態不動，token 沒有另存一份", async () => {
     const calls = stubNetwork({ recoverPlan: startOk });
 
     expect(await pressRecover()).toEqual({ ok: true });
@@ -236,11 +245,16 @@ describe("按下主按鈕", () => {
     expect(calls).toEqual([{ action: "start", source_token: SOURCE.access }]);
     const url = navigated();
     expect(url.searchParams.get("prompt")).toBe("login");
+    expect(url.searchParams.get("max_age")).toBe("0");
     expect(url.searchParams.get("nonce")).toBe(SERVER_NONCE);
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
     expect(localStorage.getItem(auth.keys.refreshToken)).toBe(SOURCE.refresh);
-    expect(JSON.parse(sessionStorage.getItem(PLAN_RECOVERY_STASH_KEY)).sourceToken).toBe(SOURCE.access);
-    expect(localStorage.getItem(PLAN_RECOVERY_STASH_KEY)).toBeNull();
+    expect(Object.keys(sessionStorage).map(key => sessionStorage.getItem(key)).join("\n")).not.toContain(SOURCE.access);
+  });
+
+  it("一般登入不帶 max_age", async () => {
+    await auth._redirectToAuthorization({ intent: "login", returnTo: "/" }, {});
+    expect(navigated().searchParams.has("max_age")).toBe(false);
   });
 
   it.each([
@@ -259,20 +273,18 @@ describe("按下主按鈕", () => {
     expect(result.message).toContain(message);
     expect(result.message).not.toMatch(/帳號|合併/);
     expect(auth._navigateToAuthorization).not.toHaveBeenCalled();
-    expect(sessionStorage.getItem(PLAN_RECOVERY_STASH_KEY)).toBeNull();
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
     expect(localStorage.getItem(auth.keys.refreshToken)).toBe(SOURCE.refresh);
     expect(auth.isLoggedIn()).toBe(true);
   });
 
-  it("開不了 Logto（discovery 失敗）：清掉暫存與登入流程，登入狀態不動", async () => {
+  it("開不了 Logto（discovery 失敗）：清掉登入流程，登入狀態不動", async () => {
     stubNetwork({ recoverPlan: startOk });
     vi.spyOn(auth, "_getEndpoints").mockRejectedValue(new Error("discovery failed"));
 
     const result = await pressRecover();
 
     expect(result.ok).toBe(false);
-    expect(sessionStorage.getItem(PLAN_RECOVERY_STASH_KEY)).toBeNull();
     expect(localStorage.getItem(auth.keys.planRecoveryFlow)).toBeNull();
     expect(localStorage.getItem(auth.keys.nonce)).toBeNull();
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
@@ -285,25 +297,25 @@ describe("會友取消", () => {
     await pressRecover();
   });
 
-  it("按返回、關掉重開（開機時沒有登入回呼）：暫存清掉，token 還是原本的", async () => {
+  it("按返回、關掉重開（開機時沒有登入回呼）：登入流程清掉，token 還是原本的", async () => {
     expect(await auth.handleCallback()).toBe(false);
     abandonPlanRecovery({ auth });
 
-    expect(sessionStorage.getItem(PLAN_RECOVERY_STASH_KEY)).toBeNull();
     expect(localStorage.getItem(auth.keys.planRecoveryFlow)).toBeNull();
     expect(localStorage.getItem(auth.keys.state)).toBeNull();
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
     expect(auth.isLoggedIn()).toBe(true);
-    const { result, showResult } = await finish();
+    const { result, showResult, confirm } = await finish();
     expect(result).toBeNull();
     expect(showResult).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
   });
 
-  it("瀏覽器從 bfcache 還原這一頁：暫存一樣清掉", () => {
+  it("瀏覽器從 bfcache 還原這一頁：登入流程一樣清掉", () => {
     const pageshow = new Event("pageshow");
     pageshow.persisted = true;
     window.dispatchEvent(pageshow);
-    expect(sessionStorage.getItem(PLAN_RECOVERY_STASH_KEY)).toBeNull();
+    expect(localStorage.getItem(auth.keys.planRecoveryFlow)).toBeNull();
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
   });
 
@@ -312,13 +324,13 @@ describe("會友取消", () => {
     landOnCallback(`error=access_denied&state=${state}`);
 
     expect(await auth.handleCallback()).toBe(true);
-    const { result, message } = await finish();
+    const { result, message, confirm } = await finish();
 
     expect(result).toEqual({ status: "cancelled" });
     expect(message).toContain("沒有變動");
+    expect(confirm).not.toHaveBeenCalled();
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
     expect(localStorage.getItem(auth.keys.refreshToken)).toBe(SOURCE.refresh);
-    expect(sessionStorage.getItem(PLAN_RECOVERY_STASH_KEY)).toBeNull();
     expect(window.location.search).toBe("");
     expect(global.fetch).toHaveBeenCalledTimes(1); // 只有 start，沒有 complete
   });
@@ -337,11 +349,39 @@ describe("會友取消", () => {
   it("id_token 的 nonce 不是伺服器發的：不存 token，不合併", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ access_token: "x", id_token: jwt({ sub: "s", nonce: "other" }), expires_in: 1 })));
     await returnFromLogto();
-    const { result } = await finish();
+    const { result, confirm } = await finish();
 
     expect(result).toEqual({ status: "cancelled" });
+    expect(confirm).not.toHaveBeenCalled();
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("Logto 回應太慢：說沒有變動，晚到的 token 不存、不跳轉、不換登入", async () => {
+    vi.useFakeTimers();
+    try {
+      let release;
+      vi.stubGlobal("fetch", vi.fn(() => new Promise(resolve => {
+        release = () => resolve(json({ access_token: TARGET.access, refresh_token: TARGET.refresh, id_token: TARGET.id, expires_in: 3600 }));
+      })));
+      const enter = vi.spyOn(auth, "_enterAfterLateLogin").mockImplementation(() => {});
+      const callback = returnFromLogto();
+      await vi.advanceTimersByTimeAsync(60_000);
+      await callback;
+      const { result, message } = await finish();
+      expect(result).toEqual({ status: "cancelled" });
+      expect(message).toContain("沒有變動");
+
+      release();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(enter).not.toHaveBeenCalled();
+      expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
+      expect(localStorage.getItem(auth.keys.refreshToken)).toBe(SOURCE.refresh);
+      expect(auth.takePlanRecoveryTokens()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("一般登入的失敗回呼維持原本行為：清 token（沒有被這次改動影響）", async () => {
@@ -360,12 +400,119 @@ describe("登入舊的方式回來", () => {
     await returnFromLogto();
     return calls;
   }
+  const allStored = () => [
+    ...Object.keys(localStorage).map(key => localStorage.getItem(key)),
+    ...Object.keys(sessionStorage).map(key => sessionStorage.getItem(key))
+  ].join("\n");
 
-  it("通過：同時送出兩個 token，顯示完成訊息；來源 token 不再留在裝置上", async () => {
+  it("回來後還沒確認：舊方式的 token 不寫進任何儲存，本機還是原本的登入", async () => {
+    await signedInAgain(() => json({ ok: true }));
+    expect(allStored()).not.toContain(TARGET.access);
+    expect(allStored()).not.toContain(TARGET.refresh);
+    expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
+    expect(auth.isLoggedIn()).toBe(true);
+  });
+
+  it("不會自動送出：等到按確認才呼叫 complete", async () => {
+    const calls = await signedInAgain(() => json({ ok: true }));
+    let answer;
+    const confirm = vi.fn(() => new Promise(resolve => { answer = resolve; }));
+    const pending = finish({ confirm });
+
+    await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
+    expect(calls).toHaveLength(1);
+
+    answer(true);
+    const { result } = await pending;
+    expect(result).toEqual({ status: "merged" });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("按取消：不送出、token 消失、還是原本的登入，也不重新載入", async () => {
+    const calls = await signedInAgain(() => json({ ok: true }));
+
+    const { result, showResult, reload } = await finish({ confirm: async () => false });
+
+    expect(result).toEqual({ status: "declined" });
+    expect(calls).toHaveLength(1);
+    expect(showResult).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
+    expect(localStorage.getItem(auth.keys.refreshToken)).toBe(SOURCE.refresh);
+    expect(allStored()).not.toContain(TARGET.access);
+    expect(auth.takePlanRecoveryTokens()).toBeNull();
+  });
+
+  it("確認畫面還開著就重新整理：記憶體裡的 token 沒了，開機只清流程，還是原本的登入", async () => {
+    const calls = await signedInAgain(() => json({ ok: true }));
+    // 重新整理＝記憶體重來；網址已清，下一次開機不是回呼
+    auth._planRecoveryHeldTokens = null;
+    auth._planRecoveryOutcome = null;
+    abandonPlanRecovery({ auth });
+
+    const { result } = await finish();
+
+    expect(result).toBeNull();
+    expect(calls).toHaveLength(1);
+    expect(window.location.search).toBe("");
+    expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
+    expect(allStored()).not.toContain(TARGET.access);
+  });
+
+  it("確認畫面的文案：說出用什麼確認、兩種方式看到同一份、無法復原；不提帳號、合併", () => {
+    const phone = planRecoveryConfirmBody({ phone_number: "886912345678" });
+    expect(phone).toContain("你已用 手機（");
+    expect(phone).toContain("***");
+    expect(phone).not.toContain("912345");
+    expect(phone).toContain("同一份計畫");
+    expect(phone).toContain("無法復原");
+    expect(planRecoveryConfirmBody({ email: "abcdef@gmail.com" })).toContain("你已用 Email（ab***@gmail.com）");
+    // 說不出是哪一種（兩個都有或都沒有）就不猜
+    for (const claims of [{}, null, { email: "abcdef@gmail.com", phone_number: "886912345678" }]) {
+      expect(planRecoveryConfirmBody(claims)).toMatch(/^你已完成身分確認/);
+    }
+    const copy = readFileSync("js/copy/zh-Hant.js", "utf8");
+    const block = copy.slice(copy.indexOf("confirmTitle:"), copy.indexOf("loginMethodHint:"));
+    expect(block).toContain("確認找回");
+    expect(block).not.toMatch(/帳號|合併/);
+  });
+
+  it("確認畫面顯示的是剛登入的方式，不是裝置紀錄", async () => {
+    localStorage.setItem(LAST_LOGIN_METHOD_KEY, JSON.stringify({ method: "email", masked: "zz***@other.com" }));
+    await signedInAgain(() => json({ ok: true }));
+    const confirm = vi.fn(async () => false);
+    await finish({ confirm });
+    expect(confirm.mock.calls[0][0]).toContain("你已用 手機（");
+    expect(confirm.mock.calls[0][0]).not.toContain("zz***");
+  });
+
+  it("預設的確認畫面：取消和確認兩個按鈕，都用 textContent，按了就關，按確認才算同意", async () => {
+    const calls = await signedInAgain(() => json({ ok: true }));
+    const pending = finishPlanRecoveryAfterCallback({ auth, config: CONFIG, sleep: async () => {}, reload: vi.fn() });
+
+    const dialog = await vi.waitFor(() => {
+      const found = document.querySelector("#plan-recovery-result");
+      expect(found).not.toBeNull();
+      return found;
+    });
+    expect(dialog.parentElement).toBe(document.body);
+    expect(dialog.querySelector(".custom-confirm-title").textContent).toBe("確認找回你的計畫");
+    expect(dialog.querySelector(".custom-confirm-desc").textContent).toContain("無法復原");
+    expect(dialog.textContent).not.toMatch(/帳號|合併/);
+    expect(dialog.querySelector(".custom-confirm-btn-cancel").textContent).toBe("取消");
+    expect(calls).toHaveLength(1);
+
+    dialog.querySelector(".custom-confirm-btn-cancel").click();
+    expect(await pending).toEqual({ status: "declined" });
+    expect(document.querySelector("#plan-recovery-result")).toBeNull();
+    expect(calls).toHaveLength(1);
+  });
+
+  it("按確認且通過：同時送出兩個 token，才換成舊方式的 token、清掉上一個方式的本機資料；按知道了才重新載入", async () => {
     localStorage.setItem("active_reading_plans", "[]");
     const calls = await signedInAgain(() => json({ ok: true }));
 
-    const { result, message } = await finish();
+    const { result, message, showResult, reload } = await finish();
 
     expect(result).toEqual({ status: "merged" });
     expect(message).toBe("已找回你的計畫和閱讀紀錄。之後用手機或 Email 登入都可以。");
@@ -377,19 +524,24 @@ describe("登入舊的方式回來", () => {
     });
     expect(localStorage.getItem(auth.keys.accessToken)).toBe(TARGET.access);
     expect(localStorage.getItem(auth.keys.refreshToken)).toBe(TARGET.refresh);
-    expect(allStoredValues()).not.toContain(SOURCE.access);
-    expect(allStoredValues()).not.toContain(SOURCE.refresh);
+    expect(allStored()).not.toContain(SOURCE.access);
+    expect(allStored()).not.toContain(SOURCE.refresh);
     expect(localStorage.getItem("active_reading_plans")).toBeNull();
     expect(window.location.search).toBe("");
+    expect(reload).not.toHaveBeenCalled();
+    showResult.mock.calls[0][1].onClose();
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it("回應沒帶 refresh token：不會留著上一個人的 refresh token", async () => {
+  it("回應沒帶 refresh token：找回後不會留著上一個人的 refresh token", async () => {
     stubNetwork({
       recoverPlan: body => (body.action === "start" ? startOk() : json({ ok: true })),
       tokenResponse: { access_token: TARGET.access, id_token: TARGET.id, expires_in: 3600 }
     });
     await pressRecover();
     await returnFromLogto();
+    await finish();
+    expect(localStorage.getItem(auth.keys.accessToken)).toBe(TARGET.access);
     expect(localStorage.getItem(auth.keys.refreshToken)).toBeNull();
   });
 
@@ -400,17 +552,18 @@ describe("登入舊的方式回來", () => {
     ["challenge_invalid", 409, "暫時無法完成"],
     ["invalid_token", 401, "暫時無法完成"],
     ["merge_failed", 500, "暫時無法完成"]
-  ])("伺服器拒絕（%s）：顯示友善訊息，不重試，登入狀態還在", async (error, status, text) => {
+  ])("伺服器拒絕（%s）：顯示友善訊息，不重試，還是原本的登入", async (error, status, text) => {
     const calls = await signedInAgain(() => json({ error }, status));
 
-    const { result, message } = await finish();
+    const { result, message, reload } = await finish();
 
     expect(result).toEqual({ status: error });
     expect(message).toContain(text);
     expect(message).not.toMatch(/帳號|合併/);
     expect(calls).toHaveLength(2);
-    expect(auth.isLoggedIn()).toBe(true);
-    expect(sessionStorage.getItem(PLAN_RECOVERY_STASH_KEY)).toBeNull();
+    expect(reload).not.toHaveBeenCalled();
+    expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
+    expect(allStored()).not.toContain(TARGET.access);
   });
 
   it("函式暫時忙碌、連線中斷：重試，成功就算成功", async () => {
@@ -428,7 +581,7 @@ describe("登入舊的方式回來", () => {
     expect(calls).toHaveLength(4);
   });
 
-  it("一直失敗：最多 3 次，不卡住也不丟例外，登入狀態還在", async () => {
+  it("一直失敗：最多 3 次，不卡住也不丟例外，還是原本的登入", async () => {
     const calls = await signedInAgain(() => { throw new TypeError("Failed to fetch"); });
 
     const { result, message } = await finish();
@@ -436,49 +589,58 @@ describe("登入舊的方式回來", () => {
     expect(result).toEqual({ status: "failed" });
     expect(message).toContain("暫時無法完成");
     expect(calls).toHaveLength(4);
-    expect(localStorage.getItem(auth.keys.accessToken)).toBe(TARGET.access);
+    expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
     expect(auth.isLoggedIn()).toBe(true);
     expect(window.loader.hide).toHaveBeenCalled();
   });
 
-  it("暫存的 token 不見了（換了瀏覽環境）：不送出，告訴他沒有完成", async () => {
-    const calls = await signedInAgain(() => json({ ok: true }));
-    sessionStorage.removeItem(PLAN_RECOVERY_STASH_KEY);
+  it("Logto 沒給 id_token 以外的東西：不顯示確認畫面，告訴他沒有完成", async () => {
+    stubNetwork({ recoverPlan: startOk, tokenResponse: { id_token: TARGET.id } });
+    await pressRecover();
+    await returnFromLogto();
 
-    const { result, message } = await finish();
+    const { result, confirm } = await finish();
 
-    expect(result).toEqual({ status: "incomplete" });
-    expect(message).toContain("沒有完成");
-    expect(calls).toHaveLength(1);
-    expect(localStorage.getItem(auth.keys.accessToken)).toBe(TARGET.access);
+    expect(result).toEqual({ status: "failed" });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(localStorage.getItem(auth.keys.accessToken)).toBe(SOURCE.access);
   });
 
-  it("顯示結果的畫面出錯也不影響開機", async () => {
+  it("顯示結果的畫面出錯也不丟例外", async () => {
     await signedInAgain(() => json({ ok: true }));
     await expect(finish({ showResult: () => { throw new Error("no dom"); } })).resolves.toBeTruthy();
   });
 
-  it("預設的結果對話框：用 textContent 顯示，掛在 body 頂層，按了就關", async () => {
+  it("確認畫面出錯：不送出，不丟例外", async () => {
+    const calls = await signedInAgain(() => json({ ok: true }));
+    const { result } = await finish({ confirm: () => { throw new Error("no dom"); } });
+    expect(result).toEqual({ status: "failed" });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("預設的結果對話框：用 textContent 顯示，掛在 body 頂層，按知道了才重新載入", async () => {
     await signedInAgain(() => json({ ok: true }));
-    await finishPlanRecoveryAfterCallback({ auth, config: CONFIG, sleep: async () => {} });
+    const reload = vi.fn();
+    await finishPlanRecoveryAfterCallback({ auth, config: CONFIG, sleep: async () => {}, confirm: async () => true, reload });
     const dialog = document.querySelector("#plan-recovery-result");
     expect(dialog.parentElement).toBe(document.body);
     expect(dialog.querySelector(".custom-confirm-desc").textContent).toContain("已找回你的計畫");
     expect(dialog.textContent).not.toMatch(/帳號|合併/);
+    expect(reload).not.toHaveBeenCalled();
     dialog.querySelector("button").click();
     expect(document.querySelector("#plan-recovery-result")).toBeNull();
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("開機流程的接法", () => {
-  it("db.js：處理完登入回呼才收尾，而且在 nlc-session 同步之前；不是回呼就先清掉暫存", () => {
+  it("db.js：處理完登入回呼才收尾，不等會友回答確認畫面；不是回呼就先清掉流程", () => {
     const source = readFileSync("js/db.js", "utf8");
     const callback = source.indexOf("await auth.handleCallback()");
-    const finishAt = source.indexOf("await finishPlanRecoveryAfterCallback()");
-    const sync = source.indexOf("sessionSync = await this.syncNlcSessionWithSupabase");
+    const finishAt = source.indexOf("void finishPlanRecoveryAfterCallback()");
     expect(callback).toBeGreaterThan(-1);
     expect(finishAt).toBeGreaterThan(callback);
-    expect(sync).toBeGreaterThan(finishAt);
+    expect(source).not.toContain("await finishPlanRecoveryAfterCallback()");
     const abandon = source.indexOf("if (!hasOAuthCallback) abandonPlanRecovery()");
     expect(abandon).toBeGreaterThan(-1);
     expect(abandon).toBeLessThan(callback);
