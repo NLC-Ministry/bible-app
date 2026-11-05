@@ -757,7 +757,17 @@ function renderPersonalUnlockedBadges() {
   // Deprecated: Badge strip is removed as badges only display on the profile page
 }
 
-async function renderMyPersonalRankings() {
+// 原地更新（#667）：排名列直接到定位，不重跑進場動畫，看起來才不會閃
+function settleRankingRows(track, rowSelector, barSelector) {
+  track.querySelectorAll(rowSelector).forEach(row => {
+    row.style.transition = "none";
+    const bar = row.querySelector(barSelector);
+    if (bar) bar.style.transition = "none";
+    row.classList.add("is-running");
+  });
+}
+
+async function renderMyPersonalRankings({ quiet = false } = {}) {
   if (!state.activePlan) return;
 
   const rankSkeleton = typeof ComponentSkeletonLoader !== "undefined"
@@ -785,6 +795,7 @@ async function renderMyPersonalRankings() {
     console.warn("Failed to fetch personal plan ranking summary", error);
     result = { success: false };
   }
+  if (quiet && !(result && result.success)) return;
 
   const context = result && result.success ? result.context || {} : {};
   const churchRank = Number(context.churchRank || 0);
@@ -831,7 +842,7 @@ function bindReadingTeamRankingToggles(sections) {
   });
 }
 
-async function renderReadingTeamLeaderboards() {
+async function renderReadingTeamLeaderboards({ quiet = false } = {}) {
   const sections = [
     { division: 3, key: "division3", container: document.getElementById("reading-team-ranking-3") },
     { division: 6, key: "division6", container: document.getElementById("reading-team-ranking-6") }
@@ -842,7 +853,7 @@ async function renderReadingTeamLeaderboards() {
   const skeleton = typeof ComponentSkeletonLoader !== "undefined"
     ? ComponentSkeletonLoader.getHtml("bar-race", { count: 3 })
     : '<div style="padding:1.25rem;text-align:center;color:var(--text-muted);">載入中…</div>';
-  sections.forEach(section => {
+  if (!quiet) sections.forEach(section => {
     section.container.className = "bar-race-list reading-team-ranking-list";
     section.container.setAttribute("aria-busy", "true");
     if (firstPaint(section.container)) section.container.innerHTML = skeleton;
@@ -903,6 +914,7 @@ async function renderReadingTeamLeaderboards() {
   }
 
   if (!result || !result.success) {
+    if (quiet) return; // 畫面已經有舊資料，更新失敗就留著
     const message = escapeHTML(result && result.message || "目前無法載入團隊排行榜。");
     sections.forEach(section => {
       section.container.removeAttribute("aria-busy");
@@ -922,6 +934,7 @@ async function renderReadingTeamLeaderboards() {
   const context = result.context || {};
   sections.forEach(section => {
     const teams = Array.isArray(context[section.key]) ? [...context[section.key]] : [];
+    const keptScrollTop = section.container.scrollTop;
     section.container.removeAttribute("aria-busy");
     const completedAt = team => {
       const time = team && team.lastReadAt ? new Date(team.lastReadAt).getTime() : Infinity;
@@ -990,6 +1003,11 @@ async function renderReadingTeamLeaderboards() {
         : `${teamCountLabel}・尚未加入 ${section.division} 人團隊`
     );
 
+    if (quiet) {
+      settleRankingRows(track, ".bar-race-row", ".bar-race-bar");
+      section.container.scrollTop = keptScrollTop;
+      return;
+    }
     requestAnimationFrame(() => {
       track.querySelectorAll(".bar-race-row").forEach(row => row.classList.add("is-running"));
       requestAnimationFrame(() => focusReadingTeamRanking(section.container));
@@ -1040,17 +1058,18 @@ async function renderPlanRankingView() {
   });
 }
 
-async function renderPastoralZoneRanking() {
+async function renderPastoralZoneRanking({ quiet = false } = {}) {
   const container = document.getElementById("pastoral-ranking-list-container");
   if (!container) return;
   bindPastoralRankingToggle(container);
+  const keptScrollTop = container.scrollTop;
 
   const rankingCard = container.closest(".glass-card");
   if (rankingCard) rankingCard.style.display = "";
 
   const header = container.previousElementSibling;
   if (header) header.style.display = "none";
-  container.className = "bar-race-list";
+  if (!quiet) container.className = "bar-race-list";
   container.style.cssText = "";
   if (firstPaint(container)) container.innerHTML = typeof ComponentSkeletonLoader !== "undefined"
     ? ComponentSkeletonLoader.getHtml("bar-race", { count: 4 })
@@ -1089,6 +1108,7 @@ async function renderPastoralZoneRanking() {
     unassignedPastoralCount = Number(context.unassignedCount || 0);
   } catch (e) {
     console.error("Failed to load pastoral rankings", e);
+    if (quiet) return; // 畫面已經有舊資料，更新失敗就留著
   }
 
   const badge = document.getElementById("pastoral-ranking-count-badge");
@@ -1187,6 +1207,11 @@ async function renderPastoralZoneRanking() {
 
     if (typeof hydrateIcons === "function") hydrateIcons(container);
 
+    if (quiet) {
+      settleRankingRows(track, ".pastoral-race-row", ".pastoral-race-progress-fill");
+      container.scrollTop = keptScrollTop;
+      return;
+    }
     requestAnimationFrame(() => {
       track.querySelectorAll(".pastoral-race-row").forEach(row => row.classList.add("is-running"));
       requestAnimationFrame(() => focusPastoralRaceRanking(container));
@@ -1195,6 +1220,32 @@ async function renderPastoralZoneRanking() {
 
   renderRace();
 }
+
+// 排行資料變了（背景重抓回來、或自己打卡／團隊異動清掉快取）：正看著排行就原地更新（#667）
+const RANKING_SECTION_RENDERERS = {
+  teams: renderReadingTeamLeaderboards,
+  personal: renderMyPersonalRankings,
+  zones: renderPastoralZoneRanking
+};
+
+function isWatchingRanking(planId) {
+  if (typeof appRouter === "undefined" || appRouter.currentTab !== "plan-view") return false;
+  // 不看按鈕的 active：切回讀經頁後它還亮著，勾章節會一直重抓
+  if (state.planActiveSubTab !== "ranking" || !state.activePlan) return false;
+  return !planId || db._readingTeamPlanId(state.activePlan) === planId;
+}
+
+window.addEventListener("leaderboards:changed", (event) => {
+  const { kind = null, planId = null } = event.detail || {};
+  if (!isWatchingRanking(planId)) return;
+  const renderers = kind ? [RANKING_SECTION_RENDERERS[kind]] : Object.values(RANKING_SECTION_RENDERERS);
+  renderers.forEach(render => {
+    if (!render) return;
+    Promise.resolve().then(() => render({ quiet: true })).catch(error => {
+      console.warn("[Ranking] In-place refresh failed", error);
+    });
+  });
+});
 
 async function renderGroupParticipantsRankingTable() {
   // 管理頁「組員總覽」看的是計畫篩選選的計畫，跟同頁的組織統計樹一致（#369）；

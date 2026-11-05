@@ -320,6 +320,7 @@ const auth = {
     state.currentProfileId = null;
     state.profileLockedFields = [];
     state.supabase?.invalidateReads?.();
+    if (typeof db !== "undefined" && typeof db.clearLeaderboardCache === "function") db.clearLeaderboardCache();
     if (typeof db !== "undefined" && typeof db.resetOrgStructure === "function") {
       db.resetOrgStructure();
     }

@@ -6,7 +6,7 @@ The app uses a deliberately limited offline model:
 
 - Cache same-origin static assets and successful public Bible API chapter responses.
 - Use network-first navigation with the last successful app shell as an offline fallback.
-- Never cache authentication, Supabase/NLC, rankings, member status, reminders, or admin responses.
+- Never cache authentication, Supabase/NLC, rankings, member status, reminders, or admin responses in the Service Worker, IndexedDB or localStorage. Leaderboards have an in-memory cache only (60 s, keyed by user, cleared by the user's own writes; `js/data/leaderboard-cache.mjs`, #667), gone when the app closes.
 - Queue reading-log mutations only when the browser is explicitly offline or a request fails at the network layer.
 - Keep NLC and Supabase credentials outside IndexedDB and Cache Storage.
 - Permit a previously verified user to enter a restricted offline-reading session for up to 30 days. This local identity is not accepted as server authentication.

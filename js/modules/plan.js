@@ -1184,6 +1184,7 @@ function initPlanControls() {
         const firstReadingDay = (plan.days || []).find(day => (day.chapters || []).some(ch => Number(ch.round || 1) === 1));
         if (firstReadingDay) state.selectedPlanDay = firstReadingDay.dayNum;
         db.invalidateMergedUsersCache();
+        db.invalidateLeaderboards?.(plan);
 
         // 3. Save to localStorage (if local/demo mode)
         if (!state.isSupabaseMode) {
@@ -3909,6 +3910,7 @@ window.triggerPlanUpgradeFlow = async function() {
     ));
     if (firstNextRoundDay) state.selectedPlanDay = firstNextRoundDay.dayNum;
     db.invalidateMergedUsersCache();
+    db.invalidateLeaderboards?.(plan);
 
     calculatePlanProgress();
     await renderPlanView();

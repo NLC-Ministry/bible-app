@@ -1032,6 +1032,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (loginGate && !loginGate.classList.contains("hidden") && typeof db.syncNlcSessionWithSupabase === "function") {
       db.syncNlcSessionWithSupabase(true).then(() => db.applyLoginOnboardingGate && db.applyLoginOnboardingGate()).catch(() => {});
     }
+    // 看著排行回前景（#667）：超過新鮮期就背景重抓，有變才原地重畫
+    if (currentTab === "plan-view" && state.planActiveSubTab === "ranking" && state.activePlan) {
+      db.revalidateLeaderboards?.(state.activePlan);
+    }
     // 管理分頁（#584）：沒有「更新」鈕，回前景時自動更新（超過 5 分鐘的資料才重拿）
     if (currentTab === "admin-view") {
       loadModule('pastoral').then((pastoral) => pastoral.refreshPastoralOnForeground()).catch(() => {});
