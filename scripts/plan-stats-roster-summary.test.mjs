@@ -173,7 +173,9 @@ describe("彙總路徑", () => {
 
   it("沒帶日程（首頁）：不帶比對尺，makeup 是 null，名單照樣能用", async () => {
     const calls = [];
-    const db = await loadDb(fakeClient(calls, "ok", summaryPayload({ m: null })));
+    // 沒帶日程時請求用裝置時區，伺服器會原樣回傳；不能寫死台北，CI 是 UTC。
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const db = await loadDb(fakeClient(calls, "ok", { ...summaryPayload({ m: null }), tz }));
     const { users } = await db.fetchMergedUsersWithLogs(PLAN);
     expect(calls[0].args).toMatchObject({ p_start_date: null, p_schedule: null });
     expect(users[0].roster_stats).toEqual({ streak: 2, makeup: null });
