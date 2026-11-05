@@ -54,7 +54,7 @@ describe("0170: exam_get_stats — 5 參數簽章 + 過濾旗標", () => {
 
   it("scoped_stats 只在 v_filter 時篩掉沒讀完的人，否則等於 scoped", () => {
     expect(sql).toContain("IF v_filter THEN");
-    expect(sql).toContain("WHERE a.id=ANY(scoped) AND public._user_read_book_once(a.user_id,v_book,p_book_chapters)");
+    expect(sql).toContain("WHERE a.id=ANY(scoped) AND a.user_id=ANY(v_read_users)");
     expect(sql).toContain("scoped_stats:=scoped;");
   });
 
@@ -65,7 +65,7 @@ describe("0170: exam_get_stats — 5 參數簽章 + 過濾旗標", () => {
     // teamRanking 分數 FILTER 走 scoped_stats（JOIN 本身放寬成 scoped，見缺口拆類測試）
     expect(sql).toMatch(/'teamRanking'[\s\S]*?FILTER\(WHERE a\.id=ANY\(scoped_stats\)AND a\.status='graded'\)completed/);
     // roster 用 scoped（列出所有人，含被排除者）
-    expect(sql).toMatch(/'roster',COALESCE\(\(SELECT jsonb_agg[\s\S]*?WHERE a\.id=ANY\(scoped\)AND a\.status IN\('submitted','graded'\)\),'\[\]'::jsonb\)/);
+    expect(sql).toMatch(/'roster',COALESCE\(\([\s\S]*?SELECT jsonb_agg[\s\S]*?WHERE a\.id=ANY\(scoped\)AND a\.status IN\('submitted','graded'\)\),'\[\]'::jsonb\)/);
   });
 
   // 團隊排行「哪些隊算數」的邏輯（v_plans 書卷比對 → 改成直接跟著
@@ -73,17 +73,23 @@ describe("0170: exam_get_stats — 5 參數簽章 + 過濾旗標", () => {
   // 在這支測驗，這裡只留跟「讀完一遍」過濾本身有關的斷言。
 
   it("roster 每列帶 firstRoundDone（沒帶書卷 → NULL）", () => {
-    expect(sql).toContain("'firstRoundDone',CASE WHEN v_book IS NULL THEN NULL ELSE public._user_read_book_once(a.user_id,v_book,p_book_chapters)END");
+    expect(sql).toContain("'firstRoundDone',CASE WHEN v_book IS NULL THEN NULL ELSE a.user_id=ANY(v_read_users)END");
   });
 
   it("overall.notReadCount = 已作答但沒讀完該書卷的人數（不受 toggle 影響、只要有帶書卷就算）", () => {
     expect(sql).toContain("'notReadCount',(SELECT COUNT(*)FROM public.exam_attempts a2 WHERE a2.id=ANY(scoped)AND a2.status IN('submitted','graded')");
-    expect(sql).toContain("AND v_book IS NOT NULL AND NOT public._user_read_book_once(a2.user_id,v_book,p_book_chapters))");
+    expect(sql).toContain("AND v_book IS NOT NULL AND NOT a2.user_id=ANY(v_read_users)))");
   });
 
   it("PR 母體也排除沒讀完的人（v_filter 時）", () => {
-    expect(sql).toContain("AND(NOT v_filter OR public._user_read_book_once(a.user_id,v_book,p_book_chapters))");
-    expect(sql).toContain("AND(NOT v_filter OR public._user_read_book_once(a2.user_id,v_book,p_book_chapters))");
+    expect(sql).toContain("AND(NOT v_filter OR a.user_id=ANY(v_read_users))");
+    expect(sql).toContain("AND(NOT v_filter OR a2.user_id=ANY(v_read_users))");
+  });
+
+  it("「讀完一遍」一人只判斷一次，判定規則仍在 _user_read_book_once（#675）", () => {
+    expect(sql.match(/public\._user_read_book_once\(u\.user_id,v_book,p_book_chapters\)/g)).toHaveLength(1);
+    expect(sql).not.toContain("public._user_read_book_once(a.user_id");
+    expect(sql).not.toContain("public._user_read_book_once(a2.user_id");
   });
 });
 

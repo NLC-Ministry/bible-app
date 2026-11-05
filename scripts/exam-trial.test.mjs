@@ -1,18 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { currentMigrationSql, latestFunctionDefinition } from "./migration-sql.mjs";
 
 // #302（大測驗 R5，屬於 #297）：「試作」合併演練作答與預覽試卷；試作只有自己看得到，
 // 不算進成績、統計、首頁卡片、我的測驗；開放作答時自動清除（#298）。
 // 換行統一成 \n：Windows 上 git（autocrlf）會把檔案 checkout 成 CRLF
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const migration = read("supabase/migrations/20260928041142_exam_trial_attempts_out_of_stats.sql");
+const migration = currentMigrationSql("20260928041142_exam_trial_attempts_out_of_stats.sql");
 const exam = read("js/modules/exam.js");
 
-const fnBody = name => {
-  const start = migration.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
-  expect(start, `${name} is redefined`).toBeGreaterThanOrEqual(0);
-  return migration.slice(start, migration.indexOf("$function$;", start));
-};
+const fnBody = name => latestFunctionDefinition(name).text.replace(/\r\n/g, "\n");
 
 describe("migration: trials stay out of the numbers", () => {
   it("every official-attempt query in exam_get_stats excludes trials", () => {
