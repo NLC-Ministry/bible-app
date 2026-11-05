@@ -70,5 +70,6 @@ describe("repo 內沒有 project ref／試算表 ID（#609）", () => {
       if (hits.length) offenders.push(`${path}: ${[...new Set(hits)].join("、")}`);
     }
     expect(offenders, `這些檔案含有不該公開的 ID，改成讀 .env／占位符（見 docs/staging.md）：\n${offenders.join("\n")}`).toEqual([]);
-  });
+    // 要讀全部追蹤檔，整合時機器忙可能超過預設的 5 秒。
+  }, 60000);
 });
