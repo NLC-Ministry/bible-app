@@ -317,6 +317,7 @@ const TEAM_RPC_FUNCTIONS = new Set([
   "get_unjoined_plan_members",
   "get_joined_plan_members",
   "send_plan_join_invitation",
+  "send_plan_join_invitations_batch",
   "get_admin_member_team_placements"
 ]);
 const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
@@ -324,6 +325,7 @@ const PLAN_MANAGEMENT_RPC_FUNCTIONS = new Set([
   "get_unjoined_plan_members",
   "get_joined_plan_members",
   "send_plan_join_invitation",
+  "send_plan_join_invitations_batch",
   "get_admin_member_team_placements",
   // App 管理分頁的統計（#551）；範圍參數在下面依登入者覆寫
   PASTORAL_OVERVIEW_RPC
