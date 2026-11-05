@@ -3477,6 +3477,13 @@ body:not(.dark-theme) .settings-row-btn:hover {
   white-space: nowrap;
 }
 
+.account-switch-hint__status {
+  margin: 0 0 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
 .account-switch-hint__actions {
   display: flex;
   flex-wrap: wrap;

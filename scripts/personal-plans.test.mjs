@@ -121,7 +121,9 @@ const ONE_PERSON_SUPPORT_VIEW = [
   "admin_api_user_timeline",
   "_admin_api_section_items",
   // 合併重複帳號（#655）：把同一位會友兩個帳號的計畫（含個人計畫）整批搬到一起，不是排行或統計
-  "admin_merge_profiles"
+  "admin_merge_profiles",
+  // 找回計畫（#664）：只看這個帳號有沒有任何計畫（含個人計畫），不是排行或統計
+  "account_recovery_target_refusal"
 ];
 
 function functionsTouchingReadingTables() {

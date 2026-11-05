@@ -13,6 +13,7 @@ const block = (src) => {
 const nlcDataSrc = read("nlc-data");
 const nlcSessionSrc = read("nlc-session");
 const adminApiSrc = read("admin-api");
+const recoverPlanSrc = read("recover-plan");
 const code = transformSync(
   `${block(nlcDataSrc)}\nreturn { LOGTO_JWT_MODE, verifyLogtoJwt, recordLogtoJwt, pickSessionUserinfo };`,
   { loader: "ts" }
@@ -59,6 +60,14 @@ describe("both functions embed the same verification code", () => {
     expect(block(nlcDataSrc)).toBeTruthy();
     expect(block(nlcDataSrc)).toBe(block(nlcSessionSrc));
     expect(block(nlcDataSrc)).toBe(block(adminApiSrc));
+    expect(block(nlcDataSrc)).toBe(block(recoverPlanSrc));
+  });
+  it("recover-plan always requires verified tokens, whatever NLC_JWT_VERIFY_MODE says (#664)", () => {
+    const code = recoverPlanSrc.slice(recoverPlanSrc.indexOf("const MAX_BODY_CHARS"));
+    expect(code).toContain("verifyLogtoJwt(token, issuer");
+    expect(code).toContain("verifyLogtoJwt(targetIdToken, issuer)");
+    expect(code).not.toContain("LOGTO_JWT_MODE");
+    expect(code).not.toContain("parseJwt");
   });
   it("admin-api always requires a verified token, whatever NLC_JWT_VERIFY_MODE says", () => {
     const serve = adminApiSrc.slice(adminApiSrc.indexOf("Deno.serve("));

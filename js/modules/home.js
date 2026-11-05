@@ -16,6 +16,7 @@ import {
   shouldShowAccountSwitchHintForState,
   switchToOriginalAccount
 } from "./account-switch-hint.mjs";
+import { planRecoveryOffer, startPlanRecovery } from "../plan-recovery.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -404,15 +405,16 @@ export function updateDashboardView() {
     planSummaryDiv.onclick = null;
     planSummaryDiv.onkeydown = null;
     const showAccountSwitchHint = shouldShowAccountSwitchHintForState(state);
+    const recoveryOffer = showAccountSwitchHint ? planRecoveryOffer(state) : null;
     planSummaryDiv.innerHTML = `
-      ${showAccountSwitchHint ? accountSwitchHintMarkup(state.currentUser) : ""}
+      ${showAccountSwitchHint ? accountSwitchHintMarkup(state.currentUser, recoveryOffer) : ""}
       <div class="empty-state" style="text-align: center; padding: 2rem 0;">
         <p style="color: var(--text-secondary); margin-bottom: 1rem;">${(window.APP_COPY && window.APP_COPY.plan.emptyBody) || "還沒加入讀經計畫"}</p>
         <button class="primary-btn" onclick="appRouter.switchTab('plan-view')">${(window.APP_COPY && window.APP_COPY.plan.emptyCta) || "去找計畫"}</button>
       </div>
     `;
     if (showAccountSwitchHint) {
-      bindAccountSwitchHint(planSummaryDiv, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount });
+      bindAccountSwitchHint(planSummaryDiv, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount, onRecover: startPlanRecovery });
     }
   }
 

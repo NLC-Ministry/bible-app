@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMigratedDb } from "./lib/pglite-supabase.mjs";
+import { shouldKeepAccountMember } from "../supabase/functions/_shared/account-member-guard.mjs";
 
 // #594：在 PGlite 從空資料庫套用 supabase/migrations/ 的全部 migration，實際執行重要 RPC，把行為鎖住
 //（test:changed 靠這個路徑字串，改了 migration 就會跑這支）。
@@ -1226,6 +1227,350 @@ describe("合併重複帳號（admin_merge_profiles，#655）", () => {
               has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
        FROM pg_proc p WHERE p.proname = 'admin_merge_profiles'`));
     expect(privileges).toEqual({ anon: false, authenticated: false, service: true });
+  });
+});
+
+describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）", () => {
+  // 來源＝換登入方式開出來的空帳號；目標＝原本有計畫的舊帳號。和手動合併的 4 位（舊併新）方向相反，
+  // 見 migration 檔頭：來源是空的，保留舊帳號，舊帳號的會員 ID、組織、角色都不動。
+  const R = {
+    source: "24000000-0000-4000-8000-000000000001",
+    target: "24000000-0000-4000-8000-000000000002",
+    sourceMember: "25000000-0000-4000-8000-000000000001",
+    targetMember: "25000000-0000-4000-8000-000000000002",
+    sourceSub: "recovery-sub-email",
+    targetSub: "recovery-sub-phone"
+  };
+  const NONCE = "a".repeat(64);
+  const one = async (tx, sql, params = []) => (await tx.query(sql, params)).rows[0];
+  const roleId = async (tx, code) => (await one(tx, `SELECT id FROM public.role_definitions WHERE code = $1`, [code])).id;
+  const disabledProfileTriggers = async tx => (await one(tx,
+    `SELECT count(*)::int AS n FROM pg_trigger WHERE NOT tgisinternal AND tgenabled = 'D' AND tgrelid = 'public.profiles'::regclass`
+  )).n;
+
+  /** 建好一空一舊兩個帳號，prepare 先動手腳（用資料庫擁有者身分），fn 以 service_role 呼叫 RPC，最後一律 rollback。 */
+  async function withRecovery({ prepare, fn }) {
+    let result;
+    let failure;
+    try {
+      await db.transaction(async tx => {
+        try {
+          const member = await roleId(tx, "member");
+          await tx.query(
+            `INSERT INTO public.profiles (id, name, role_id, email, phone, nlc_member_id, great_region, pastoral_zone, small_group, is_active, created_at) VALUES
+               ($1, '會友', $3, 'new@example.invalid', NULL, $4, '', '', '', TRUE, now() - INTERVAL '1 day'),
+               ($2, '會友', $3, NULL, '0912000000', $5, '大區 A', '牧區 A-1', '小組 A-1-1', TRUE, now() - INTERVAL '200 days')`,
+            [R.source, R.target, member, R.sourceMember, R.targetMember]
+          );
+          await tx.query(
+            `INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES
+               ($1, 'logto', $3, TRUE), ($2, 'logto', $4, TRUE)`,
+            [R.source, R.target, R.sourceSub, R.targetSub]
+          );
+          await tx.query(
+            `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+             SELECT $1, id, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`,
+            [R.target, ids.plan]
+          );
+          if (prepare) await prepare(tx);
+          const service = async (sql, params) => {
+            await tx.exec(`SET LOCAL ROLE service_role`);
+            try {
+              return (await tx.query(sql, params)).rows[0]?.r;
+            } finally {
+              await tx.exec(`RESET ROLE`);
+            }
+          };
+          result = await fn({
+            tx,
+            start: (nonce = NONCE, sub = R.sourceSub) =>
+              service(`SELECT public.account_recovery_start($1, $2) AS r`, [sub, nonce]),
+            merge: ({ source = R.sourceSub, target = R.targetSub, nonce = NONCE, authTime = null } = {}) =>
+              service(`SELECT public.account_recovery_merge($1, $2, $3, $4, 'req-1') AS r`, [source, target, nonce, authTime]),
+            challenge: (nonce = NONCE) => one(tx, `SELECT * FROM public.account_recovery_challenges WHERE nonce_hash = $1`, [nonce]),
+            unmerged: async () => {
+              const merges = (await one(tx, `SELECT count(*)::int AS n FROM public.profile_merges WHERE source_profile_id = $1`, [R.source])).n;
+              const identity = await one(tx, `SELECT profile_id FROM public.user_identities WHERE provider_user_id = $1`, [R.sourceSub]);
+              return merges === 0 && identity.profile_id === R.source;
+            }
+          });
+        } catch (error) {
+          failure = error;
+        }
+        await tx.rollback();
+      });
+    } catch (error) {
+      if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+    }
+    if (failure) throw failure;
+    return result;
+  }
+
+  it("通過：兩個登入方式都進舊帳號，舊帳號的資料不動，來源停用，稽核記下觸發來源，觸發器恢復", async () => {
+    const outcome = await withRecovery({
+      fn: async ({ tx, start, merge, challenge }) => {
+        expect(await start()).toEqual({ ok: true });
+        const result = await merge();
+        return {
+          result,
+          identities: (await tx.query(`SELECT provider_user_id FROM public.user_identities WHERE profile_id = $1 ORDER BY 1`, [R.target])).rows.map(row => row.provider_user_id),
+          source: await one(tx, `SELECT is_active, nlc_member_id, email FROM public.profiles WHERE id = $1`, [R.source]),
+          target: await one(tx, `SELECT id, nlc_member_id, pastoral_zone, is_active, email, phone FROM public.profiles WHERE id = $1`, [R.target]),
+          log: await one(tx, `SELECT source_profile_id, target_profile_id, report FROM public.profile_merges`),
+          challenge: await challenge(),
+          disabled: await disabledProfileTriggers(tx)
+        };
+      }
+    });
+    expect(outcome.result).toEqual({ ok: true });
+    expect(outcome.identities).toEqual([R.sourceSub, R.targetSub].sort());
+    expect(outcome.source).toEqual({ is_active: false, nlc_member_id: null, email: null });
+    expect(outcome.target).toMatchObject({
+      nlc_member_id: R.targetMember, pastoral_zone: "牧區 A-1", is_active: true,
+      email: "new@example.invalid", phone: "0912000000"
+    });
+    expect(outcome.log).toMatchObject({ source_profile_id: R.source, target_profile_id: R.target });
+    expect(outcome.log.report.trigger).toMatchObject({ source: "self_service_recovery", function: "recover-plan", requestId: "req-1" });
+    expect(JSON.stringify(outcome.log.report)).not.toMatch(/token|eyJ/i);
+    expect(outcome.challenge).toMatchObject({ outcome: "merged", target_profile_id: R.target });
+    expect(outcome.disabled).toBe(0);
+  });
+
+  it("這個方向下 #665 的保留邏輯成立：合併後用新方式登入，沒有牧區的會員不會覆寫舊帳號", async () => {
+    const target = await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        await start();
+        await merge();
+        return one(tx, `SELECT nlc_member_id, pastoral_zone FROM public.profiles WHERE id = $1`, [R.target]);
+      }
+    });
+    expect(shouldKeepAccountMember({
+      linkSource: "identity", existingProfile: target, sessionMemberId: R.sourceMember, sessionPastoralZone: ""
+    })).toBe(true);
+    // 反過來（舊併新）留下的是空帳號的會員、沒有牧區，#665 沒有東西可保留，所以這裡一定要新併舊
+    expect(shouldKeepAccountMember({
+      linkSource: "identity",
+      existingProfile: { nlc_member_id: R.sourceMember, pastoral_zone: "" },
+      sessionMemberId: R.targetMember,
+      sessionPastoralZone: ""
+    })).toBe(false);
+  });
+
+  it("重試：合併成功但回應沒送到，同一個 nonce 再呼叫回成功、不重做；其他組合用不了", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        await start();
+        await merge();
+        expect(await merge()).toEqual({ ok: true, alreadyDone: true });
+        expect(await merge({ source: "someone-else" })).toEqual({ ok: false, code: "challenge_invalid" });
+        expect((await one(tx, `SELECT count(*)::int AS n FROM public.profile_merges`)).n).toBe(1);
+      }
+    });
+  });
+
+  it("空帳號收到的關心提醒和回報不算實質資料，會跟著搬過去", async () => {
+    const moved = await withRecovery({
+      prepare: async tx => {
+        await tx.query(
+          `INSERT INTO public.care_reminders (sender_id, recipient_id, reason, status, read_at, created_at)
+           VALUES ($1, $2, 'care', 'read', '2026-10-02T01:00:00Z', '2026-10-01T01:00:00Z')`,
+          [ids.admin, R.source]
+        );
+        await tx.query(`INSERT INTO public.issue_reports (user_id, category, description) VALUES ($1, 'bug', '我的計畫不見了')`, [R.source]);
+      },
+      fn: async ({ tx, start, merge }) => {
+        expect(await start()).toEqual({ ok: true });
+        expect(await merge()).toEqual({ ok: true });
+        return {
+          reminders: (await one(tx, `SELECT count(*)::int AS n FROM public.care_reminders WHERE recipient_id = $1`, [R.target])).n,
+          reports: (await one(tx, `SELECT count(*)::int AS n FROM public.issue_reports WHERE user_id = $1`, [R.target])).n
+        };
+      }
+    });
+    expect(moved).toEqual({ reminders: 1, reports: 1 });
+  });
+
+  const setProfile = (id, sql) => tx => tx.query(`UPDATE public.profiles SET ${sql} WHERE id = $1`, [id]);
+  const setRole = (id, code) => async tx => tx.query(`UPDATE public.profiles SET role_id = $2 WHERE id = $1`, [id, await roleId(tx, code)]);
+  const addOrphanLog = tx => tx.query(`INSERT INTO public.reading_logs (user_id, plan_id, book, chapter) VALUES ($1, NULL, '創世記', 1)`, [R.source]);
+
+  it.each([
+    ["來源有計畫", tx => tx.query(
+      `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+       SELECT $1, id, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`, [R.source, ids.plan])],
+    ["來源有不屬於計畫的打卡", addOrphanLog],
+    ["來源建立超過 30 天", setProfile(R.source, `created_at = now() - INTERVAL '31 days'`)],
+    ["來源已停用", setProfile(R.source, `is_active = FALSE`)],
+    ["來源是管理者", setRole(R.source, "admin")],
+    ["來源是小組長", setRole(R.source, "group_leader")],
+    ["來源有委任範圍", setProfile(R.source, `managed_zones = '牧區 A-1'`)],
+    ["來源有兩個登入身分", tx => tx.query(`INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES ($1, 'logto', 'recovery-sub-third', FALSE)`, [R.source])],
+    ["之後新增的表也算實質資料（fail closed）", async tx => {
+      await tx.exec(`CREATE TABLE public.recovery_future_table (user_id UUID REFERENCES public.profiles(id))`);
+      await tx.query(`INSERT INTO public.recovery_future_table VALUES ($1)`, [R.source]);
+    }]
+  ])("開始就擋：%s", async (_label, prepare) => {
+    await withRecovery({
+      prepare,
+      fn: async ({ start, merge, unmerged }) => {
+        expect(await start()).toEqual({ ok: false, code: "not_eligible" });
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it.each([
+    ["目標已停用", setProfile(R.target, `is_active = FALSE`)],
+    ["目標是系統管理員", setRole(R.target, "admin")],
+    ["目標是牧者", setRole(R.target, "pastor")],
+    ["目標是牧區長", setRole(R.target, "zone_leader")],
+    ["目標有委任範圍", setProfile(R.target, `managed_regions = '大區 A'`)],
+    ["目標比來源新", setProfile(R.target, `created_at = now()`)],
+    ["目標沒有任何計畫", tx => tx.query(`DELETE FROM public.reading_plans WHERE user_id = $1`, [R.target])],
+    ["目標已經被併掉", tx => tx.query(`INSERT INTO public.profile_merges (source_profile_id, target_profile_id, report) VALUES ($1, $2, '{}')`, [R.target, ids.other])]
+  ])("合併時才擋，而且用掉 challenge：%s", async (_label, prepare) => {
+    await withRecovery({
+      fn: async ({ tx, start, merge, challenge, unmerged }) => {
+        expect(await start()).toEqual({ ok: true });
+        await prepare(tx);
+        expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+        expect((await challenge()).consumed_at).not.toBeNull();
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("開始之後來源才有了資料：合併時重查，一樣擋", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge, unmerged }) => {
+        await start();
+        await addOrphanLog(tx);
+        expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("兩個 token 是同一個帳號：回 same_account，什麼都不動", async () => {
+    await withRecovery({
+      fn: async ({ start, merge, unmerged }) => {
+        await start();
+        expect(await merge({ target: R.sourceSub })).toEqual({ ok: false, code: "same_account" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("challenge 綁定來源帳號：沒開始過、別人的、用過的、過期的、目標登入太舊都不行", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge, unmerged }) => {
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+
+        await start();
+        expect(await merge({ source: "not-the-one-who-started" })).toEqual({ ok: false, code: "challenge_invalid" });
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+
+        const expiring = "b".repeat(64);
+        await start(expiring);
+        await tx.query(`UPDATE public.account_recovery_challenges SET expires_at = now() - INTERVAL '1 second' WHERE nonce_hash = $1`, [expiring]);
+        expect(await merge({ nonce: expiring })).toEqual({ ok: false, code: "challenge_invalid" });
+
+        // 目標的登入比 challenge 早：不是為了這次找回才登入的
+        const stale = "c".repeat(64);
+        await start(stale);
+        expect(await merge({ nonce: stale, authTime: new Date(Date.now() - 3600 * 1000).toISOString() })).toEqual({ ok: false, code: "not_eligible" });
+
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("目標的 sub 查無帳號：not_eligible，回應不說是哪一個條件", async () => {
+    await withRecovery({
+      fn: async ({ start, merge, unmerged }) => {
+        await start();
+        expect(await merge({ target: "never-seen-sub" })).toEqual({ ok: false, code: "not_eligible" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("頻率限制：一小時 5 次（被拒絕的也算），開新的舊的就失效", async () => {
+    const nonce = i => String(i).repeat(64);
+    await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        for (let i = 1; i <= 5; i++) expect(await start(nonce(i))).toEqual({ ok: true });
+        expect(await start(nonce(6))).toEqual({ ok: false, code: "rate_limited" });
+        expect(await merge({ nonce: nonce(1) })).toEqual({ ok: false, code: "challenge_invalid" });
+        const rows = (await tx.query(`SELECT outcome FROM public.account_recovery_challenges WHERE source_profile_id = $1`, [R.source])).rows;
+        expect(rows).toHaveLength(5);
+        expect(rows.filter(row => row.outcome === "superseded")).toHaveLength(4);
+      }
+    });
+    await withRecovery({
+      prepare: addOrphanLog,
+      fn: async ({ start }) => {
+        for (let i = 1; i <= 5; i++) expect(await start(nonce(i))).toEqual({ ok: false, code: "not_eligible" });
+        expect(await start(nonce(6))).toEqual({ ok: false, code: "rate_limited" });
+      }
+    });
+  });
+
+  const failMergeWith = sqlstate => tx => tx.exec(`
+    CREATE FUNCTION public.recovery_test_fail() RETURNS trigger LANGUAGE plpgsql AS $f$
+    BEGIN RAISE EXCEPTION 'injected' USING ERRCODE = '${sqlstate}'; END; $f$;
+    CREATE TRIGGER recovery_test_fail BEFORE INSERT ON public.profile_merges
+    FOR EACH ROW EXECUTE FUNCTION public.recovery_test_fail();
+  `);
+
+  it("等不到鎖：回 busy、整筆回滾、觸發器恢復、challenge 留著可以重試", async () => {
+    await withRecovery({
+      prepare: failMergeWith("55P03"),
+      fn: async ({ tx, start, merge, challenge, unmerged }) => {
+        await start();
+        expect(await merge()).toEqual({ ok: false, code: "busy" });
+        expect((await challenge()).consumed_at).toBeNull();
+        expect(await unmerged()).toBe(true);
+        expect(await disabledProfileTriggers(tx)).toBe(0);
+
+        await tx.exec(`DROP TRIGGER recovery_test_fail ON public.profile_merges`);
+        expect(await merge()).toEqual({ ok: true });
+      }
+    });
+  });
+
+  it("合併中途出錯：回 merge_failed、整筆回滾，錯誤原因只記 SQLSTATE", async () => {
+    await withRecovery({
+      prepare: failMergeWith("XX999"),
+      fn: async ({ start, merge, challenge, unmerged }) => {
+        await start();
+        expect(await merge()).toEqual({ ok: false, code: "merge_failed" });
+        expect((await challenge()).outcome).toBe("merge_failed:XX999");
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("函式只給 service_role，challenge 表連 service_role 都不能直接讀", async () => {
+    const rows = (await db.query(
+      `SELECT p.proname,
+              has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+              has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+       FROM pg_proc p WHERE p.proname LIKE 'account_recovery_%'`
+    )).rows;
+    expect(rows.map(row => row.proname).sort()).toEqual([
+      "account_recovery_merge", "account_recovery_source_refusal", "account_recovery_start", "account_recovery_target_refusal"
+    ]);
+    rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
+    const table = (await db.query(
+      `SELECT has_table_privilege('anon', 'public.account_recovery_challenges', 'SELECT') AS anon,
+              has_table_privilege('authenticated', 'public.account_recovery_challenges', 'SELECT') AS authenticated,
+              has_table_privilege('service_role', 'public.account_recovery_challenges', 'SELECT') AS service`
+    )).rows[0];
+    expect(table).toEqual({ anon: false, authenticated: false, service: false });
   });
 });
 

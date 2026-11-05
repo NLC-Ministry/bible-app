@@ -1,10 +1,10 @@
-// Edge Function 的 CORS 白名單（#553）：三支函式內嵌同一段區塊，只對白名單內的網站回
+// Edge Function 的 CORS 白名單（#553）：瀏覽器會呼叫的函式都內嵌同一段區塊，只對白名單內的網站回
 // Access-Control-Allow-Origin；不再把請求帶來的任何 origin 原樣反射回去。
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { transformSync } from "esbuild";
 
-const FUNCTIONS = ["nlc-data", "nlc-session", "exam-write"];
+const FUNCTIONS = ["nlc-data", "nlc-session", "exam-write", "recover-plan"];
 const read = (name) => readFileSync(new URL(`../supabase/functions/${name}/index.ts`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const block = (src) => src.match(/\/\/ >>> cors-allowlist[\s\S]*?\/\/ <<< cors-allowlist/)?.[0] ?? null;
 const sources = Object.fromEntries(FUNCTIONS.map((name) => [name, read(name)]));

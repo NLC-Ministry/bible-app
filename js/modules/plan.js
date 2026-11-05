@@ -19,6 +19,7 @@ import {
   shouldShowAccountSwitchHintForState,
   switchToOriginalAccount
 } from "./account-switch-hint.mjs";
+import { planRecoveryOffer, startPlanRecovery } from "../plan-recovery.mjs";
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import { canCreatePersonalPlan, isPersonalPlan, personalPlanErrorMessage } from "../data/personal-plans.mjs";
@@ -1881,15 +1882,16 @@ function renderJoinedPlansList() {
     if (plansToRender.length === 0) {
       if (filter === "mine") {
         const showAccountSwitchHint = shouldShowAccountSwitchHintForState(state);
+        const recoveryOffer = showAccountSwitchHint ? planRecoveryOffer(state) : null;
         container.innerHTML = `
-          ${showAccountSwitchHint ? accountSwitchHintMarkup(state.currentUser) : ""}
+          ${showAccountSwitchHint ? accountSwitchHintMarkup(state.currentUser, recoveryOffer) : ""}
           <div class="empty-state" style="text-align: center; padding: 3rem 0;">
             <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-weight: 500;">您目前沒有加入任何讀經計畫。</p>
             <p style="font-size: 0.88rem; color: var(--text-muted);">${(window.APP_COPY && window.APP_COPY.plan.clickFindPlans) || "請點擊頂部「探索計畫」瀏覽並加入！"}</p>
           </div>
         `;
         if (showAccountSwitchHint) {
-          bindAccountSwitchHint(container, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount });
+          bindAccountSwitchHint(container, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount, onRecover: startPlanRecovery });
         }
       } else {
         container.innerHTML = `

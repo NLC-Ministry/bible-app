@@ -49,6 +49,7 @@ const auth = {
     flowId: "nlc_auth_flow_id",
     continuation: "nlc_auth_continuation",
     continuationVersion: "nlc_auth_continuation_version",
+    planRecoveryFlow: "nlc_auth_plan_recovery",
     memberContext: "nlc_member_context",
     supabaseAccessToken: "nlc_supabase_access_token",
     supabaseExpiresAt: "nlc_supabase_expires_at",
@@ -249,7 +250,8 @@ const auth = {
       this.keys.nonce,
       this.keys.continuation,
       this.keys.continuationVersion,
-      this.keys.flowId
+      this.keys.flowId,
+      this.keys.planRecoveryFlow
     ].forEach((key) => {
       sessionStorage.removeItem(key);
       localStorage.removeItem(key);
@@ -503,54 +505,93 @@ const auth = {
         return;
       }
 
-      const safeContinuation = this._normalizeAuthContinuationInput(continuation);
-      const stateVal = this._generateCodeVerifier();
-      const verifierVal = this._generateCodeVerifier();
-      const nonceVal = this._generateCodeVerifier();
-      const challenge = await this._generateCodeChallenge(verifierVal);
-      if (!/^[0-9A-Z]{26}$/.test(safeContinuation.flowId || "")) {
-        safeContinuation.flowId = createAuthContinuation({
-          intent: safeContinuation.intent,
-          returnTo: safeContinuation.returnTo
-        }).flowId;
-      }
-
-      const serializedContinuation = serializeAuthContinuation(safeContinuation);
-
-      this._clearFlowState();
-      this._setFlowItem(this.keys.state, stateVal);
-      this._setFlowItem(this.keys.verifier, verifierVal);
-      this._setFlowItem(this.keys.nonce, nonceVal);
-      this._setFlowItem(this.keys.continuation, serializedContinuation);
-      this._setFlowItem(this.keys.continuationVersion, String(AUTH_POLICY_VERSION));
-      this._setFlowItem(this.keys.flowId, safeContinuation.flowId);
-
-      const redirectUri = this._getRedirectUri();
-      const endpoints = await this._getEndpoints();
-      const authParams = new URLSearchParams({
-        client_id: this.config.clientId,
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: this.config.scopes,
-        state: stateVal,
-        code_challenge: challenge,
-        code_challenge_method: "S256",
-        nonce: nonceVal
-      });
-      if (this.config.platformResource) {
-        authParams.set("resource", this.config.platformResource);
-      }
-      // 平常不帶 prompt：會友在其他 NLC App 已登入就直接通過（SSO）。
-      // 只有「換回原本的帳號」時帶 prompt=login，否則 Logto 會沿用剛才的登入狀態又進到同一個帳號。
-      if (signInPrompt) authParams.set("prompt", signInPrompt);
-
-      this._navigateToAuthorization(`${endpoints.authorizationEndpoint}?${authParams}`);
+      await this._redirectToAuthorization(continuation, { prompt: signInPrompt });
     } catch (err) {
       console.error("Logto login redirect failed:", err);
       this._showMessage("\u7121\u6cd5\u958b\u555f\u6559\u6703\u7cfb\u7d71\u767b\u5165\uff0c\u8acb\u91cd\u8a66\u3002");
     }
   },
 
+  async _redirectToAuthorization(continuation, { prompt = "", nonce = "", planRecovery = false } = {}) {
+    const safeContinuation = this._normalizeAuthContinuationInput(continuation);
+    const stateVal = this._generateCodeVerifier();
+    const verifierVal = this._generateCodeVerifier();
+    const nonceVal = nonce || this._generateCodeVerifier();
+    const challenge = await this._generateCodeChallenge(verifierVal);
+    if (!/^[0-9A-Z]{26}$/.test(safeContinuation.flowId || "")) {
+      safeContinuation.flowId = createAuthContinuation({
+        intent: safeContinuation.intent,
+        returnTo: safeContinuation.returnTo
+      }).flowId;
+    }
+
+    const serializedContinuation = serializeAuthContinuation(safeContinuation);
+
+    this._clearFlowState();
+    this._setFlowItem(this.keys.state, stateVal);
+    this._setFlowItem(this.keys.verifier, verifierVal);
+    this._setFlowItem(this.keys.nonce, nonceVal);
+    this._setFlowItem(this.keys.continuation, serializedContinuation);
+    this._setFlowItem(this.keys.continuationVersion, String(AUTH_POLICY_VERSION));
+    this._setFlowItem(this.keys.flowId, safeContinuation.flowId);
+    if (planRecovery) this._setFlowItem(this.keys.planRecoveryFlow, "1");
+
+    const redirectUri = this._getRedirectUri();
+    const endpoints = await this._getEndpoints();
+    const authParams = new URLSearchParams({
+      client_id: this.config.clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: this.config.scopes,
+      state: stateVal,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      nonce: nonceVal
+    });
+    if (this.config.platformResource) {
+      authParams.set("resource", this.config.platformResource);
+    }
+    // 平常不帶 prompt：會友在其他 NLC App 已登入就直接通過（SSO）。
+    // 只有「換回原本的帳號」時帶 prompt=login，否則 Logto 會沿用剛才的登入狀態又進到同一個帳號。
+    if (prompt) authParams.set("prompt", prompt);
+
+    this._navigateToAuthorization(`${endpoints.authorizationEndpoint}?${authParams}`);
+  },
+
+  // #664：驗證舊的登入方式來找回計畫。和一般登入不同：
+  //   · 不清本機的登入狀態。會友在 Logto 中途取消、按返回，都要回到原本的狀態。
+  //   · nonce 由伺服器發，舊帳號的 id_token 會帶著它，證明這次登入是為了這次找回做的。
+  // 失敗就丟例外，由呼叫端（js/plan-recovery.mjs）顯示訊息。
+  async startPlanRecoveryLogin({ nonce } = {}) {
+    if (!this.config.clientId || !nonce) throw new Error("plan_recovery_login_unavailable");
+    try {
+      localStorage.removeItem(SIGN_IN_PROMPT_KEY);
+    } catch (_) {}
+    await this._redirectToAuthorization({ intent: "login", returnTo: "/" }, { prompt: "login", nonce, planRecovery: true });
+  },
+
+  // 這次登入回來的結果：signed_in（換到剛登入的 token）／cancelled（token 沒動）／null（不是找回流程）。
+  _planRecoveryOutcome: null,
+
+  consumePlanRecoveryOutcome() {
+    const outcome = this._planRecoveryOutcome;
+    this._planRecoveryOutcome = null;
+    return outcome;
+  },
+
+  // 會友沒回來就放棄了（按返回、關掉重開）：清掉這次的登入流程，token 沒動過。
+  clearPlanRecoveryFlow() {
+    if (this._getFlowItem(this.keys.planRecoveryFlow)) this._clearFlowState();
+  },
+
+  // 找回流程的登入失敗或取消：和 _failCallback 不同，不清 token，會友還是原本的登入狀態。
+  _failPlanRecoveryCallback(detail) {
+    if (detail) console.warn("Plan recovery sign-in did not complete", detail);
+    this._clearFlowState();
+    this._cleanCallbackUrl();
+    this._planRecoveryOutcome = "cancelled";
+    return true;
+  },
 
   async login(options = {}) {
     return this.startInteractiveLogin(options);
@@ -581,6 +622,10 @@ const auth = {
   },
 
   async handleCallback() {
+    const planRecovery = !!this._getFlowItem(this.keys.planRecoveryFlow);
+    const fail = (message, detail) => planRecovery
+      ? this._failPlanRecoveryCallback(detail)
+      : this._failCallback(message, detail);
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get("code");
     const stateVal = urlParams.get("state");
@@ -588,22 +633,22 @@ const auth = {
     const authErrorDescription = urlParams.get("error_description");
 
     if (authError) {
-      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription });
+      return fail("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff1a" + (authErrorDescription || authError), { authError, authErrorDescription });
     }
 
     if (!code && !stateVal) return false;
-    if (!code || !stateVal) return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u8cc7\u6599\u4e0d\u5b8c\u6574\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { code: !!code, state: !!stateVal });
+    if (!code || !stateVal) return fail("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u8cc7\u6599\u4e0d\u5b8c\u6574\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { code: !!code, state: !!stateVal });
 
     const savedState = this._getFlowItem(this.keys.state);
     if (!savedState || savedState !== stateVal) {
-      return this._failCallback("\u767b\u5165\u9a57\u8b49\u5df2\u904e\u671f\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { savedState: !!savedState, callbackState: !!stateVal });
+      return fail("\u767b\u5165\u9a57\u8b49\u5df2\u904e\u671f\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", { savedState: !!savedState, callbackState: !!stateVal });
     }
 
     const verifier = this._getFlowItem(this.keys.verifier);
-    if (!verifier) return this._failCallback("\u767b\u5165\u9a57\u8b49\u8cc7\u6599\u907a\u5931\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+    if (!verifier) return fail("\u767b\u5165\u9a57\u8b49\u8cc7\u6599\u907a\u5931\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
 
     const nonce = this._getFlowItem(this.keys.nonce);
-    if (!nonce) return this._failCallback("\u767b\u5165\u9a57\u8b49\u6c92\u6709\u6240\u9700\u7684\u76f8\u95dc\u8cc7\u8a0a\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
+    if (!nonce) return fail("\u767b\u5165\u9a57\u8b49\u6c92\u6709\u6240\u9700\u7684\u76f8\u95dc\u8cc7\u8a0a\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002");
 
     // 登入成功後跳回原本那一頁（例如批改頁 /grade.html?paper=…&attempt=…），
     // 而不是永遠停在首頁——continuation 在 startInteractiveLogin() 存的 returnTo
@@ -615,7 +660,7 @@ const auth = {
     try {
       // 換 token 用軟逾時（#415）：等太久就先顯示登入卡，但請求繼續跑——
       // 登入碼只能用一次，中斷後重送一定失敗。晚到的成功結果照樣存 token，再重新進入。
-      const exchange = this._exchangeAuthorizationCode({ code, verifier, nonce });
+      const exchange = this._exchangeAuthorizationCode({ code, verifier, nonce, replaceSession: planRecovery });
       const result = await withSoftTimeout(exchange, TOKEN_SOFT_TIMEOUT_MS, { timedOut: true });
       if (result.timedOut) {
         exchange.then((late) => {
@@ -623,23 +668,27 @@ const auth = {
           const target = returnTo && returnTo !== "/" ? returnTo : "/" + window.location.hash;
           window.location.replace(target);
         }).catch(() => {});
-        return this._failCallback("\u6559\u6703\u7cfb\u7d71\u56de\u61c9\u8f03\u6162\uff0c\u5b8c\u6210\u5f8c\u6703\u81ea\u52d5\u9032\u5165\uff1b\u4e5f\u53ef\u4ee5\u91cd\u65b0\u767b\u5165\u3002", { tokenExchange: "timed_out" });
+        return fail("\u6559\u6703\u7cfb\u7d71\u56de\u61c9\u8f03\u6162\uff0c\u5b8c\u6210\u5f8c\u6703\u81ea\u52d5\u9032\u5165\uff1b\u4e5f\u53ef\u4ee5\u91cd\u65b0\u767b\u5165\u3002", { tokenExchange: "timed_out" });
       }
       if (result.error) throw result.error;
       if (!result.ok) {
-        return this._failCallback("\u767b\u5165\u9a57\u8b49\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", result.detail);
+        return fail("\u767b\u5165\u9a57\u8b49\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", result.detail);
       }
 
       this._cleanCallbackUrl();
       this._applyTokenProfileFallback();
-      this._showMessage("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u6210\u529f\u3002");
+      if (planRecovery) {
+        this._planRecoveryOutcome = "signed_in";
+      } else {
+        this._showMessage("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u6210\u529f\u3002");
+      }
       if (returnTo && returnTo !== "/" && returnTo !== window.location.pathname + window.location.search) {
         window.location.replace(returnTo);
         return true;
       }
       return true;
     } catch (err) {
-      return this._failCallback("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", err);
+      return fail("\u6559\u6703\u7cfb\u7d71\u767b\u5165\u5931\u6557\uff0c\u8acb\u91cd\u65b0\u767b\u5165\u3002", err);
     } finally {
       this._clearFlowState();
       loader.hide();
@@ -648,7 +697,9 @@ const auth = {
 
   // 用登入碼換 token。不論呼叫端等不等，這個 promise 都會跑完：成功就存 token。
   // 回傳 { ok: true } / { ok: false, detail }（驗證失敗）/ { error }（網路或伺服器錯誤），不丟例外。
-  async _exchangeAuthorizationCode({ code, verifier, nonce }) {
+  // replaceSession：找回流程沒有先清本機（#664），存新 token 前要把上一個登入的 token 與快取清掉，
+  // 否則回應沒帶 refresh token 時，新的 access token 會配到上一個人的 refresh token。
+  async _exchangeAuthorizationCode({ code, verifier, nonce, replaceSession = false }) {
     try {
       const endpoints = await this._getEndpoints();
       const tokenParams = {
@@ -682,6 +733,7 @@ const auth = {
         };
       }
 
+      if (replaceSession) this._clearStoredTokens();
       this._saveTokens(data);
       return { ok: true };
     } catch (error) {
@@ -926,11 +978,8 @@ const auth = {
     window.location.replace(cleanUrl);
   },
 
-  async logout() {
-    this._clearStoredTokens();
-    this._clearFlowState();
-    this._resetAppAuthState();
-    // Explicitly clear user data cache only on intentional logout
+  // 上一個登入者留在這台裝置的資料。登出時清；找回計畫換到舊的登入方式時也清（#664）。
+  async clearAccountLocalData() {
     localStorage.removeItem("active_reading_plans");
     localStorage.removeItem("reading_logs");
     localStorage.removeItem("reading_log_digest");
@@ -947,6 +996,14 @@ const auth = {
     try { await window.db?.clearBootSnapshot?.(); } catch (_) {}
     try { sessionStorage.removeItem("plan_elig_hub_verified"); } catch (_) {}
     try { localStorage.removeItem("plan_elig_hub_verified"); } catch (_) {}
+  },
+
+  async logout() {
+    this._clearStoredTokens();
+    this._clearFlowState();
+    this._resetAppAuthState();
+    // Explicitly clear user data cache only on intentional logout
+    await this.clearAccountLocalData();
 
     if (typeof state !== "undefined" && state.supabase && state.supabase.auth && typeof state.supabase.auth.signOut === "function") {
       try {
