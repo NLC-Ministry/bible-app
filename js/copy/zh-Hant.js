@@ -63,8 +63,8 @@ window.APP_COPY = {
     dismissCta: "我是第一次參加",
   },
   loginMethodHint: {
-    phone: "上次在這支手機是用手機 {account} 登入，請用同一個方式才看得到你的計畫。",
-    email: "上次在這支手機是用 Email {account} 登入，請用同一個方式才看得到你的計畫。",
+    phone: "上次在這台裝置是用手機 {account} 登入，請用同一個方式才看得到你的計畫。",
+    email: "上次在這台裝置是用 Email {account} 登入，請用同一個方式才看得到你的計畫。",
     unknown: "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。",
   },
   memberHub: {
