@@ -1,6 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as jose from "https://esm.sh/jose@5.9.6";
 import { buildInternalErrorBody } from "../_shared/internal-error-body.mjs";
+import {
+  keepAccountMemberOnPayload,
+  keptOrgFields,
+  shouldKeepAccountMember
+} from "../_shared/account-member-guard.mjs";
 
 // >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
@@ -940,14 +945,30 @@ Deno.serve(async (req: Request) => {
     }
 
 
-    const syncedRoleId = await resolveSyncedRoleId(supabaseAdmin, memberContext, existingProfile?.role_id, linkSource);
+    // #665：帳號合併後用另一種方式登入，這次的會員沒有牧區就不拿來覆寫帳號。
+    const keepAccountMember = shouldKeepAccountMember({
+      linkSource,
+      existingProfile,
+      sessionMemberId: memberId,
+      sessionPastoralZone: mergedOrg.pastoral_zone
+    });
+
+    // 不傳 memberContext 時，resolveSyncedRoleId 直接回傳帳號原本的角色。
+    const syncedRoleId = await resolveSyncedRoleId(
+      supabaseAdmin,
+      keepAccountMember ? null : memberContext,
+      existingProfile?.role_id,
+      linkSource
+    );
     mark("role_resolution");
 
     // Member Hub is canonical only when the context endpoint was reachable for this session.
     const hubLinked = !!memberContext;
-    const projectedOrg = projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked, {
-      platformFailed: platformOrgStatus === "failed"
-    });
+    const projectedOrg = keepAccountMember
+      ? keptOrgFields(existingProfile)
+      : projectOrgFieldsFromHub(mergedOrg, existingProfile, hubLinked, {
+          platformFailed: platformOrgStatus === "failed"
+        });
     const orgProjectionAudit = buildOrgProjectionAudit({
       memberContext,
       organization,
@@ -961,6 +982,7 @@ Deno.serve(async (req: Request) => {
       memberContextError,
       platformOrgStatus
     });
+    if (keepAccountMember) (orgProjectionAudit as any).kept_account_member = true;
     console.info("nlc-session org projection", JSON.stringify(orgProjectionAudit));
 
     const canonicalName = [
@@ -1037,14 +1059,16 @@ Deno.serve(async (req: Request) => {
     } else if (existingProfile?.nlc_member_id) {
       profilePayload.nlc_member_id = existingProfile.nlc_member_id;
     }
+    if (keepAccountMember) keepAccountMemberOnPayload(profilePayload, existingProfile);
 
+    // 保留時不重建組織節點：組織名稱沒變，下面會沿用帳號原本的 ID。
     const {
       great_region_id,
       pastoral_zone_id,
       small_group_id,
       orgLinkStatus,
       orgLinkError
-    } = await resolveLocalOrgLinks(supabaseAdmin, profilePayload, memberContext);
+    } = await resolveLocalOrgLinks(supabaseAdmin, profilePayload, keepAccountMember ? null : memberContext);
     mark("org_links");
 
     profilePayload.great_region_id = (great_region_id || (profilePayload.great_region === existingProfile?.great_region ? existingProfile?.great_region_id : null)) || null;
@@ -1080,6 +1104,24 @@ Deno.serve(async (req: Request) => {
     }
     mark("org_prune");
 
+    // 保留時，會友身分用帳號原本的。要在 clear_primary 之前讀；讀不到就回 null，前端會維持現有的值。
+    let sessionMembershipStatus = membershipStatus;
+    if (keepAccountMember) {
+      const { data: primaryIdentity, error: primaryIdentityError } = await supabaseAdmin
+        .from("user_identities")
+        .select("membership_status:metadata->>membership_status")
+        .eq("profile_id", profileId)
+        .eq("is_primary", true)
+        .order("last_seen_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (primaryIdentityError) {
+        console.warn("Reading the account's membership status failed; returning none.", primaryIdentityError);
+      }
+      sessionMembershipStatus = primaryIdentity?.membership_status || null;
+      mark("kept_membership_status");
+    }
+
     const { error: clearPrimaryError } = await supabaseAdmin
       .from("user_identities")
       .update({ is_primary: false, updated_at: nowIso })
@@ -1108,9 +1150,11 @@ Deno.serve(async (req: Request) => {
     identityMetadata.org_projection_audit = orgProjectionAudit;
     const rolePermissionSignals = collectHubPermissionSignals(memberContext);
     const roleResolutionAudit = {
-      status: linkSource === "email"
-        ? "weak_link_member"
-        : (memberContext ? "member_hub_resolved" : "degraded_preserved"),
+      status: keepAccountMember
+        ? "kept_account_member"
+        : linkSource === "email"
+          ? "weak_link_member"
+          : (memberContext ? "member_hub_resolved" : "degraded_preserved"),
       link_source: linkSource,
       role_id: profile.role_id,
       role_code: profile.role_definition?.code || null,
@@ -1127,8 +1171,9 @@ Deno.serve(async (req: Request) => {
     if (platformOrganization) {
       identityMetadata.platform_organization = platformOrganization;
     }
-    if (membershipStatus) {
-      identityMetadata.membership_status = membershipStatus;
+    // 這個 identity 會變成主要的，下次登入要從這裡讀到帳號原本的身分，不是這次會員的。
+    if (sessionMembershipStatus) {
+      identityMetadata.membership_status = sessionMembershipStatus;
     }
 
     const { error: upsertIdentityError } = await supabaseAdmin
@@ -1153,7 +1198,7 @@ Deno.serve(async (req: Request) => {
       edge_session: true,
       profile,
       locked_fields: lockedFields,
-      membership_status: membershipStatus,
+      membership_status: sessionMembershipStatus,
       member_context_error: memberContextError,
       org_projection_debug: orgProjectionAudit,
       role_resolution_debug: roleResolutionAudit
