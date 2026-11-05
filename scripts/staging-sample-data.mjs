@@ -16,7 +16,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { PROD_REF, STAGING_REF, runSql } from "./lib/supabase-cli-query.mjs";
+import { PROD_REF, STAGING_REF, runSql, runSqlWrite } from "./lib/supabase-cli-query.mjs";
 
 export const SAMPLE_RATE = 0.25;
 export const SAMPLE_EMAIL_SUFFIX = "@example.invalid";
@@ -363,7 +363,7 @@ UNION ALL SELECT 'exam_attempts', count(*)::text FROM public.exam_attempts
 UNION ALL SELECT 'quiz_attempts', count(*)::text FROM public.quiz_attempts
 ORDER BY 1;`;
 
-export function importSample(sample, runner = runSql) {
+export function importSample(sample, runner = runSqlWrite) {
   const { errors } = checkSample(sample);
   if (errors.length) throw new Error(`匯出檔沒通過個資檢查（${errors.length} 項），拒絕匯入。先跑 check。`);
   // 目標寫死為 staging，沒有任何參數可以改成正式環境
@@ -382,7 +382,7 @@ export function importSample(sample, runner = runSql) {
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
-function main([command, file]) {
+export function main([command, file, ...flags]) {
   if (command === "export" && file) {
     const sample = exportSample();
     const { errors, warnings } = checkSample(sample);
@@ -399,11 +399,16 @@ function main([command, file]) {
     return errors.length ? 1 : 0;
   }
   if (command === "import" && file) {
+    // 會清掉並改寫 staging 的資料，CLI 也要求明確同意：沒帶 --yes 就不開始（#680）
+    if (!flags.includes("--yes")) {
+      console.error("import 會改寫 staging 的資料。確認要做、而且（代理程式執行時）使用者同意了，才加 --yes：\n  node scripts/staging-sample-data.mjs import <檔案.json> --yes");
+      return 2;
+    }
     const rows = importSample(JSON.parse(readFileSync(file, "utf8")));
     for (const r of rows) console.log(`${r.k}: ${r.v}`);
     return rows.some(r => r.k.startsWith("orphans: ") && r.v !== "0") ? 1 : 0;
   }
-  console.error("用法：node scripts/staging-sample-data.mjs export|check|import <檔案.json>");
+  console.error("用法：node scripts/staging-sample-data.mjs export|check <檔案.json>，或 import <檔案.json> --yes");
   return 2;
 }
 

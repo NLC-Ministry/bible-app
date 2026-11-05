@@ -1,5 +1,5 @@
 // #609：repo 是公開的，Supabase project ref 與 Google 試算表 ID 不能出現在任何已追蹤的檔案裡。
-// 不需要知道真正的 ref：抓「長得像 ref 的值」（20 碼小寫英數 + .supabase.co／--project-ref 後面），
+// 不需要知道真正的 ref：抓「長得像 ref 的值」（20 碼小寫英數 + .supabase.co／--project-ref、--remote 後面），
 // 只放行明確的假值。真值放 .env（見 docs/staging.md）。
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
@@ -12,7 +12,7 @@ const BINARY_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".i
 const MAX_BYTES = 3 * 1024 * 1024;
 
 const HOST_RE = /(?<![a-z0-9])([a-z0-9]{20})\.supabase\.co(?![a-z0-9])/g;
-const FLAG_RE = /--project-ref[ =]["']?([a-z0-9]{20})(?![a-z0-9])/g;
+const FLAG_RE = /--(?:project-ref|remote)[ =]["']?([a-z0-9]{20})(?![a-z0-9])/g;
 const SHEET_RE = /docs\.google\.com\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/g;
 
 /** 掃一段文字，回傳不被允許的「像 ref／ID 的值」（只回前後文，不回整個值，避免測試輸出又印出真值）。 */
@@ -47,6 +47,8 @@ describe("findForbiddenIds", () => {
   it("抓得到 ref 形狀的值，放行假值與占位符", () => {
     expect(findForbiddenIds(`https://${SAMPLE_REF}.supabase.co/functions/v1/x`)).toHaveLength(1);
     expect(findForbiddenIds(`npx supabase db push --project-ref ${SAMPLE_REF}`)).toHaveLength(1);
+    expect(findForbiddenIds(`npx supabase db push --remote=${SAMPLE_REF}`)).toHaveLength(1);
+    expect(findForbiddenIds("db advisors --remote=<ref> --remote")).toEqual([]);
     expect(findForbiddenIds(`https://docs.google.com/spreadsheets/d/${SAMPLE_SHEET_ID}/edit`)).toHaveLength(1);
     expect(findForbiddenIds(`https://${FAKE_STAGING_REF}.supabase.co`)).toEqual([]);
     expect(findForbiddenIds("https://YOUR-PROJECT-REF.supabase.co https://placeholder.supabase.co https://example.supabase.co")).toEqual([]);

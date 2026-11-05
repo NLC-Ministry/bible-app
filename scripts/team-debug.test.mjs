@@ -149,6 +149,10 @@ describe("what the member app should show", () => {
     expect(joinMethod(null).key).toBe("unknown");
     expect(joinMethod([]).key).toBe("manual");
     expect(joinMethod(["carry_reading_teams_to_stage"]).label).toBe("帶隊帶入");
+    // #678：接手、補帶、原隊員一鍵加入都算帶隊，後台查得出是哪一種
+    expect(joinMethod(["take_over_reading_team_carry"])).toEqual({ key: "carry", label: "隊員接手帶入" });
+    expect(joinMethod(["backfill_reading_team_from_source"])).toEqual({ key: "carry", label: "隊長補帶" });
+    expect(joinMethod(["join_carried_reading_team"])).toEqual({ key: "carry", label: "原隊員一鍵加入" });
     expect(joinMethod(["some_admin_fn"]).label).toBe("其他（some_admin_fn）");
   });
 });

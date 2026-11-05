@@ -2,6 +2,7 @@ import {
   detectAuthenticationEnvironment,
   shouldGateInteractiveAuth
 } from "./auth-environment.js";
+import { renderLoginMethodHint } from "./login-method-memory.mjs";
 
 export const BIBLE_HUB_CONTINUE_RETURN_TO = "/?resume=plan";
 
@@ -24,7 +25,7 @@ export function getLoginGateCopy(block, { hasTokens, returnedFromHub = false } =
     return {
       enterApp: false,
       title: "新生命聖經速讀計畫",
-      subtitle: "跟弟兄姊妹一起速讀聖經。登入後，換手機也能接著讀。第一次使用也從這裡開始。",
+      subtitle: "跟弟兄姊妹一起速讀聖經。登入後，換裝置也能接著讀。第一次使用也從這裡開始。",
       button: "登入",
       mode: "sso",
     };
@@ -102,6 +103,7 @@ export function applyLoginGateView({
   buttonEl,
   refreshActionsEl,
   returnedFromHub = false,
+  storage,
 } = {}) {
   const copy = getLoginGateCopy(block, { hasTokens, returnedFromHub });
   if (copy.enterApp) {
@@ -133,5 +135,7 @@ export function applyLoginGateView({
   // 紅點狀態只給 showConnectionError（真正的連線錯誤／登入失效）；這裡的畫面已經把原因寫在副標。
   const statusEl = query("#gate-status-container");
   if (statusEl) statusEl.classList.add("hidden");
+  // #677：只有要會友登入的畫面才提醒上次的方式。
+  renderLoginMethodHint(loginGate, { visible: copy.mode === "sso", ...(storage ? { storage } : {}) });
   return copy;
 }

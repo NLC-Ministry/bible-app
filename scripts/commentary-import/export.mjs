@@ -1,11 +1,11 @@
 // 從資料庫匯出審好的經文注釋譯文（#542）：匯入後以資料庫為準（審核者會改譯文），repo 裡的
 // content/commentary/tosn/ 只是初稿。CC BY-SA 要求衍生作品同樣公開，這份匯出就是公開的版本。
 //
-//   node scripts/commentary-import/export.mjs <書名> --project-ref <ref> [--all]
+//   node scripts/commentary-import/export.mjs <書名> --env <staging|production> [--all]
 //     預設只匯出審核通過（approved）和已發布（published）的；--all 連待審、退回的一起匯出。
 //   → content/commentary/reviewed/<英文書名>.json
 //
-// 透過 Supabase CLI 查詢（需要先 `npx supabase login`），一律明確指定 --project-ref。
+// 透過 Supabase CLI 唯讀查詢（需要先 `npx supabase login`）。匯出檔要進公開 repo，只記環境名稱、不記 ref。
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { REPO_ROOT, bookSlug, resolveBook } from "./tosn-books.mjs";
 import { TOSN_ATTRIBUTION } from "./tosn.mjs";
 import { runSql } from "../lib/supabase-cli-query.mjs";
+import { requireProjectRef } from "../lib/project-refs.mjs";
 
 export const REVIEWED_STATUSES = Object.freeze(["approved", "published"]);
 export const ALL_STATUSES = Object.freeze(["pending", "returned", "approved", "published"]);
@@ -48,14 +49,14 @@ ORDER BY chapter, verse_start, verse_end, source_ref;`;
 }
 
 // CLI 回傳的 rows → 匯出檔。note 欄可能是物件或 JSON 字串（看 CLI 版本）。
-export function buildExportFile(book, rows, { statuses = REVIEWED_STATUSES, exportedAt = new Date().toISOString(), projectRef = "" } = {}) {
+export function buildExportFile(book, rows, { statuses = REVIEWED_STATUSES, exportedAt = new Date().toISOString(), environment = "" } = {}) {
   const notes = (rows || []).map(row => (typeof row.note === "string" ? JSON.parse(row.note) : row.note)).filter(Boolean);
   return {
     book,
     attribution: TOSN_ATTRIBUTION,
     license: "CC BY-SA 4.0（https://creativecommons.org/licenses/by-sa/4.0/）",
     exportedAt,
-    projectRef,
+    environment,
     statuses: [...statuses],
     sourceVersions: Array.from(new Set(notes.map(note => note.source_version).filter(Boolean))),
     notes
@@ -68,16 +69,16 @@ export function exportPathFor(book) {
 
 function main() {
   const args = process.argv.slice(2);
-  const bookName = args.find((arg, index) => !arg.startsWith("--") && args[index - 1] !== "--project-ref");
-  const projectRef = args[args.indexOf("--project-ref") + 1];
-  if (!bookName || !args.includes("--project-ref") || !projectRef) {
-    console.error("用法：node scripts/commentary-import/export.mjs <書名> --project-ref <ref> [--all]");
+  const bookName = args.find((arg, index) => !arg.startsWith("--") && args[index - 1] !== "--env");
+  const environment = args.includes("--env") ? args[args.indexOf("--env") + 1] : "";
+  if (!bookName || !environment) {
+    console.error("用法：node scripts/commentary-import/export.mjs <書名> --env <staging|production> [--all]");
     process.exit(1);
   }
   const { book } = resolveBook(bookName);
   const statuses = args.includes("--all") ? ALL_STATUSES : REVIEWED_STATUSES;
-  const rows = runSql(projectRef, buildExportSql(book.name, statuses));
-  const file = buildExportFile(book.name, rows, { statuses, projectRef });
+  const rows = runSql(requireProjectRef(environment), buildExportSql(book.name, statuses));
+  const file = buildExportFile(book.name, rows, { statuses, environment });
   const outPath = exportPathFor(book);
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, `${JSON.stringify(file, null, 2)}\n`, "utf8");

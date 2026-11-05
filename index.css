@@ -3389,6 +3389,14 @@ body:not(.dark-theme) .settings-row-btn:hover {
   line-height: 1.6;
 }
 
+.login-method-hint {
+  margin: -1.5rem 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
 .login-gate-refresh-actions {
   width: 100%;
   margin-top: 0.15rem;
@@ -14577,6 +14585,7 @@ body.dark-theme .custom-confirm-overlay {
 }
 .custom-confirm-desc {
   margin: 0;
+  white-space: pre-line;
   font-size: 0.88rem;
   line-height: 1.55;
   color: var(--text-secondary);
@@ -15774,6 +15783,89 @@ body.profile-subpage-open .main-content {
 
 .plan-card-participation-item__hint--danger {
   color: var(--color-danger);
+}
+
+/* 月初帶隊卡片（#678）：首頁、計畫卡片、詳細頁共用。 */
+.team-carry-card {
+  align-items: flex-start;
+  display: grid;
+  gap: 0.625rem;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.team-carry-card + .team-carry-card {
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+}
+
+.team-carry-card__media {
+  align-items: center;
+  background: var(--color-brand-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-brand);
+  display: inline-flex;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
+.team-carry-card__body {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.team-carry-card__title {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.team-carry-card__description,
+.team-carry-card__hint {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.team-carry-card__description {
+  color: var(--text-secondary);
+}
+
+.team-carry-card__hint {
+  color: var(--text-muted);
+}
+
+.team-carry-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+}
+
+.team-carry-card__btn {
+  font-size: 0.875rem;
+  padding: 0.4rem 0.875rem;
+  width: auto;
+}
+
+/* 放在計畫卡片和詳細頁：跟底下那一排用同一條分隔線，不再多包一層框。 */
+.team-carry-slot:empty {
+  display: none;
+}
+
+.plan-card-participation-slot .team-carry-slot {
+  border-top: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+  margin-top: 0.5rem;
+  padding-top: 0.625rem;
+}
+
+[data-team-carry-slot] + .reading-team-registration-card {
+  margin-top: 0.75rem;
 }
 
 /* ==================== 🔔 Notification Bell & Dropdown CSS ==================== */

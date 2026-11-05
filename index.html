@@ -119,7 +119,7 @@
         title.textContent = "畫面載入時間過長";
         var desc = document.createElement("div");
         desc.style.cssText = "max-width:360px;font-size:16px;line-height:1.6;color:#555;margin-bottom:8px;";
-        desc.textContent = "可能是網路不穩，或這支手機上的登入資料需要更新。請由上往下試試看，都不會刪除你的讀經進度。";
+        desc.textContent = "可能是網路不穩，或這台裝置上的登入資料需要更新。請由上往下試試看，都不會刪除你的讀經進度。";
         var detail = document.createElement("div");
         detail.id = "boot-watchdog-detail";
         detail.style.cssText = "max-width:360px;font-size:14px;line-height:1.5;color:#737373;margin-top:8px;word-break:break-all;";
@@ -380,6 +380,9 @@
           <div class="glass-card card-col span-12 bento-card quiz-announcement-banner hidden" id="quiz-announcement-banner">
             <div class="exam-home-banner" id="exam-home-banner"></div>
           </div>
+
+          <!-- 月初帶隊（#678）：隊長帶隊、隊員看隊長帶了沒。不用彈窗；沒有帶隊的事就整塊隱藏。 -->
+          <div class="glass-card card-col span-12 bento-card team-carry-home-card hidden" id="team-carry-home-card"></div>
 
           <!-- 首頁「雲柱測驗」：單題限時搶答卡片。內容由 js/modules/lightning-quiz.mjs
                透過 get_todays_lightning_quiz() 決定；沒有題目/不在時段內/功能關閉時整塊隱藏。 -->
@@ -1729,7 +1732,8 @@
         <img src="assets/bible-reading-icon.svg" alt="" width="72" height="72">
       </div>
       <h2 class="login-title">新生命聖經速讀計畫</h2>
-      <p class="login-subtitle" id="login-gate-subtitle">跟弟兄姊妹一起速讀聖經。登入後，換手機也能接著讀。第一次使用也從這裡開始。</p>
+      <p class="login-subtitle" id="login-gate-subtitle">跟弟兄姊妹一起速讀聖經。登入後，換裝置也能接著讀。第一次使用也從這裡開始。</p>
+      <p class="login-method-hint hidden" data-login-method-hint role="note"></p>
 
       <!-- Primary: sign in (church SSO) -->
       <button class="primary-btn" id="btn-gate-nlc-login"

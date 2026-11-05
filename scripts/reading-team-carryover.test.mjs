@@ -9,6 +9,7 @@ const plan = read("js/modules/plan.js");
 const db = read("js/db.js");
 const edge = read("supabase/functions/nlc-data/index.ts");
 const teamUi = read("js/modules/team-registration.js");
+const teamCarry = read("js/modules/team-carry.mjs");
 const migrationByDate = currentMigrationSql("20260928101011_carryover_next_plan_by_date.sql");
 const migrationDivision = currentMigrationSql("20260928120418_carryover_single_division.sql");
 const migrationTaoyuan = read("supabase/migrations/20260928101019_taoyuan_first_round_final_exodus.sql");
@@ -49,7 +50,7 @@ describe("reading team stage carryover", () => {
       expect(migration).toContain("FUNCTION public." + name);
     }
     expect(db).toContain("getReadingTeamCarryoverOffer(plan)");
-    expect(db).toContain("carryReadingTeamsToStage(plan, division = null)");
+    expect(db).toContain("carryReadingTeamsToStage(plan, division = null, teamName = null)");
   });
 
   // 0154: a member who quit the roster mid-season and independently joined a
@@ -109,9 +110,9 @@ describe("reading team stage carryover", () => {
     expect(teamUi).not.toContain("carryTeamToStage");
     expect(teamUi).not.toContain("findNextCampaignStagePlan");
 
-    // 目標計畫就是使用者所在的這張，後端的 offer 以它為準
-    expect(teamUi).toContain("db.getReadingTeamCarryoverOffer(plan)");
-    expect(teamUi).toContain("db.carryReadingTeamsToStage(plan, sourceTeam.division)");
+    // 目標計畫就是使用者所在的這張。#678 起讀共用的帶隊狀態，流程搬到 team-carry.mjs（首頁也會用到）
+    expect(teamUi).toContain("getPlanCarryEntries(plan)");
+    expect(teamCarry).toContain("db.carryReadingTeamsToStage(plan, sourceTeam.division, teamName)");
     // 加入團隊視窗最上面，只列這裡還沒加入的組別
     expect(teamUi).toContain("data-team-carryover");
     expect(teamUi).toContain("void renderCarryoverSection(availableDivisions)");
@@ -124,7 +125,7 @@ describe("reading team stage carryover", () => {
     expect(plan).toContain("window.offerReadingTeamCarryoverOnJoin(plan)");
     expect(plan).toContain("onJoin: () => joinPlanFromExplore(plan, key)");
     // 結果說明（誰被略過、為什麼）
-    expect(teamUi).toContain("db.describeReadingTeamCarryoverSkips(");
+    expect(teamCarry).toContain("db.describeReadingTeamCarryoverSkips(");
     expect(db).toContain("plan_requires_pastoral_zone: names =>");
   });
 

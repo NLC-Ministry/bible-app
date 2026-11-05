@@ -486,7 +486,10 @@ describe("export from the database (#542)", () => {
 
   it("writes the licence, statuses and notes, accepting JSON text or objects from the CLI", () => {
     const file = buildExportFile("利未記", [{ note: { ref: "Lev.1.1", zh: "甲", source_version: "TOSN 1.25" } }, { note: '{"ref":"Lev.1.2","zh":"乙","source_version":"TOSN 1.25"}' }],
-      { exportedAt: "2026-10-19T00:00:00.000Z", projectRef: "aaaaaaaaaaaaaaaaaaaa" });
+      { exportedAt: "2026-10-19T00:00:00.000Z", environment: "production" });
+    // 匯出檔要進公開 repo，只記環境名稱，不記 project ref（#680）
+    expect(file.environment).toBe("production");
+    expect(file).not.toHaveProperty("projectRef");
     expect(file).toMatchObject({ book: "利未記", statuses: ["approved", "published"], sourceVersions: ["TOSN 1.25"], exportedAt: "2026-10-19T00:00:00.000Z" });
     expect(file.notes.map(note => note.zh)).toEqual(["甲", "乙"]);
     expect(file.license).toContain("CC BY-SA 4.0");

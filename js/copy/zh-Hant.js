@@ -49,7 +49,7 @@ window.APP_COPY = {
     pilgrimageTitle: "牧區讀經排行",
   },
   auth: {
-    loginSubtitle: "跟弟兄姊妹一起速讀聖經。登入後，換手機也能接著讀。第一次使用也從這裡開始。",
+    loginSubtitle: "跟弟兄姊妹一起速讀聖經。登入後，換裝置也能接著讀。第一次使用也從這裡開始。",
     loginSwitchAccount: "找不到以前的進度？換回上次的登入方式",
   },
   // #615：換一種方式登入而開出新的空帳號時，在沒有計畫的畫面提示改回原本的方式。
@@ -61,6 +61,11 @@ window.APP_COPY = {
     bodyUnknown: "如果你以前參加時是用另一種方式（Email 或手機號碼）登入，計畫會在那裡，請登出後改用那個方式登入。",
     switchCta: "登出，換別的方式登入",
     dismissCta: "我是第一次參加",
+  },
+  loginMethodHint: {
+    phone: "上次在這台裝置是用手機 {account} 登入，請用同一個方式才看得到你的計畫。",
+    email: "上次在這台裝置是用 Email {account} 登入，請用同一個方式才看得到你的計畫。",
+    unknown: "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。",
   },
   memberHub: {
     cardTitle: "新生命會員中心",

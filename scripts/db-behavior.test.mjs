@@ -1292,3 +1292,496 @@ describe("帶隊進下一個月（get_reading_team_carryover_offer／carry_readi
     expect(outcome.offer).toMatchObject({ eligible: false, teams: [] });
   });
 });
+
+describe("月初隊伍接不上：帶隊狀態、隊員接手、補帶、重名（#678）", () => {
+  const SOURCE = "70000000-0000-4000-8000-000000000780";
+  const TARGET = "70000000-0000-4000-8000-000000000781";
+  const CAMPAIGN = "70000000-0000-4000-8000-000000000770";
+  const TEAM = "70000000-0000-4000-8000-000000000678";
+  const OTHER_TARGET_TEAM = "70000000-0000-4000-8000-000000000679";
+  const THIRD = "20000000-0000-4000-8000-000000000678";
+  const OUTSIDER = "20000000-0000-4000-8000-000000000679";
+  const CAPTAIN = ids.member;
+  const MATE = ids.other;
+  // 跟 RPC 同一個「今天」：接手時間以台北日期算，CI 跑在 UTC，邊界才不會差一天。
+  const TAIPEI_TODAY = `(now() AT TIME ZONE 'Asia/Taipei')::date`;
+
+  const addProfile = (tx, id, name) => tx.query(
+    `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, is_active)
+     SELECT $1, $2, role_id, great_region, pastoral_zone, TRUE FROM public.profiles WHERE id = $3`,
+    [id, name, MATE]
+  );
+  // 上個月 3 人隊：隊長、隊友、第三位。targetStartedDaysAgo：這個月開始幾天了。
+  const seed = async (tx, { targetStartedDaysAgo = 5, teamName = "十月隊" } = {}) => {
+    await addProfile(tx, THIRD, "測試會友 0678");
+    await addProfile(tx, OUTSIDER, "測試會友 0679");
+    await tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books, is_hidden, plan_kind, rules) VALUES
+         ($1, '上個月', ${TAIPEI_TODAY} - 40, ${TAIPEI_TODAY} + 10, ARRAY['利未記'], FALSE, 'church_campaign_stage', jsonb_build_object('parentCampaignId', $3::text)),
+         ($2, '這個月', ${TAIPEI_TODAY} - $4::int, ${TAIPEI_TODAY} + 25, ARRAY['民數記'], FALSE, 'church_campaign_stage', jsonb_build_object('parentCampaignId', $3::text))`,
+      [SOURCE, TARGET, CAMPAIGN, targetStartedDaysAgo]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_teams (id, global_plan_id, division, name, captain_id, invite_code)
+       VALUES ($1, $2, 3, $3, $4, 'CARRY67801')`,
+      [TEAM, SOURCE, teamName, CAPTAIN]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role)
+       VALUES ($1, $2, 3, $3, 'captain'), ($1, $2, 3, $4, 'member'), ($1, $2, 3, $5, 'member')`,
+      [TEAM, SOURCE, CAPTAIN, MATE, THIRD]
+    );
+  };
+  // 目標計畫裡已經有一支隊（別人建的，或隊長自己重建的）。
+  const addTargetTeam = async (tx, { captainId, name, memberIds = [] }) => {
+    await tx.query(
+      `INSERT INTO public.reading_teams (id, global_plan_id, division, name, captain_id, invite_code)
+       VALUES ($1, $2, 3, $3, $4, 'CARRY67802')`,
+      [OTHER_TARGET_TEAM, TARGET, name, captainId]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role)
+       VALUES ($1, $2, 3, $3, 'captain')`,
+      [OTHER_TARGET_TEAM, TARGET, captainId]
+    );
+    for (const userId of memberIds) {
+      await tx.query(
+        `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role)
+         VALUES ($1, $2, 3, $3, 'member')`,
+        [OTHER_TARGET_TEAM, TARGET, userId]
+      );
+    }
+  };
+  const statusOf = async (tx, actorId) =>
+    (await tx.query(`SELECT public.get_reading_team_carry_status($1) AS status`, [actorId])).rows[0].status;
+  const carry = async (tx, actorId, teamName = null) =>
+    (await tx.query(
+      `SELECT public.carry_reading_teams_to_stage(p_target_global_plan_id => $1, p_actor_id => $2, p_division => 3, p_team_name => $3) AS result`,
+      [TARGET, actorId, teamName]
+    )).rows[0].result;
+  const takeOver = async (tx, actorId, teamName = null) =>
+    (await tx.query(`SELECT public.take_over_reading_team_carry($1, $2, $3, $4) AS result`, [TARGET, TEAM, teamName, actorId])).rows[0].result;
+  const backfill = async (tx, actorId) =>
+    (await tx.query(`SELECT public.backfill_reading_team_from_source($1, $2, $3) AS result`, [TARGET, TEAM, actorId])).rows[0].result;
+  const joinCarried = async (tx, actorId) =>
+    (await tx.query(`SELECT public.join_carried_reading_team($1, $2, $3) AS result`, [TARGET, TEAM, actorId])).rows[0].result;
+  const rosterOf = async (tx, teamId) => (await tx.query(
+    `SELECT user_id, member_role FROM public.reading_team_members WHERE team_id = $1 ORDER BY member_role, user_id`, [teamId]
+  )).rows;
+  const carriedTeam = async tx => (await tx.query(
+    `SELECT * FROM public.reading_teams WHERE global_plan_id = $1 AND carried_from_team_id = $2`, [TARGET, TEAM]
+  )).rows[0];
+  const enrolled = async (tx, userId) => (await tx.query(
+    `SELECT 1 FROM public.reading_plans WHERE user_id = $1 AND global_plan_id = $2`, [userId, TARGET]
+  )).rows.length > 0;
+
+  describe("重名（第 6 點）", () => {
+    it("原隊名被別隊用走：帶隊不會失敗，回報要改名，什麼都沒寫入", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "十月隊" });
+        return { result: await carry(tx, CAPTAIN), team: await carriedTeam(tx), captainEnrolled: await enrolled(tx, CAPTAIN) };
+      });
+      expect(outcome.result.teams).toEqual([]);
+      expect(outcome.result.skippedTeams).toEqual([expect.objectContaining({ sourceTeamId: TEAM, reason: "duplicate_team_name" })]);
+      expect(outcome.team).toBeUndefined();
+      expect(outcome.captainEnrolled).toBe(false);
+    });
+
+    it("換一個隊名就能帶隊", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "十月隊" });
+        const result = await carry(tx, CAPTAIN, "十一月隊");
+        const team = await carriedTeam(tx);
+        return { result, team, roster: await rosterOf(tx, team.id) };
+      });
+      expect(outcome.team).toMatchObject({ name: "十一月隊", captain_id: CAPTAIN, status: "ready" });
+      expect(outcome.roster).toHaveLength(3);
+    });
+
+    it("新隊名也重複：再要求改名一次；不安全的隊名直接拒絕", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "十月隊" });
+        return carry(tx, CAPTAIN, "  十月隊 ");
+      });
+      expect(outcome.skippedTeams[0]).toMatchObject({ reason: "duplicate_team_name" });
+      await expect(asService(async tx => {
+        await seed(tx);
+        return carry(tx, CAPTAIN, "<b>壞名字</b>");
+      })).rejects.toThrow(/invalid_team_name/);
+    });
+
+    it("接手時原隊名重複：要求改名，沒有留下半套的隊伍", async () => {
+      await expect(asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: CAPTAIN, name: "十月隊" });
+        return takeOver(tx, MATE);
+      })).rejects.toThrow(/duplicate_team_name/);
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: CAPTAIN, name: "十月隊" });
+        await takeOver(tx, MATE, "接手隊");
+        return carriedTeam(tx);
+      });
+      expect(outcome).toMatchObject({ name: "接手隊", captain_id: MATE });
+    });
+  });
+
+  describe("原隊長回來（第 4 點）", () => {
+    it("隊伍已被帶入：帶隊回報已由誰帶入，不假裝成功，也不把原隊長加進去", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await takeOver(tx, MATE);
+        const team = await carriedTeam(tx);
+        return { result: await carry(tx, CAPTAIN), roster: await rosterOf(tx, team.id) };
+      });
+      expect(outcome.result.teams[0]).toMatchObject({
+        sourceTeamId: TEAM,
+        alreadyCarried: true,
+        actorIsMember: false,
+        carriedByName: "測試會友 0002",
+        hasVacancy: true
+      });
+      expect(outcome.roster.map(row => row.user_id)).not.toContain(CAPTAIN);
+    });
+
+    it("帶隊狀態也顯示已由誰帶入，有空位時可以一鍵加入，加入後就不再列出", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await takeOver(tx, MATE);
+        const before = await statusOf(tx, CAPTAIN);
+        const joined = await joinCarried(tx, CAPTAIN);
+        const team = await carriedTeam(tx);
+        return { before, joined, team, roster: await rosterOf(tx, team.id), after: await statusOf(tx, CAPTAIN), plan: await enrolled(tx, CAPTAIN) };
+      });
+      expect(outcome.before.teams).toEqual([expect.objectContaining({
+        state: "carried", role: "captain", carriedByName: "測試會友 0002", hasVacancy: true
+      })]);
+      expect(outcome.joined).toMatchObject({ teamId: outcome.team.id, memberCount: 3 });
+      expect(outcome.roster).toContainEqual({ user_id: CAPTAIN, member_role: "member" });
+      expect(outcome.team.status).toBe("ready");
+      expect(outcome.plan).toBe(true);
+      expect(outcome.after.teams).toEqual([]);
+    });
+
+    it("隊伍額滿時不能一鍵加入", async () => {
+      await expect(asService(async tx => {
+        await seed(tx);
+        await takeOver(tx, MATE);
+        const team = await carriedTeam(tx);
+        await tx.query(
+          `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role) VALUES ($1, $2, 3, $3, 'member')`,
+          [team.id, TARGET, OUTSIDER]
+        );
+        await tx.query(`UPDATE public.reading_teams SET status = 'ready' WHERE id = $1`, [team.id]);
+        const status = await statusOf(tx, CAPTAIN);
+        expect(status.teams[0]).toMatchObject({ state: "carried", hasVacancy: false });
+        return joinCarried(tx, CAPTAIN);
+      })).rejects.toThrow(/reading_team_full/);
+    });
+
+    it("不是這支隊的原隊員不能一鍵加入", async () => {
+      await expect(asService(async tx => {
+        await seed(tx);
+        await takeOver(tx, MATE);
+        return joinCarried(tx, OUTSIDER);
+      })).rejects.toThrow(/team_join_carried_member_required/);
+    });
+  });
+
+  describe("帶隊狀態（第 1～3 點）", () => {
+    it("隊長還沒加入新計畫也看得到可以帶隊，名單列出會帶入的人", async () => {
+      const status = await asService(async tx => {
+        await seed(tx);
+        return statusOf(tx, CAPTAIN);
+      });
+      expect(status.teams).toHaveLength(1);
+      expect(status.teams[0]).toMatchObject({
+        state: "carry",
+        role: "captain",
+        targetPlanId: TARGET,
+        sourcePlanId: SOURCE,
+        sourceTeamId: TEAM,
+        name: "十月隊",
+        division: 3,
+        memberCount: 3,
+        carried: false,
+        captainJoinedTarget: false
+      });
+      expect(status.teams[0].roster.map(row => row.userId).sort()).toEqual([MATE, THIRD].sort());
+      expect(status.teams[0].roster.every(row => row.reason === null)).toBe(true);
+    });
+
+    it("隊員看到隊長還沒帶隊；未滿 3 天不能接手，回傳可接手的日期", async () => {
+      const status = await asService(async tx => {
+        await seed(tx, { targetStartedDaysAgo: 2 });
+        const opensOn = (await tx.query(`SELECT (${TAIPEI_TODAY} + 1)::text AS day`)).rows[0].day;
+        return { ...(await statusOf(tx, MATE)), opensOn };
+      });
+      expect(status.teams[0]).toMatchObject({
+        state: "waiting",
+        role: "member",
+        captainId: CAPTAIN,
+        captainName: "測試會友 0001",
+        canTakeover: false,
+        takeoverOpensOn: status.opensOn,
+        reminderSentToday: false
+      });
+    });
+
+    it("隊長加入新計畫（個人讀經）後，隊員看得到隊長已加入", async () => {
+      const status = await asService(async tx => {
+        await seed(tx);
+        await tx.query(
+          `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books, is_fixed)
+           SELECT $1, id, name, start_date, end_date, target_books, TRUE FROM public.global_plans WHERE id = $2`,
+          [CAPTAIN, TARGET]
+        );
+        return statusOf(tx, MATE);
+      });
+      expect(status.teams[0]).toMatchObject({ captainJoinedTarget: true, canTakeover: true });
+    });
+
+    it("這個月同組別已經有隊的隊員不列出；帶入後全隊都不再列出", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "別隊", memberIds: [THIRD] });
+        const third = await statusOf(tx, THIRD);
+        await carry(tx, CAPTAIN);
+        return { third, captain: await statusOf(tx, CAPTAIN), mate: await statusOf(tx, MATE) };
+      });
+      expect(outcome.third.teams).toEqual([]);
+      expect(outcome.captain.teams).toEqual([]);
+      expect(outcome.mate.teams).toEqual([]);
+    });
+
+    it("沒有上個月隊伍的人、隱藏或已結束的階段都不列出", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        const outsider = await statusOf(tx, OUTSIDER);
+        await tx.query(`UPDATE public.global_plans SET is_hidden = TRUE WHERE id = $1`, [TARGET]);
+        const hidden = await statusOf(tx, CAPTAIN);
+        await tx.query(`UPDATE public.global_plans SET is_hidden = FALSE, end_date = ${TAIPEI_TODAY} - 1 WHERE id = $1`, [TARGET]);
+        const ended = await statusOf(tx, CAPTAIN);
+        return { outsider, hidden, ended };
+      });
+      expect(outcome.outsider.teams).toEqual([]);
+      expect(outcome.hidden.teams).toEqual([]);
+      expect(outcome.ended.teams).toEqual([]);
+    });
+
+    it("提醒隊長一天一次，沿用隊友提醒；傳過後狀態顯示今天已提醒", async () => {
+      const send = (tx, actorId) => tx.query(
+        `SELECT public.send_reading_team_reminder($1, $2, 'care', '提醒帶隊', $3, $4)`,
+        [TEAM, CAPTAIN, SOURCE, actorId]
+      );
+      const status = await asService(async tx => {
+        await seed(tx);
+        await send(tx, MATE);
+        return statusOf(tx, MATE);
+      });
+      expect(status.teams[0].reminderSentToday).toBe(true);
+      await expect(asService(async tx => {
+        await seed(tx);
+        await send(tx, MATE);
+        await send(tx, MATE);
+      })).rejects.toThrow(/team_reminder_daily_limit/);
+    });
+  });
+
+  describe("隊員接手（第 4 點）", () => {
+    it("開始未滿 3 天不能接手", async () => {
+      await expect(asService(async tx => {
+        await seed(tx, { targetStartedDaysAgo: 2 });
+        return takeOver(tx, MATE);
+      })).rejects.toThrow(/team_takeover_not_open/);
+    });
+
+    it("開始滿 3 天：接手者當新隊長，其他隊員帶入，原隊長不在新隊也不會被加入計畫", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx, { targetStartedDaysAgo: 3 });
+        const statusBefore = await statusOf(tx, MATE);
+        const result = await takeOver(tx, MATE);
+        const team = await carriedTeam(tx);
+        return {
+          statusBefore, result, team,
+          roster: await rosterOf(tx, team.id),
+          enrolled: { mate: await enrolled(tx, MATE), third: await enrolled(tx, THIRD), captain: await enrolled(tx, CAPTAIN) }
+        };
+      });
+      expect(outcome.statusBefore.teams[0]).toMatchObject({ state: "waiting", canTakeover: true });
+      expect(outcome.statusBefore.teams[0].roster.map(row => row.userId)).toEqual([THIRD]);
+      expect(outcome.team).toMatchObject({ captain_id: MATE, name: "十月隊", status: "forming", carried_from_team_id: TEAM });
+      expect(outcome.roster.sort((a, b) => a.member_role.localeCompare(b.member_role))).toEqual([
+        { user_id: MATE, member_role: "captain" },
+        { user_id: THIRD, member_role: "member" }
+      ]);
+      expect(outcome.enrolled).toEqual({ mate: true, third: true, captain: false });
+      expect(outcome.result.teams[0]).toMatchObject({ teamId: outcome.team.id, memberCount: 2, skippedMembers: [] });
+    });
+
+    it("先按先贏：後按的人已被帶入，回報已在隊上，沒有第二支隊", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await takeOver(tx, MATE);
+        const second = await takeOver(tx, THIRD);
+        const count = (await tx.query(
+          `SELECT COUNT(*)::int AS n FROM public.reading_teams WHERE global_plan_id = $1`, [TARGET]
+        )).rows[0].n;
+        return { second, count };
+      });
+      expect(outcome.count).toBe(1);
+      expect(outcome.second.teams[0]).toMatchObject({ alreadyCarried: true, actorIsMember: true });
+    });
+
+    it("已在別隊或不符合加入條件的隊員略過並列出", async () => {
+      const noZone = await asService(async tx => {
+        await seed(tx);
+        await tx.query(`UPDATE public.profiles SET pastoral_zone = '' WHERE id = $1`, [THIRD]);
+        return takeOver(tx, MATE);
+      });
+      expect(noZone.teams[0].skippedMembers).toEqual([
+        { userId: THIRD, name: "測試會友 0678", reason: "plan_requires_pastoral_zone" }
+      ]);
+      const inOther = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "別隊", memberIds: [THIRD] });
+        return takeOver(tx, MATE);
+      });
+      expect(inOther.teams[0].skippedMembers).toEqual([
+        { userId: THIRD, name: "測試會友 0678", reason: "already_in_target_team" }
+      ]);
+    });
+
+    it("隊長已經重建隊伍時仍可接手，隊長的隊不受影響", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: CAPTAIN, name: "隊長新隊" });
+        const status = await statusOf(tx, MATE);
+        await takeOver(tx, MATE);
+        const team = await carriedTeam(tx);
+        return { status, roster: await rosterOf(tx, team.id), captainTeam: await rosterOf(tx, OTHER_TARGET_TEAM) };
+      });
+      expect(outcome.status.teams[0]).toMatchObject({ state: "waiting", canTakeover: true });
+      expect(outcome.roster.map(row => row.user_id).sort()).toEqual([MATE, THIRD].sort());
+      expect(outcome.captainTeam).toEqual([{ user_id: CAPTAIN, member_role: "captain" }]);
+    });
+
+    it("只有原隊員能接手；原隊長請走帶隊；已在同組別有隊的人不能接手", async () => {
+      await expect(asService(async tx => {
+        await seed(tx);
+        return takeOver(tx, OUTSIDER);
+      })).rejects.toThrow(/team_takeover_member_required/);
+      await expect(asService(async tx => {
+        await seed(tx);
+        return takeOver(tx, CAPTAIN);
+      })).rejects.toThrow(/team_takeover_member_required/);
+      await expect(asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "別隊", memberIds: [MATE] });
+        return takeOver(tx, MATE);
+      })).rejects.toThrow(/already_in_plan_division/);
+    });
+
+    it("接手者還沒設定牧區：不能接手", async () => {
+      await expect(asService(async tx => {
+        await seed(tx);
+        await tx.query(`UPDATE public.profiles SET pastoral_zone = '' WHERE id = $1`, [MATE]);
+        return takeOver(tx, MATE);
+      })).rejects.toThrow(/plan_requires_pastoral_zone/);
+    });
+  });
+
+  describe("補帶（第 5 點）", () => {
+    it("隊長自己的隊還有空位：補進上月隊員，標成來源隊伍的延續，之後不能再被接手", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: CAPTAIN, name: "隊長新隊" });
+        const statusBefore = await statusOf(tx, CAPTAIN);
+        const result = await backfill(tx, CAPTAIN);
+        const team = (await tx.query(`SELECT * FROM public.reading_teams WHERE id = $1`, [OTHER_TARGET_TEAM])).rows[0];
+        const roster = await rosterOf(tx, OTHER_TARGET_TEAM);
+        const statusAfter = await statusOf(tx, CAPTAIN);
+        const again = await takeOver(tx, MATE);
+        return { statusBefore, result, team, roster, statusAfter, again, plan: await enrolled(tx, THIRD) };
+      });
+      expect(outcome.statusBefore.teams).toEqual([expect.objectContaining({
+        state: "backfill", role: "captain", ownTeamId: OTHER_TARGET_TEAM, ownTeamName: "隊長新隊", ownTeamVacancy: 2
+      })]);
+      expect(outcome.result).toMatchObject({ teamId: OTHER_TARGET_TEAM, addedCount: 2, skippedMembers: [] });
+      expect(outcome.team).toMatchObject({ carried_from_team_id: TEAM, status: "ready" });
+      expect(outcome.roster).toHaveLength(3);
+      expect(outcome.plan).toBe(true);
+      expect(outcome.statusAfter.teams).toEqual([]);
+      expect(outcome.again.teams[0]).toMatchObject({ alreadyCarried: true, actorIsMember: true });
+    });
+
+    it("補到額滿為止，多的人略過並列出", async () => {
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: CAPTAIN, name: "隊長新隊", memberIds: [OUTSIDER] });
+        const statusBefore = await statusOf(tx, CAPTAIN);
+        const result = await backfill(tx, CAPTAIN);
+        return { statusBefore, result, roster: await rosterOf(tx, OTHER_TARGET_TEAM) };
+      });
+      expect(outcome.statusBefore.teams[0].roster.filter(row => row.reason === null)).toHaveLength(1);
+      expect(outcome.statusBefore.teams[0].roster.filter(row => row.reason === "team_full")).toHaveLength(1);
+      expect(outcome.result.addedCount).toBe(1);
+      expect(outcome.result.skippedMembers).toEqual([expect.objectContaining({ reason: "team_full" })]);
+      expect(outcome.roster).toHaveLength(3);
+    });
+
+    it("隊長在別人的隊當隊員不能補帶，但上月隊員仍可接手", async () => {
+      await expect(asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "別隊", memberIds: [CAPTAIN] });
+        return backfill(tx, CAPTAIN);
+      })).rejects.toThrow(/team_backfill_captain_required/);
+      const outcome = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: OUTSIDER, name: "別隊", memberIds: [CAPTAIN] });
+        const captain = await statusOf(tx, CAPTAIN);
+        const mate = await statusOf(tx, MATE);
+        await takeOver(tx, MATE);
+        return { captain, mate, team: await carriedTeam(tx) };
+      });
+      expect(outcome.captain.teams).toEqual([]);
+      expect(outcome.mate.teams[0]).toMatchObject({ state: "waiting", canTakeover: true });
+      expect(outcome.team).toMatchObject({ captain_id: MATE });
+    });
+
+    it("隊伍額滿、或上月隊員都已經有隊：不顯示補帶", async () => {
+      const full = await asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: CAPTAIN, name: "隊長新隊", memberIds: [MATE, THIRD] });
+        return statusOf(tx, CAPTAIN);
+      });
+      expect(full.teams).toEqual([]);
+    });
+
+    it("別人已帶入後，隊長不能再補帶同一支來源隊伍", async () => {
+      await expect(asService(async tx => {
+        await seed(tx);
+        await addTargetTeam(tx, { captainId: CAPTAIN, name: "隊長新隊" });
+        await takeOver(tx, MATE);
+        return backfill(tx, CAPTAIN);
+      })).rejects.toThrow(/team_backfill_already_carried/);
+    });
+  });
+
+  it("新 RPC 只開給 service_role，authenticated 和 anon 都不能直接呼叫", async () => {
+    const { rows } = await db.query(
+      `SELECT p.proname,
+              has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+              has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+       FROM pg_proc p
+       WHERE p.proname IN ('get_reading_team_carry_status', 'take_over_reading_team_carry',
+                           'backfill_reading_team_from_source', 'join_carried_reading_team')`
+    );
+    expect(rows).toHaveLength(4);
+    rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
+  });
+});

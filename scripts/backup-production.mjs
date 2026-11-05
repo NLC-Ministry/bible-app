@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 const { isAbsolute, join, relative, resolve } = win32;
 
 // 正式站 ref 來自環境變數／.env（#609），和 scripts/lib/supabase-cli-query.mjs 同一個來源
-import { PROD_REF } from "./lib/supabase-cli-query.mjs";
+import { PROD_REF, SUPABASE_CLI, remoteFlag } from "./lib/supabase-cli-query.mjs";
 export { PROD_REF };
 export const MONTHLY_FULL_KEEP = 3;
 export const CLOUD_KEEP = 4;
@@ -282,10 +282,13 @@ export function parseCliCredentials(output) {
   return creds;
 }
 
+export const credentialsCliArgs = () => [SUPABASE_CLI, "db", "dump", "--dry-run", remoteFlag(PROD_REF)];
+export const secretsCliArgs = () => [SUPABASE_CLI, "secrets", "list", remoteFlag(PROD_REF), "-o", "json"];
+
 /** 每次連線前重新拿一組臨時帳號，避免備份到一半臨時密碼過期。 */
 function pgEnv(config) {
   if (!config.projectDir) throw new Error("backup.config.json 沒有 projectDir（請重跑 backup-production.ps1 -Install）");
-  const out = run("npx", ["supabase", "db", "dump", "--dry-run", "--linked", "--project-ref", PROD_REF], {
+  const out = run("npx", credentialsCliArgs(), {
     cwd: config.projectDir, shell: true, sensitiveOutput: true // npx 是 .cmd，要經過 shell；參數都是固定值
   });
   return {
@@ -315,7 +318,7 @@ function writeEdgeFunctionSecretNames(config, metaDir) {
   const file = join(metaDir, "edge_function_secret_names.json");
   if (!config.projectDir) return log("略過 Edge Function 環境變數名稱：沒有設定 projectDir");
   try {
-    const out = run("npx", ["supabase", "secrets", "list", "--project-ref", PROD_REF, "-o", "json"], {
+    const out = run("npx", secretsCliArgs(), {
       cwd: config.projectDir, env: process.env, shell: true // npx 是 .cmd，要經過 shell；參數都是固定值
     });
     const parsed = JSON.parse(out.slice(out.indexOf("[")));

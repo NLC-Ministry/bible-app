@@ -15,7 +15,8 @@ import { applyLoginGateView } from "../js/login-onboarding-gate.mjs";
 
 // #615：會友換一種方式登入（原本手機號碼、這次 Email），Logto 給新的 sub、會員中心另建會員，
 // nlc-session 就開了全新的空帳號——會友只看到「我的計畫不見了」。
-// 新帳號、會員中心不是正式會友、一個計畫都沒有 → 在空白畫面提示改用原本的方式登入。
+// 新帳號、一個計畫都沒有 → 在空白畫面提示改用原本的方式登入。
+// #677：會員中心可能很快把新帳號核准成正式會友，所以不再排除正式會友。
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse("2026-10-27T12:00:00+08:00");
@@ -31,13 +32,13 @@ describe("shouldShowAccountSwitchHint", () => {
   };
   const show = overrides => shouldShowAccountSwitchHint({ ...base, ...overrides });
 
-  it("shows for a new non-official account with no plans (the reported case)", () => {
+  it("shows for a new account with no plans (the reported case)", () => {
     expect(show()).toBe(true);
     expect(show({ membershipStatus: "visitor" })).toBe(true);
   });
 
-  it("never shows to an official member — the Hub already knows them, so this is a real first login", () => {
-    expect(show({ membershipStatus: "official_member" })).toBe(false);
+  it("also shows to an official member: the Hub can approve a split account right away (#677)", () => {
+    expect(show({ membershipStatus: "official_member" })).toBe(true);
   });
 
   it("does not show once the account has any plan (active or ended)", () => {
@@ -158,8 +159,8 @@ describe("account switch hint: current login method", () => {
   });
 });
 
-// #645：一般登入畫面不再放「請用跟上次相同的方式登入」（沒事的會友看了會擔心）；
-// 改成只在會員中心不認得這個帳號（沒註冊，#650）時，給換回原本登入方式的連結（#648 起文字是「找不到以前的進度？換回上次的登入方式」）。
+// #645：會員中心不認得這個帳號（沒註冊，#650）時，給換回原本登入方式的連結（#648 起文字是「找不到以前的進度？換回上次的登入方式」）。
+// 一般登入畫面的提醒文字見 #677（scripts/login-method-memory.test.mjs）。
 describe("login gate: switch-account link", () => {
   const gate = () => {
     document.body.innerHTML = `
@@ -190,11 +191,11 @@ describe("login gate: switch-account link", () => {
     expect(els.linkEl.classList.contains("hidden")).toBe(false);
   });
 
-  it("index.html carries the link inside the login card, and no same-method reminder", () => {
+  it("index.html carries the link and the same-method reminder (#677) inside the login card", () => {
     const html = readFileSync("index.html", "utf8");
     const card = html.slice(html.indexOf('id="login-gate"'), html.indexOf('id="gate-status-container"'));
     expect(card).toContain("data-login-switch-account");
-    expect(card).not.toContain("data-login-method-hint");
+    expect(card).toContain("data-login-method-hint");
   });
 });
 
@@ -240,5 +241,13 @@ describe("auth: switching account forces the Logto sign-in page", () => {
     expect((await loginUrl()).searchParams.get("prompt")).toBe("login");
     vi.restoreAllMocks();
     expect((await loginUrl()).searchParams.has("prompt")).toBe(false);
+  });
+
+  it("a real logout keeps the remembered login method for the next sign-in card (#677)", async () => {
+    localStorage.setItem("nlc_last_login_method", JSON.stringify({ method: "phone", masked: "0912-***-678" }));
+    vi.spyOn(auth, "_finishLocalLogout").mockImplementation(() => {});
+    await auth.logoutToSwitchAccount();
+    expect(auth._finishLocalLogout).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(localStorage.getItem("nlc_last_login_method")).method).toBe("phone");
   });
 });

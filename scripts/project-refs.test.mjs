@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { environmentOfRef, loadProjectRefs, parseDotEnv, requireProjectRef } from "./lib/project-refs.mjs";
 import { ORIGIN_PLACEHOLDERS, renderAdminVercelConfig } from "./lib/admin-vercel-config.mjs";
 import { buildSupabaseArgs } from "./supabase-env.mjs";
+import { SUPABASE_CLI } from "./lib/supabase-cli-query.mjs";
 import { renderToFile } from "./render-admin-vercel-config.mjs";
 import { FAKE_PRODUCTION_REF, FAKE_STAGING_REF } from "../vitest.shared.mjs";
 
@@ -50,12 +51,19 @@ describe("loadProjectRefs", () => {
 });
 
 describe("supabase-env 包裝", () => {
-  it("把環境換成 --project-ref，並擋掉自帶的 --project-ref", () => {
-    expect(buildSupabaseArgs("staging", ["db", "push", "--linked", "--dry-run"], FAKE_STAGING_REF))
-      .toEqual(["supabase", "db", "push", "--linked", "--dry-run", "--project-ref", FAKE_STAGING_REF]);
-    expect(() => buildSupabaseArgs("staging", ["db", "push", "--project-ref", "x"], FAKE_STAGING_REF)).toThrow(/不要自己帶/);
+  it("把環境換成 --remote=<ref>，用釘住的 CLI 版本，並擋掉自帶的專案旗標", () => {
+    expect(buildSupabaseArgs("staging", ["db", "push", "--dry-run"], FAKE_STAGING_REF))
+      .toEqual([SUPABASE_CLI, "db", "push", "--dry-run", `--remote=${FAKE_STAGING_REF}`]);
+    for (const flag of ["--project-ref", `--project-ref=${FAKE_STAGING_REF}`, "--remote", `--remote=${FAKE_STAGING_REF}`]) {
+      expect(() => buildSupabaseArgs("staging", ["db", "push", flag], FAKE_STAGING_REF)).toThrow(/不要自己帶/);
+    }
     expect(() => buildSupabaseArgs("prod", ["db", "push"], FAKE_STAGING_REF)).toThrow(/用法/);
     expect(() => buildSupabaseArgs("staging", [], FAKE_STAGING_REF)).toThrow(/缺少/);
+  });
+
+  it("舊習慣帶的 --linked 直接拿掉（v4 會移除，#680）", () => {
+    expect(buildSupabaseArgs("staging", ["db", "push", "--linked", "--dry-run"], FAKE_STAGING_REF))
+      .toEqual([SUPABASE_CLI, "db", "push", "--dry-run", `--remote=${FAKE_STAGING_REF}`]);
   });
 });
 

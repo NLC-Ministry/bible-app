@@ -45,16 +45,16 @@ After pushing (step 6), check the CI run once (`gh run list --branch staging --l
 
 ## 5. Migrations (only if a merged branch lists one)
 ```bash
-node scripts/supabase-env.mjs staging db push --linked --dry-run   # must list exactly the expected files
-node scripts/supabase-env.mjs staging db push --linked
+node scripts/supabase-env.mjs staging db push --dry-run   # must list exactly the expected files
+node scripts/supabase-env.mjs staging db push --yes   # only after the user agreed to these files on staging
 ```
-Read each migration's header for ordering requirements first; then check the result with a query (`supabase db query --linked --project-ref … -f file.sql`). Production is only pushed after the user merges the release PR.
+Read each migration's header for ordering requirements first; then check the result with a read-only query (`node scripts/supabase-env.mjs staging db query --read-only -f file.sql`). In agent mode the CLI refuses hosted writes without `--yes`: list each one for the user first (environment + which migration/function) and add `--yes` only after a clear yes; approval for staging doesn't cover production. Don't paste raw CLI output anywhere public, it prints the project ref. Production is only pushed after the user merges the release PR.
 
 After every push (step 6), with or without migrations, check that staging caught up — CI can't see the database or the deployed Edge Functions (#593):
 ```bash
 node scripts/check-env-drift.mjs --env staging --ref origin/staging
 ```
-🔴 → apply the missing migration / redeploy the function now (`node scripts/supabase-env.mjs staging functions deploy <name>`), or tell the user why not. It only reports; it never blocks.
+🔴 → apply the missing migration / redeploy the function now (`node scripts/supabase-env.mjs staging functions deploy <name> --yes`, after asking), or tell the user why not. It only reports; it never blocks.
 
 If the batch applied a migration, also run `node scripts/security-advisor.mjs` (Supabase Security Advisor on staging, #594): 🔴 → tell the user what it found before the release PR; never add to `supabase/security-allowlist.json` on your own.
 
@@ -103,8 +103,8 @@ Its 正式站 section is what goes into the template's 「資料庫要更新的�
 
 ## 9. After the user says the release PR is merged
 Take the lock, then:
-1. **Production migrations** (only if the release included any; the release PR's 環境一致檢查 comment lists them): from a clean worktree of `origin/main` at `.worktrees/release` (same create/remove steps as `integrate` in steps 4 and 7), `node scripts/supabase-env.mjs production db push --linked --dry-run`, then without `--dry-run`, then `node scripts/compare-env-snapshots.mjs --run`.
-2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds. Redeploy the Edge Functions the comment listed (`node scripts/supabase-env.mjs production functions deploy <name>`), then `node scripts/check-env-drift.mjs --env production --ref origin/main` must be all ✅.
+1. **Production migrations** (only if the release included any; the release PR's 環境一致檢查 comment lists them): from a clean worktree of `origin/main` at `.worktrees/release` (same create/remove steps as `integrate` in steps 4 and 7), `node scripts/supabase-env.mjs production db push --dry-run`, then with `--yes` instead of `--dry-run` once the user agreed to those files on production, then `node scripts/compare-env-snapshots.mjs --run`.
+2. **Deploy**: `gh run list --branch main --limit 1` — report if the deploy failed or hasn't finished yet; don't claim production is updated before it succeeds. Redeploy the Edge Functions the comment listed (`node scripts/supabase-env.mjs production functions deploy <name> --yes`, after the user agreed to each function), then `node scripts/check-env-drift.mjs --env production --ref origin/main` must be all ✅.
 3. **Merge `main` back into `staging`** so `main` never drifts ahead (each release adds a merge commit that only `main` has; a hotfix would otherwise stay missing on `staging`):
    ```bash
    git fetch origin

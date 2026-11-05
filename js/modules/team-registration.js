@@ -8,6 +8,12 @@ import {
   countLateCompletedDays
 } from "../data/schedule-progress.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
+import {
+  carryTeamIntoPlan,
+  carryTeamWithConfirm,
+  getPlanCarryEntries,
+  renderTeamCarryCards
+} from "./team-carry.mjs";
 
 // Independent 3-person / 6-person competition team registration.
 // Organisation small-group and pastoral-zone scopes are deliberately not used here.
@@ -99,65 +105,14 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 
   // ── 帶上一個計畫的隊伍一起加入（#321）────────────────────────────────────
   // 入口在「下一個計畫」裡：加入團隊視窗的最上面，以及按「加入計畫」時的提示。
-  // 後端以目標計畫為準：傳入這張計畫，它會找出上一張（同活動、同對象大區、
-  // 日期緊接在前），列出你在上一張當隊長、而且這裡還沒加入該組別的隊伍。
+  // 資料來自共用的帶隊狀態（team-carry.mjs，#678）；流程也在那裡，首頁會用到。
 
-  // 回傳可帶的隊伍（[{ sourceTeamId, name, division, memberCount }]）；不能帶就回 []。
+  // 回傳可帶的隊伍（狀態 carry 的那幾筆）；不能帶就回 []。
   async function getCarryoverTeams(plan) {
-    if (!plan || !state.isSupabaseMode || !state.supabase
-      || typeof db.getReadingTeamCarryoverOffer !== "function"
-      || !isCampaignStageKind(plan) || isCampaignStageEnded(plan)) {
-      return [];
-    }
-    const result = await db.getReadingTeamCarryoverOffer(plan);
-    // RPC 壞掉時也只能當成「沒有可帶的隊伍」，但要留下紀錄：#659 就是報錯被當成沒資格，好幾天沒人發現。
-    if (!result || !result.success) {
-      console.warn("[team-registration] carryover offer failed:", result && (result.error || result.message));
-    }
-    const offer = result && result.success ? result.context || {} : {};
-    return offer.eligible && Array.isArray(offer.teams) ? offer.teams : [];
+    if (!plan || !isCampaignStageKind(plan) || isCampaignStageEnded(plan)) return [];
+    return (await getPlanCarryEntries(plan)).filter(entry => entry.state === "carry");
   }
 
-  // 帶一支隊伍進這張計畫，並告訴隊長結果（誰被略過、為什麼）。帶成功回 true。
-  async function carryTeamIntoPlan(plan, sourceTeam) {
-    const planName = plan.name || "這個計畫";
-    loader.show("正在帶隊伍加入…");
-    const result = await db.carryReadingTeamsToStage(plan, sourceTeam.division);
-    loader.hide();
-    if (!result.success) {
-      alert(result.message || "帶隊失敗，請稍後再試。");
-      return false;
-    }
-    const data = result.data || {};
-    const division = Number(sourceTeam.division);
-    const skippedTeam = (data.skippedTeams || []).find(item => Number(item.division) === division);
-    const carriedTeam = (data.teams || []).find(item => Number(item.division) === division);
-    const { captainBlocked, memberNotes } = db.describeReadingTeamCarryoverSkips({
-      skippedTeam,
-      skippedMembers: carriedTeam && carriedTeam.skippedMembers,
-      targetName: planName
-    });
-    if (captainBlocked || !carriedTeam) {
-      alert(captainBlocked || "帶隊失敗，請稍後再試。");
-      return false;
-    }
-    alert([`已將「${sourceTeam.name || ""}」帶入「${planName}」。`, ...memberNotes].join("\n"));
-    return true;
-  }
-
-  // 先確認再帶隊；團隊視窗、計畫卡片、詳細頁入口（#652）共用。帶成功回 true。
-  async function carryTeamWithConfirm(plan, team) {
-    const confirmed = await window.showConfirmDialog({
-      title: "帶隊伍一起加入",
-      message: `確認後「${team.name || ""}」的隊員會直接加入「${plan.name || "這個計畫"}」和同一支隊伍。\n若有隊員已經在這個計畫加入了別的隊伍，或還沒設定牧區，會略過那位隊員，其餘隊員照常帶入。`,
-      confirmText: "帶隊加入",
-      cancelText: "取消"
-    });
-    if (!confirmed) return false;
-    return carryTeamIntoPlan(plan, team);
-  }
-
-  window.getReadingTeamCarryoverTeams = getCarryoverTeams;
   window.carryReadingTeamWithConfirm = carryTeamWithConfirm;
 
   function renderCarryoverTeamButtons(teams) {
@@ -1065,7 +1020,8 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 
     const result = await db.getMyReadingTeam(plan);
     if (!result || !result.success || getJoinedReadingTeamContexts(result.context).length) return hide();
-    const teams = await getCarryoverTeams(plan);
+    const carryEntries = await getPlanCarryEntries(plan);
+    const teams = carryEntries.filter(entry => entry.state === "carry");
     // 等待期間使用者可能已經切到別的計畫。
     if (state.activePlan !== plan) return;
 
@@ -1073,6 +1029,7 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
       ? { title: "帶上一個計畫的隊伍一起加入", description: "隊員不用重新報名或輸入邀請碼。" }
       : { title: "個人讀經中", description: "想和夥伴一起讀，可以建立或加入 3 人、6 人團隊。" };
     container.innerHTML = `
+      <div class="team-carry-slot" data-team-carry-slot></div>
       <div class="reading-team-registration-card" style="padding: 1.2rem; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border-card); box-shadow: var(--shadow-sm);">
         <div class="reading-team-registration-panel__heading" style="display: flex; gap: 12px; align-items: center; margin-bottom: 0.8rem;">
           <span class="reading-team-form-card__icon" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--color-brand-subtle); color: var(--color-brand);"><span class="nlc-icon nlc-icon--md" data-icon="people" aria-hidden="true"></span></span>
@@ -1082,6 +1039,10 @@ import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
         <button type="button" class="secondary-btn" data-team-entry-open style="width: 100%;">${teams.length ? "或建立 / 加入其他團隊" : "建立 / 加入團隊"}</button>
       </div>`;
     container.classList.remove("hidden");
+    renderTeamCarryCards(
+      container.querySelector("[data-team-carry-slot]"),
+      carryEntries.filter(entry => entry.state !== "carry")
+    );
 
     container.querySelector("[data-team-entry-open]").onclick = () => window.openReadingTeamDialog(plan);
     container.querySelectorAll("[data-carryover-division]").forEach(button => {

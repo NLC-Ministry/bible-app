@@ -9,6 +9,7 @@ import {
   chunkRows,
   exportSample,
   importSample,
+  main,
   tableQueries
 } from "./staging-sample-data.mjs";
 import { PROD_REF, STAGING_REF } from "./lib/supabase-cli-query.mjs";
@@ -16,6 +17,12 @@ import { PROD_REF, STAGING_REF } from "./lib/supabase-cli-query.mjs";
 // #267：從正式環境只讀匯出去識別化樣本，匯入 staging。
 const SALT = "0123456789abcdef0123456789abcdef";
 const queries = tableQueries(SALT);
+
+describe("import 要明確同意（#680）", () => {
+  it("沒帶 --yes 就拒絕，連檔案都不讀", () => {
+    expect(main(["import", "does-not-exist.json"])).toBe(2);
+  });
+});
 
 const cleanProfile = (n = 1) => ({
   id: "11111111-1111-4111-8111-111111111111",
