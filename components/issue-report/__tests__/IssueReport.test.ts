@@ -5,7 +5,7 @@ import React from "react";
 import { ValidateReportBlock, SubmitReportBlock, ReportPipeline } from "../IssueReportBlocks.ts";
 import { convertToCSV } from "../AdminReportView.tsx";
 import { SupportFab } from "../SupportFab.tsx";
-import { ReportDrawer, reportSchema, descriptionCounterClassName } from "../ReportDrawer.tsx";
+import { ReportDrawer, validateReport, descriptionCounterClassName } from "../ReportDrawer.tsx";
 import { AdminReportTable } from "../AdminReportTable.tsx";
 import { Input } from "../../ui/input.tsx";
 import { Textarea } from "../../ui/textarea.tsx";
@@ -19,10 +19,6 @@ vi.mock("react-hook-form", () => ({
     formState: { errors: {} },
     reset: vi.fn()
   })
-}));
-
-vi.mock("@hookform/resolvers/zod", () => ({
-  zodResolver: () => vi.fn()
 }));
 
 class MockIDBRequest {
@@ -382,50 +378,36 @@ describe("Issue Report System Tests", () => {
       }
     });
 
-    it("Zod Schema 驗證：通過合法的分類與長度並修剪空白（消毒交由提交管線單一處理）", () => {
-      const validData = {
+    it("validateReport：通過合法的分類與長度並修剪空白（消毒交由提交管線單一處理）", () => {
+      const result = validateReport({
         category: "bug",
         description: "  這是一個合法的錯誤描述  "
-      };
-      const result = reportSchema.safeParse(validData);
-      expect(result.success).toBe(true);
-      if (result.success) {
-        // Schema only validates + trims; sanitization is done exactly once at
-        // the storage boundary (ValidateReportBlock), so it is NOT applied here.
-        expect(result.data.category).toBe("bug");
-        expect(result.data.description).toBe("這是一個合法的錯誤描述");
+      });
+      expect(result.errors).toEqual({});
+      // Only validates + trims; sanitization is done exactly once at the
+      // storage boundary (ValidateReportBlock), so it is NOT applied here.
+      expect(result.values.category).toBe("bug");
+      expect(result.values.description).toBe("這是一個合法的錯誤描述");
+    });
+
+    it("validateReport：不合法的分類回傳中文錯誤訊息", () => {
+      const result = validateReport({ category: "hacker", description: "合法內容" });
+      expect(result.errors.category).toBe("請選擇有效的問題分類");
+      expect(result.errors.description).toBeUndefined();
+    });
+
+    it("validateReport：不合法的分類應被拒絕（含 Object 原型上的鍵名）", () => {
+      for (const category of ["invalid-category", "constructor", "", undefined]) {
+        const result = validateReport({ category, description: "合法的問題描述長度內容" });
+        expect(result.errors.category).toBe("請選擇有效的問題分類");
       }
     });
 
-    it("Zod Schema 驗證：不合法的分類回傳中文錯誤訊息（Zod v4 error API）", () => {
-      const result = reportSchema.safeParse({ category: "hacker", description: "合法內容" });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        const catIssue = result.error.issues.find((i) => i.path[0] === "category");
-        expect(catIssue?.message).toBe("請選擇有效的問題分類");
-      }
-    });
-
-    it("Zod Schema 驗證：不合法的分類應被拒絕", () => {
-      const invalidData = {
-        category: "invalid-category",
-        description: "合法的問題描述長度內容"
-      };
-      const result = reportSchema.safeParse(invalidData);
-      expect(result.success).toBe(false);
-    });
-
-    it("Zod Schema 驗證：長度太長（超過 500 字）或空白內容應被拒絕", () => {
-      const emptyData = {
-        category: "bug",
-        description: ""
-      };
-      const tooLongData = {
-        category: "bug",
-        description: "a".repeat(501)
-      };
-      expect(reportSchema.safeParse(emptyData).success).toBe(false);
-      expect(reportSchema.safeParse(tooLongData).success).toBe(false);
+    it("validateReport：長度太長（超過 500 字）或空白內容應被拒絕", () => {
+      expect(validateReport({ category: "bug", description: "" }).errors.description).toBe("請填寫問題描述");
+      expect(validateReport({ category: "bug", description: "   " }).errors.description).toBe("請填寫問題描述");
+      expect(validateReport({ category: "bug", description: "a".repeat(501) }).errors.description).toBe("問題描述最多限制 500 字");
+      expect(validateReport({ category: "bug", description: "a".repeat(500) }).errors).toEqual({});
     });
 
     it("字數計數器在觸及 500 字上限前不顯示 destructive 紅字", () => {
