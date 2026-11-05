@@ -63,7 +63,7 @@ describe("nlc-data injects the scope for get_pastoral_overview", () => {
     const start = nlcData.indexOf("} else if (functionName === PASTORAL_OVERVIEW_RPC) {");
     expect(start).toBeGreaterThan(0);
     const branch = nlcData.slice(start, nlcData.indexOf("}", nlcData.indexOf("buildPastoralOverviewArgs", start)));
-    expect(branch.match(/await getVisibleProfileIds\(supabaseAdmin, profile\)/g)).toHaveLength(1);
+    expect(branch.match(/await requestVisibleProfileIds\(supabaseAdmin, profile, requestCache\)/g)).toHaveLength(1);
     expect(branch).toContain("buildPastoralOverviewArgs(body.args, visibleIds, profile.id)");
     expect(branch).not.toContain("...(body.args");
   });

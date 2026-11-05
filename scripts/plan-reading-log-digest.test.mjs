@@ -401,7 +401,7 @@ describe("nlc-data injects the plan stats scope and overrides client values (#39
       const start = nlcData.indexOf(marker);
       expect(start).toBeGreaterThan(0);
       const branch = nlcData.slice(start, nlcData.indexOf("} else if", start + 10));
-      expect(branch.match(/await getVisibleProfileIds\(supabaseAdmin, profile\)/g)).toHaveLength(1);
+      expect(branch.match(/await requestVisibleProfileIds\(supabaseAdmin, profile, requestCache\)/g)).toHaveLength(1);
       expect(branch).toContain(builder);
       expect(branch).not.toContain("...(body.args");
     }

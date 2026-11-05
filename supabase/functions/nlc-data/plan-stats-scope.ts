@@ -1,5 +1,5 @@
 // 計畫統計用的兩支 RPC（#394 get_plan_reading_log_digest、#397 get_plan_stats_roster）
-// 的參數一律在這裡組：可見範圍來自 getVisibleProfileIds 的結果（index.ts 只算一次），
+// 的參數一律在這裡組：可見範圍來自 getVisibleProfileIds 的結果（index.ts 每個請求只算一次，#674），
 // 前端傳來的 p_whole_church／p_visible_ids／p_actor_id 一律被覆寫。
 // 獨立成檔是為了讓 vitest 直接測行為（index.ts 本身是 Deno.serve 進入點）。
 

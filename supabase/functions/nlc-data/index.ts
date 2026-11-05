@@ -24,6 +24,7 @@ import { buildRequestLogLine, requestLogTarget, sanitizeReportInsertPayload } fr
 import { PLAN_REPORT_ACTIONS, PLAN_REPORT_PLAN_COLUMNS, runPlanReport } from "./plan-report.ts";
 import * as jose from "https://esm.sh/jose@5.9.6";
 import { buildInternalErrorBody } from "../_shared/internal-error-body.mjs";
+import { createFeatureFlagCache, createRequestCache, createTtlCache } from "../_shared/edge-cache.mjs";
 
 // >>> logto-jwt-verify（nlc-data、nlc-session、admin-api 三支 index.ts 內此區塊逐字相同；scripts/logto-jwt-verify.test.mjs 會比對）
 // 以 Logto 的公開金鑰（JWKS）驗證 JWT 的簽章、發行者（iss）、到期（exp）。在這之前兩支函式都只
@@ -616,8 +617,14 @@ function parseJwt(token: string) {
   }
 }
 
-const PROFILE_CACHE = new Map<string, { profile: any; timestamp: number }>();
-const PROFILE_CACHE_TTL_MS = 15000; // 15 seconds warm Edge Function memory cache
+// 認證快取（#674，模組層：跨請求、跨使用者共用）。鍵只有兩種，都不是未驗證的 claim：
+//   sub:<sub>      簽章、發行者、到期都驗過之後才讀寫（resolveProfile 每個請求都先驗）
+//   token:<token>  整串 token 經 Supabase Auth 或 Logto UserInfo 遠端驗過才寫入，讀取要整串相同
+// report 模式驗不過、off 模式沒驗的 token 不讀也不寫。
+// TTL 是「角色、管理範圍、停用狀態改了之後，其他 isolate 最久還用舊資料多久」的上限。issue 建議 60 秒，
+// 但這份 profile 決定這個人看得到誰的資料，所以先取 30 秒：沒命中的成本已從 2 趟降到 1 趟，拉長的好處小。
+const PROFILE_CACHE_TTL_MS = 30000;
+const PROFILE_CACHE = createTtlCache({ ttlMs: PROFILE_CACHE_TTL_MS });
 
 async function fetchProfileData(supabaseAdmin: any, userId: string) {
   try {
@@ -654,17 +661,57 @@ async function fetchProfileData(supabaseAdmin: any, userId: string) {
   return legacyProfile;
 }
 
-async function resolveProfile(supabaseAdmin: any, accessToken: string) {
-  const cached = PROFILE_CACHE.get(accessToken);
-  const now = Date.now();
-  if (cached && (now - cached.timestamp < PROFILE_CACHE_TTL_MS)) {
-    return cached.profile;
+// 身分＋profile 一支查詢（#674），沒命中時往返從 2 趟降成 1 趟。查詢本身失敗（例如這個資料庫還沒有
+// member-journey 欄位）就退回舊的兩步，fetchProfileData 會一路降級，不讓選填欄位擋掉所有人。
+async function fetchProfileByLogtoSub(supabaseAdmin: any, sub: string) {
+  const { data: joined, error: joinError } = await supabaseAdmin
+    .from("user_identities")
+    .select(`profile_id, profile:profiles!profile_id(${PROFILE_SELECT})`)
+    .eq("provider", "logto")
+    .eq("provider_user_id", sub)
+    .maybeSingle();
+  if (!joinError) {
+    if (!joined?.profile_id) throw new Error("profile_identity_not_found");
+    return joined.profile || await fetchProfileData(supabaseAdmin, joined.profile_id);
   }
+  console.warn("Identity + profile query failed; falling back to two steps:", joinError);
 
+  const { data: identity, error: identityError } = await supabaseAdmin
+    .from("user_identities")
+    .select("profile_id")
+    .eq("provider", "logto")
+    .eq("provider_user_id", sub)
+    .maybeSingle();
+  if (identityError) throw identityError;
+  if (!identity?.profile_id) throw new Error("profile_identity_not_found");
+  return await fetchProfileData(supabaseAdmin, identity.profile_id);
+}
+
+async function resolveProfile(supabaseAdmin: any, accessToken: string) {
+  // payload 還沒驗過，這裡只用來決定走哪條路，不能當快取鍵。
   const payload = parseJwt(accessToken);
   const expectedLogtoIssuer = trimSlash(Deno.env.get("NLC_LOGTO_ISSUER") || "https://sso.newlife.org.tw/oidc");
   const tokenIssuer = trimSlash(String(payload?.iss || ""));
   const isLogtoJwt = Boolean(payload?.sub && tokenIssuer === expectedLogtoIssuer);
+
+  // 簽章 / 發行者 / 到期驗證（見 logto-jwt-verify 區塊）。report 模式只記錄、照舊放行；
+  // enforce 模式驗不過就拒絕。快取以 sub 為鍵，所以每個請求都要先驗過才能讀（金鑰有快取，不多往返）；
+  // 這也代表過期的 token 不會因為 sub 在快取裡而過關。
+  let verifiedSub: string | null = null;
+  if (isLogtoJwt && LOGTO_JWT_MODE !== "off") {
+    const verification = await verifyLogtoJwt(accessToken, expectedLogtoIssuer, Deno.env.get("NLC_LOGTO_AUDIENCE") || undefined);
+    recordLogtoJwt("nlc-data", verification, accessToken);
+    if (!verification.ok && LOGTO_JWT_MODE === "enforce") {
+      throw new Error(verification.reason === "jwks_unavailable" ? "auth_verification_unavailable" : "invalid_logto_token");
+    }
+    if (verification.ok && verification.payload.sub) verifiedSub = String(verification.payload.sub);
+  }
+
+  const cacheKey = verifiedSub ? `sub:${verifiedSub}` : (isLogtoJwt ? null : `token:${accessToken}`);
+  if (cacheKey) {
+    const cached = PROFILE_CACHE.get(cacheKey);
+    if (cached) return cached;
+  }
 
   // Logto is the production login method. Do not send its JWT to Supabase Auth
   // first: that request must fail before fallback and adds one remote round trip
@@ -675,7 +722,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
       if (user && !authErr) {
         const profile = await fetchProfileData(supabaseAdmin, user.id);
         if (profile) {
-          PROFILE_CACHE.set(accessToken, { profile, timestamp: Date.now() });
+          PROFILE_CACHE.set(cacheKey!, profile);
           return profile;
         }
       }
@@ -684,17 +731,7 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
     }
   }
 
-  // 簽章 / 發行者 / 到期驗證（見 logto-jwt-verify 區塊）。report 模式只記錄、照舊放行；
-  // enforce 模式驗不過就拒絕。驗過才會進下面的 PROFILE_CACHE，快取不會收進偽造的 token。
-  if (isLogtoJwt && LOGTO_JWT_MODE !== "off") {
-    const verification = await verifyLogtoJwt(accessToken, expectedLogtoIssuer, Deno.env.get("NLC_LOGTO_AUDIENCE") || undefined);
-    recordLogtoJwt("nlc-data", verification, accessToken);
-    if (!verification.ok && LOGTO_JWT_MODE === "enforce") {
-      throw new Error(verification.reason === "jwks_unavailable" ? "auth_verification_unavailable" : "invalid_logto_token");
-    }
-  }
-
-  let sub: string | null = isLogtoJwt ? String(payload.sub) : null;
+  let sub: string | null = isLogtoJwt ? (verifiedSub || String(payload.sub)) : null;
   if (!sub) {
     // Opaque Logto tokens cannot be decoded locally; resolve them through the
     // configured OIDC UserInfo endpoint.
@@ -711,29 +748,18 @@ async function resolveProfile(supabaseAdmin: any, accessToken: string) {
 
   if (!sub) throw new Error("invalid_logto_token");
 
-  const { data: identity, error: identityError } = await supabaseAdmin
-    .from("user_identities")
-    .select("profile_id")
-    .eq("provider", "logto")
-    .eq("provider_user_id", sub)
-    .maybeSingle();
-  if (identityError) throw identityError;
-  if (!identity?.profile_id) throw new Error("profile_identity_not_found");
-
-  const profile = await fetchProfileData(supabaseAdmin, identity.profile_id);
-  PROFILE_CACHE.set(accessToken, { profile, timestamp: Date.now() });
+  const profile = await fetchProfileByLogtoSub(supabaseAdmin, sub);
+  if (cacheKey && profile) PROFILE_CACHE.set(cacheKey, profile);
   return profile;
 }
 
+// 功能開關不分人，可以跨請求共用（#674）。30 秒是其他 isolate 開、關生效的延遲上限；
+// 經 nlc-data 改開關時會清掉這個 isolate 的份。同一個請求內看到的是同一份，開關不會在一批的中途變掉。
+const FEATURE_FLAG_CACHE = createFeatureFlagCache({ ttlMs: 30000 });
 
-async function isFeatureEnabled(supabaseAdmin: any, key: string) {
-  const { data, error } = await supabaseAdmin
-    .from("app_feature_settings")
-    .select("enabled")
-    .eq("key", key)
-    .maybeSingle();
-  if (error) return false;
-  return data?.enabled === true;
+async function isFeatureEnabled(supabaseAdmin: any, key: string, requestCache: any) {
+  const flags = await requestCache.once("feature-flags", () => FEATURE_FLAG_CACHE.snapshot(supabaseAdmin));
+  return flags.get(key) === true;
 }
 const ROLE_CODE_MAP: Record<string, string> = {
   "10000000-0000-4000-8000-000000000001": "member",
@@ -865,6 +891,12 @@ function splitScope(value: unknown): string[] {
     .filter(Boolean);
 }
 
+// 組長每一格都要範圍：同一個請求只算一次（#674）。刻意不跨請求快取——名單會變（組員異動、停用），
+// 舊名單等於讓人繼續看到不該看的資料。
+function requestVisibleProfileIds(supabaseAdmin: any, profile: any, requestCache: any): Promise<string[] | null> {
+  return requestCache.once(`visible-ids:${profile.id}`, () => getVisibleProfileIds(supabaseAdmin, profile));
+}
+
 async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
   if (hasWholeChurchPlanScope(profile)) return null;
   const roleCode = getProfileRoleCode(profile);
@@ -894,14 +926,14 @@ async function getVisibleProfileIds(supabaseAdmin: any, profile: any) {
   return Array.from(new Set([profile.id, ...(profiles || []).map((candidate: any) => candidate.id)]));
 }
 
-async function applyForcedScope(query: any, table: string, action: string, profile: any, supabaseAdmin: any) {
+async function applyForcedScope(query: any, table: string, action: string, profile: any, supabaseAdmin: any, requestCache: any) {
   // Supabase query builders are PromiseLike. Returning one directly from this
   // async function would execute the query before order/limit/returning are
   // applied. Always wrap it in a plain object to prevent Promise assimilation.
   if (action === "insert" || action === "upsert") return { query };
   if (USER_TABLES.has(table)) {
     if (action !== "select") return { query: query.eq("user_id", profile.id) };
-    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
     return {
       query: visibleIds === null
         ? query
@@ -909,7 +941,7 @@ async function applyForcedScope(query: any, table: string, action: string, profi
     };
   }
   if (table === "profiles" && !hasWholeChurchPlanScope(profile)) {
-    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
     return { query: query.in("id", visibleIds && visibleIds.length ? visibleIds : [profile.id]) };
   }
   if (table === "user_identities") return { query: query.eq("profile_id", profile.id) };
@@ -921,12 +953,14 @@ async function applyForcedScope(query: any, table: string, action: string, profi
   // the admin team-registration overview / member-placement fallbacks in
   // js/db.js, which intentionally scan every team.
   if ((table === "reading_teams" || table === "reading_team_members") && action === "select" && !canManagePlans(profile)) {
-    const { data: memberships, error: membershipError } = await supabaseAdmin
-      .from("reading_team_members")
-      .select("team_id")
-      .eq("user_id", profile.id);
-    if (membershipError) throw membershipError;
-    const teamIds = (memberships || []).map((row: any) => row.team_id).filter(Boolean);
+    const teamIds: string[] = await requestCache.once(`team-ids:${profile.id}`, async () => {
+      const { data: memberships, error: membershipError } = await supabaseAdmin
+        .from("reading_team_members")
+        .select("team_id")
+        .eq("user_id", profile.id);
+      if (membershipError) throw membershipError;
+      return (memberships || []).map((row: any) => row.team_id).filter(Boolean);
+    });
     const idColumn = table === "reading_teams" ? "id" : "team_id";
     return { query: query.in(idColumn, teamIds.length ? teamIds : ["00000000-0000-0000-0000-000000000000"]) };
   }
@@ -1012,6 +1046,7 @@ async function runSelectPipeline(
   },
   profile: any,
   supabaseAdmin: any,
+  requestCache: any,
 ): Promise<{ data?: any; error?: string; code?: string }> {
   const table = typeof spec.table === "string" ? spec.table : "";
   if (!table) return { error: "missing_table" };
@@ -1024,14 +1059,14 @@ async function runSelectPipeline(
   if (!(READ_TABLES.has(table) || canReportOwnSelect)) return { error: "forbidden" };
 
   const devotionalTables = new Set(["devotional_notes", "devotional_likes", "devotional_comments"]);
-  if (devotionalTables.has(table) && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall"))) {
+  if (devotionalTables.has(table) && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall", requestCache))) {
     return { data: [] };
   }
 
   let query: any = supabaseAdmin.from(table).select(typeof spec.select === "string" ? spec.select : "*");
   query = applyFilters(query, spec.filters || []);
   if (spec.or) query = query.or(spec.or);
-  ({ query } = await applyForcedScope(query, table, "select", profile, supabaseAdmin));
+  ({ query } = await applyForcedScope(query, table, "select", profile, supabaseAdmin, requestCache));
   query = applyOrder(query, spec);
   if (spec.range && Number.isInteger(spec.range.from) && Number.isInteger(spec.range.to)) {
     const rangeFrom = Math.max(0, spec.range.from);
@@ -1056,6 +1091,7 @@ async function runRpcRequest(
   profile: any,
   supabaseAdmin: any,
   requestId: string,
+  requestCache: any,
 ): Promise<{ status: number; body: any }> {
   const functionName = typeof body.function === "string" ? body.function : "";
   if (!RPC_FUNCTIONS.has(functionName)) return rpcResult({ error: "forbidden_rpc" }, 403);
@@ -1082,12 +1118,7 @@ async function runRpcRequest(
     return await denyAdminRpc();
   }
   if (QUIZ_RPC_FUNCTIONS.has(functionName)) {
-    const { data: quizFeature, error: quizFeatureError } = await supabaseAdmin
-      .from("app_feature_settings")
-      .select("enabled")
-      .eq("key", "daily_quiz")
-      .maybeSingle();
-    if (quizFeatureError || quizFeature?.enabled !== true) {
+    if (!(await isFeatureEnabled(supabaseAdmin, "daily_quiz", requestCache))) {
       return rpcResult({ error: "daily_quiz_feature_disabled" }, 403);
     }
   }
@@ -1095,12 +1126,7 @@ async function runRpcRequest(
     if (EXAM_ADMIN_RPC_FUNCTIONS.has(functionName) && !isAdmin(profile)) {
       return await denyAdminRpc();
     }
-    const { data: examFeature, error: examFeatureError } = await supabaseAdmin
-      .from("app_feature_settings")
-      .select("enabled")
-      .eq("key", "speed_reading_exam")
-      .maybeSingle();
-    if (examFeatureError || examFeature?.enabled !== true) {
+    if (!(await isFeatureEnabled(supabaseAdmin, "speed_reading_exam", requestCache))) {
       return rpcResult({ error: "speed_reading_exam_feature_disabled" }, 403);
     }
   }
@@ -1124,13 +1150,13 @@ async function runRpcRequest(
       p_scope_groups: splitScope(profile.managed_groups || profile.small_group),
     };
   } else if (functionName === PLAN_READING_LOG_DIGEST_RPC) {
-    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
     rpcArgs = buildPlanReadingLogDigestArgs(body.args, visibleIds, profile.id);
   } else if (functionName === PLAN_STATS_ROSTER_RPC) {
-    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
     rpcArgs = buildPlanStatsRosterArgs(body.args, visibleIds, profile.id);
   } else if (functionName === PASTORAL_OVERVIEW_RPC) {
-    const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
+    const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
     rpcArgs = buildPastoralOverviewArgs(body.args, visibleIds, profile.id);
   } else if (functionName === ADMIN_USER_DIRECTORY_RPC) {
     rpcArgs = { p_include_plan_details: isAdmin(profile), p_actor_id: profile.id };
@@ -1168,6 +1194,8 @@ async function runRpcRequest(
     }));
   }
   if (error) return rpcResult({ error: error.message, code: error.code }, 400);
+  // 管理範圍改了：這個 isolate 不再用舊的 profile（其他 isolate 等 TTL）
+  if (functionName === "set_profile_managed_scopes") PROFILE_CACHE.clear();
   // 作答中的 attempt 附上「這份作答專用」寫入憑證：之後的暫存 / 送出走 exam-write，
   // 不再依賴這張會過期的登入 token。只簽給 attempt 主人本人（staff 查別人的卷不簽）；
   // 沒設 EXAM_WRITE_SECRET 就不簽，前端自動沿用 nlc-data。
@@ -1235,6 +1263,8 @@ Deno.serve(async (req: Request) => {
       auth: { persistSession: false, autoRefreshToken: false }
     });
     const profile = await resolveProfile(supabaseAdmin, accessToken);
+    // 請求層快取（#674）：這個請求專用，範圍、隊伍只存在這裡，請求結束就丟
+    const requestCache = createRequestCache();
 
     if (isRetiredPlanRequest(body)) {
       return jsonResponse({ error: "resource_not_found", resource: "reading_plan" }, 404);
@@ -1244,8 +1274,8 @@ Deno.serve(async (req: Request) => {
     // 名單有姓名、單位、進度：打開一次補記一筆 view_plan_roster。
     if (PLAN_REPORT_ACTIONS.has(action)) {
       if (!canManagePlans(profile)) return jsonResponse({ error: "forbidden" }, 403);
-      const visibleIds = await getVisibleProfileIds(supabaseAdmin, profile);
-      const result = await runPlanReport(action, body.args, visibleIds, profile.id, {
+      const loadVisibleIds = () => requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
+      const result = await runPlanReport(action, body.args, loadVisibleIds, profile.id, {
         fetchPlanRow: (planId) => supabaseAdmin.from("global_plans").select(PLAN_REPORT_PLAN_COLUMNS).eq("id", planId).maybeSingle(),
         rpc: (fn, args) => supabaseAdmin.rpc(fn, args)
       });
@@ -1261,14 +1291,14 @@ Deno.serve(async (req: Request) => {
           p_changes: null,
           p_reason: null,
           p_request_id: requestId,
-          p_detail: { people: result.people ?? 0, scope: visibleIds === null ? "church" : "managed" }
+          p_detail: { people: result.people ?? 0, scope: (await loadVisibleIds()) === null ? "church" : "managed" }
         });
       }
       return jsonResponse(result.body, result.status);
     }
 
     if (action === "rpc") {
-      const result = await runRpcRequest(body, profile, supabaseAdmin, requestId);
+      const result = await runRpcRequest(body, profile, supabaseAdmin, requestId, requestCache);
       return jsonResponse(result.body, result.status);
     }
 
@@ -1293,11 +1323,11 @@ Deno.serve(async (req: Request) => {
           if (isRetiredPlanRequest(spec || {})) return { error: "resource_not_found", resource: "reading_plan" } as any;
           if (spec && spec.action === "rpc") {
             if (!BATCH_RPC_FUNCTIONS.has(String(spec.function || ""))) return { error: "batch_read_only" };
-            const result = await runRpcRequest(spec, profile, supabaseAdmin, requestId);
+            const result = await runRpcRequest(spec, profile, supabaseAdmin, requestId, requestCache);
             return result.status === 200 ? { data: result.body?.data } : { ...(result.body || { error: "rpc_failed" }) };
           }
           if (spec && spec.action && spec.action !== "select") return { error: "batch_read_only" };
-          return await runSelectPipeline(spec || {}, profile, supabaseAdmin);
+          return await runSelectPipeline(spec || {}, profile, supabaseAdmin, requestCache);
         } catch (queryErr) {
           const message = queryErr instanceof Error ? queryErr.message : String(queryErr);
           return { error: message };
@@ -1589,6 +1619,7 @@ Deno.serve(async (req: Request) => {
 
       if (saveError) return jsonResponse({ error: saveError.message, code: saveError.code }, 400);
       if (!savedProfile) return jsonResponse({ error: "profile_write_not_verified" }, 500);
+      PROFILE_CACHE.clear();
 
       if (String((savedProfile as any).name || "") !== String(updatePayload.name || "")) {
         return jsonResponse({
@@ -1722,7 +1753,7 @@ Deno.serve(async (req: Request) => {
 
     const devotionalTables = new Set(["devotional_notes", "devotional_likes", "devotional_comments"]);
     if (devotionalTables.has(table)
-      && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall"))) {
+      && !(await isFeatureEnabled(supabaseAdmin, "pastoral_sharing_wall", requestCache))) {
       if (action === "select") return jsonResponse({ data: [] });
       return jsonResponse({ error: "feature_archived" }, 403);
     }
@@ -1743,7 +1774,7 @@ Deno.serve(async (req: Request) => {
 
     query = applyFilters(query, body.filters || []);
     if (body.or) query = query.or(body.or);
-    ({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin));
+    ({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin, requestCache));
     if (["insert", "update", "upsert"].includes(action) && body.select) query = query.select(body.select);
     query = applyOrder(query, body);
     if (body.range && Number.isInteger(body.range.from) && Number.isInteger(body.range.to)) {
@@ -1764,6 +1795,11 @@ Deno.serve(async (req: Request) => {
         rowCount: Array.isArray(data) ? data.length : null,
         error
       }));
+    }
+    // 這個 isolate 改了就立刻不用舊資料；其他 isolate 等 TTL（失敗也清，清掉只是多查一次）
+    if (action !== "select") {
+      if (table === "app_feature_settings") FEATURE_FLAG_CACHE.clear();
+      if (table === "profiles") PROFILE_CACHE.clear();
     }
     if (error) return jsonResponse({ error: error.message, code: error.code }, 400);
 
