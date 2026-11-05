@@ -1785,3 +1785,801 @@ describe("月初隊伍接不上：帶隊狀態、隊員接手、補帶、重名�
     rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
   });
 });
+
+// #675：測驗作答／計分／關卷／統計的特徵測試。先對改寫前的函式跑過，鎖住行為後才把逐題迴圈換成集合式寫法。
+const examId = n => `e${String(n).padStart(7, "0")}-0000-4000-8000-000000000000`;
+const EX = {
+  paper: examId(1),
+  plainPaper: examId(2),
+  emptyPaper: examId(3),
+  q: { tf: examId(11), single: examId(12), multi: examId(13), match: examId(14), order: examId(15), nokey: examId(16), missing: examId(17), short: examId(18) },
+  plainQ: { a: examId(21), b: examId(22) },
+  attempt: examId(31),
+  practice: examId(32),
+  rehearsal: examId(33),
+  otherAttempt: examId(34)
+};
+
+async function seedExamPaper(tx, id, { status = "published", openAt = "now() - interval '1 hour'", closeAt = "now() + interval '1 hour'", linkedPlan = null, results = "NULL", practice = true } = {}) {
+  await tx.query(
+    `INSERT INTO public.exam_papers (id, title, status, open_at, close_at, duration_minutes, total_points, published_at, practice_retake_enabled, linked_plan_id, results_published_at)
+     VALUES ($1, '測試試卷', $2, ${openAt}, ${closeAt}, 60, 100, now() - interval '2 hours', $3, $4, ${results})`,
+    [id, status, practice, linkedPlan]
+  );
+}
+
+async function seedExamQuestion(tx, id, paperId, section, position, points, answerKey) {
+  await tx.query(
+    `INSERT INTO public.exam_questions (id, paper_id, section, position, points, answer_key) VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [id, paperId, section, position, points, answerKey === null ? null : JSON.stringify(answerKey)]
+  );
+}
+
+async function seedExamAttempt(tx, id, paperId, userId, { status = "submitted", kind = "official", isTest = false, deadline = "now() + interval '30 minutes'", officialId = null, total = null } = {}) {
+  await tx.query(
+    `INSERT INTO public.exam_attempts (id, paper_id, user_id, status, attempt_kind, is_test, deadline_at, pledge_name, official_attempt_id, practice_acknowledged_at, started_at, submitted_at, auto_score, total_score)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, $4::text, $5::text, $6::boolean, ${deadline}, '測試宣示', $7::uuid, CASE WHEN $5::text = 'practice' THEN now() END,
+       TIMESTAMPTZ '2026-10-01 10:00:00+08', CASE WHEN $4::text <> 'in_progress' THEN TIMESTAMPTZ '2026-10-01 10:30:00+08' END, $8::numeric, $8::numeric)`,
+    [id, paperId, userId, status, kind, isTest, officialId, total]
+  );
+}
+
+const seedExamAnswer = (tx, attemptId, questionId, section, response, awarded = null) => tx.query(
+  `INSERT INTO public.exam_answers (attempt_id, question_id, section, response, auto_correct, awarded_points) VALUES ($1, $2, $3, $4::jsonb, NULL, $5)`,
+  [attemptId, questionId, section, response === undefined ? null : JSON.stringify(response), awarded]
+);
+
+/** 主試卷：涵蓋所有題型、沒填正解的題目、完全沒作答的題目、簡答。 */
+async function seedExamFixture(tx) {
+  await tx.query(
+    `INSERT INTO public.app_feature_settings (key, enabled) VALUES ('speed_reading_exam', TRUE)
+     ON CONFLICT (key) DO UPDATE SET enabled = TRUE`
+  );
+  await seedExamPaper(tx, EX.paper);
+  await seedExamQuestion(tx, EX.q.tf, EX.paper, "truefalse", 1, 2, true);
+  await seedExamQuestion(tx, EX.q.single, EX.paper, "single", 1, 3, 1);
+  await seedExamQuestion(tx, EX.q.multi, EX.paper, "multiple", 1, 4, [0, 2]);
+  await seedExamQuestion(tx, EX.q.match, EX.paper, "matching", 1, 5, { a: 1, b: 2 });
+  await seedExamQuestion(tx, EX.q.order, EX.paper, "ordering", 1, 6, [2, 0, 1]);
+  await seedExamQuestion(tx, EX.q.nokey, EX.paper, "single", 2, 7, null);
+  await seedExamQuestion(tx, EX.q.missing, EX.paper, "single", 3, 8, 0);
+  await seedExamQuestion(tx, EX.q.short, EX.paper, "shortanswer", 1, 10, null);
+  // 沒有簡答的試卷
+  await seedExamPaper(tx, EX.plainPaper);
+  await seedExamQuestion(tx, EX.plainQ.a, EX.plainPaper, "truefalse", 1, 2, true);
+  await seedExamQuestion(tx, EX.plainQ.b, EX.plainPaper, "single", 1, 3, 1);
+  // 沒有題目的試卷
+  await seedExamPaper(tx, EX.emptyPaper);
+}
+
+/** 主試卷上的一份作答：對 tf／multi／match，錯 single／order，nokey 沒正解，missing 沒作答；自動分 2+4+5=11。 */
+async function seedExamAnswers(tx, attemptId, { shortAwarded = null } = {}) {
+  await seedExamAnswer(tx, attemptId, EX.q.tf, "truefalse", true);
+  await seedExamAnswer(tx, attemptId, EX.q.single, "single", 0);
+  await seedExamAnswer(tx, attemptId, EX.q.multi, "multiple", [2, 0]);
+  await seedExamAnswer(tx, attemptId, EX.q.match, "matching", { b: 2, a: 1 });
+  await seedExamAnswer(tx, attemptId, EX.q.order, "ordering", [2, 1, 0]);
+  await seedExamAnswer(tx, attemptId, EX.q.nokey, "single", 1);
+  await seedExamAnswer(tx, attemptId, EX.q.short, "shortanswer", "我的簡答", shortAwarded);
+}
+
+/** 以超級使用者建好資料後切成 service_role（跟 nlc-data 一樣）執行，結束一律 rollback。 */
+async function withExam(fn) {
+  let result;
+  let failure;
+  try {
+    await db.transaction(async tx => {
+      await tx.query(`SELECT set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ role: "service_role" })]);
+      await tx.exec(`SET LOCAL session_replication_role = replica`);
+      await seedExamFixture(tx);
+      await tx.exec(`SET LOCAL session_replication_role = DEFAULT`);
+      // 測試中途要再放資料：暫時切回超級使用者、關掉觸發器
+      const seed = async work => {
+        await tx.exec(`RESET ROLE`);
+        await tx.exec(`SET LOCAL session_replication_role = replica`);
+        await work();
+        await tx.exec(`SET LOCAL session_replication_role = DEFAULT`);
+        await tx.exec(`SET LOCAL ROLE service_role`);
+      };
+      await tx.exec(`SET LOCAL ROLE service_role`);
+      try {
+        result = await fn(tx, seed);
+      } catch (error) {
+        failure = error;
+      }
+      await tx.rollback();
+    });
+  } catch (error) {
+    if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+  }
+  if (failure) throw failure;
+  return result;
+}
+
+const attemptRow = async (tx, id) => (await tx.query(
+  `SELECT status, submit_reason, auto_score::float8 AS auto, manual_score::float8 AS manual, total_score::float8 AS total
+   FROM public.exam_attempts WHERE id = $1`, [id]
+)).rows[0];
+
+const answerRows = async (tx, id) => Object.fromEntries((await tx.query(
+  `SELECT question_id, response, auto_correct, awarded_points::float8 AS points FROM public.exam_answers WHERE attempt_id = $1`, [id]
+)).rows.map(row => [row.question_id, { response: row.response, correct: row.auto_correct, points: row.points }]));
+
+describe("測驗計分 _exam_score_attempt（#675 特徵）", () => {
+  const score = (tx, id) => tx.query(`SELECT public._exam_score_attempt($1)`, [id]);
+
+  it("各題型計分；沒正解、沒作答都算 0 分；簡答沒批改前狀態留在 submitted、總分 NULL", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswers(tx, EX.attempt);
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "submitted", auto: 11, manual: null, total: null });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.q.tf]).toMatchObject({ correct: true, points: 2 });
+      expect(rows[EX.q.single]).toMatchObject({ correct: false, points: 0 });
+      expect(rows[EX.q.multi]).toMatchObject({ correct: true, points: 4 });
+      expect(rows[EX.q.match]).toMatchObject({ correct: true, points: 5 });
+      expect(rows[EX.q.order]).toMatchObject({ correct: false, points: 0 });
+      expect(rows[EX.q.nokey]).toMatchObject({ correct: false, points: 0 });
+      // 沒作答的題目不會補列，簡答不被自動計分碰到
+      expect(rows[EX.q.missing]).toBeUndefined();
+      expect(rows[EX.q.short]).toMatchObject({ response: "我的簡答", correct: null, points: null });
+    });
+  });
+
+  it("簡答都批改完 → graded，總分＝自動分＋簡答分", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswers(tx, EX.attempt, { shortAwarded: 7 });
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 11, manual: 7, total: 18 });
+      expect((await answerRows(tx, EX.attempt))[EX.q.short]).toMatchObject({ correct: null, points: 7 });
+    });
+  });
+
+  it("試卷有簡答題但這份作答沒有簡答列 → 視同批改完，簡答分 0", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", true);
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 2, manual: 0, total: 2 });
+    });
+  });
+
+  it("沒有簡答的試卷 → graded、簡答分 0", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.plainPaper, ids.member);
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.b, "single", 0);
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 2, manual: 0, total: 2 });
+    });
+  });
+
+  it("沒有題目的試卷：自動分 0（不是 NULL）", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.emptyPaper, ids.member));
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 0, manual: 0, total: 0 });
+    });
+  });
+
+  it("重作練習：簡答不等批改，直接 graded，manual NULL、總分＝自動分", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { kind: "practice", officialId: EX.attempt });
+        await seedExamAnswers(tx, EX.practice);
+      });
+      await score(tx, EX.practice);
+      expect(await attemptRow(tx, EX.practice)).toMatchObject({ status: "graded", auto: 11, manual: null, total: 11 });
+    });
+  });
+
+  it("作答中或不存在的作答：什麼都不做、不報錯", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswers(tx, EX.attempt);
+      });
+      await score(tx, EX.attempt);
+      await score(tx, examId(999));
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "in_progress", auto: null, total: null });
+      expect((await answerRows(tx, EX.attempt))[EX.q.tf]).toMatchObject({ correct: null, points: null });
+    });
+  });
+
+  it("改正解後重算會覆蓋舊分數；不屬於這份試卷的作答列不受影響", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswers(tx, EX.attempt);
+        // 掛在別份試卷題目上的髒資料
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+      });
+      await score(tx, EX.attempt);
+      await seed(() => tx.query(`UPDATE public.exam_questions SET answer_key = '0'::jsonb WHERE id = $1`, [EX.q.single]));
+      await score(tx, EX.attempt);
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.q.single]).toMatchObject({ correct: true, points: 3 });
+      expect(rows[EX.plainQ.a]).toMatchObject({ correct: null, points: null });
+      expect((await attemptRow(tx, EX.attempt)).auto).toBe(14);
+    });
+  });
+});
+
+describe("測驗交卷 exam_submit_attempt（#675 特徵）", () => {
+  const submit = async (tx, attemptId, answers, reason = "manual", actor = ids.member) => (await tx.query(
+    `SELECT public.exam_submit_attempt($1, $2::jsonb, $3, $4) AS result`,
+    [attemptId, answers === null ? null : JSON.stringify(answers), reason, actor]
+  )).rows[0].result;
+
+  it("送出的答案覆蓋暫存；沒送的保留暫存；JSON null 算有送；每題都補一列；多餘的 key 不理", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false, 9);
+        await seedExamAnswer(tx, EX.attempt, EX.q.single, "single", 2, 9);
+        await seedExamAnswer(tx, EX.attempt, EX.q.multi, "multiple", [1], 9);
+      });
+      const result = await submit(tx, EX.attempt, {
+        [EX.q.tf]: true, [EX.q.multi]: null, [EX.q.short]: "新的簡答", [EX.plainQ.a]: true
+      });
+      expect(result).toEqual({ attemptId: EX.attempt, status: "submitted", attemptKind: "official", autoScore: null, totalScore: null, alreadySubmitted: false });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(Object.keys(rows)).toHaveLength(8);
+      expect(rows[EX.q.tf]).toEqual({ response: true, correct: null, points: null });
+      expect(rows[EX.q.single]).toEqual({ response: 2, correct: null, points: null });
+      expect(rows[EX.q.multi]).toEqual({ response: null, correct: null, points: null });
+      expect(rows[EX.q.short]).toEqual({ response: "新的簡答", correct: null, points: null });
+      expect(rows[EX.q.order]).toEqual({ response: null, correct: null, points: null });
+      expect(rows[EX.plainQ.a]).toBeUndefined();
+      const { rows: [jsonNull] } = await tx.query(
+        `SELECT response IS NULL AS sql_null, jsonb_typeof(response) AS kind FROM public.exam_answers WHERE attempt_id = $1 AND question_id = $2`,
+        [EX.attempt, EX.q.multi]
+      );
+      expect(jsonNull).toEqual({ sql_null: false, kind: "null" });
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "submitted", submit_reason: "manual", auto: null, manual: null, total: null });
+    });
+  });
+
+  it("p_answers 是 NULL 或不是物件：只用暫存，不報錯", async () => {
+    for (const payload of [null, [1, 2], 5]) {
+      await withExam(async (tx, seed) => {
+        await seed(async () => {
+          await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+          await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false);
+        });
+        await submit(tx, EX.attempt, payload);
+        const rows = await answerRows(tx, EX.attempt);
+        expect(rows[EX.q.tf].response).toBe(false);
+        expect(Object.keys(rows)).toHaveLength(8);
+      });
+    }
+  });
+
+  it("送出原因只接受 manual／timeout／auto_close，其他一律 manual", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await submit(tx, EX.attempt, {}, "timeout");
+      expect((await attemptRow(tx, EX.attempt)).submit_reason).toBe("timeout");
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await submit(tx, EX.attempt, {}, "亂填");
+      expect((await attemptRow(tx, EX.attempt)).submit_reason).toBe("manual");
+    });
+  });
+
+  it("重複送出不覆蓋答案；重作練習不能送出；別人的作答查不到", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "submitted" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false);
+      });
+      expect(await submit(tx, EX.attempt, { [EX.q.tf]: true })).toEqual({ attemptId: EX.attempt, status: "submitted", attemptKind: "official", alreadySubmitted: true });
+      expect((await answerRows(tx, EX.attempt))[EX.q.tf].response).toBe(false);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      await expect(submit(tx, EX.practice, {})).rejects.toThrow(/exam_practice_no_submit/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(submit(tx, EX.attempt, {}, "manual", ids.other)).rejects.toThrow(/exam_attempt_not_found/);
+    });
+  });
+
+  it("試作送出就計分；正式作答要等收卷", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'draft' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.rehearsal, EX.plainPaper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      await submit(tx, EX.rehearsal, { [EX.plainQ.a]: true, [EX.plainQ.b]: 1 }, "manual", ids.admin);
+      expect(await attemptRow(tx, EX.rehearsal)).toMatchObject({ status: "graded", auto: 5, manual: 0, total: 5 });
+    });
+  });
+
+  it("已過截止時間才送：先被關卷收走，送出的答案不算", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 minute' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.attempt, EX.plainPaper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+      });
+      const result = await submit(tx, EX.attempt, { [EX.plainQ.b]: 1 });
+      expect(result).toMatchObject({ status: "graded", alreadySubmitted: true });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.plainQ.a]).toEqual({ response: true, correct: true, points: 2 });
+      expect(rows[EX.plainQ.b]).toEqual({ response: null, correct: false, points: 0 });
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", submit_reason: "auto_close", auto: 2, total: 2 });
+    });
+  });
+});
+
+describe("測驗暫存 exam_save_progress（#675 特徵）", () => {
+  const save = async (tx, attemptId, answers, actor = ids.member) => (await tx.query(
+    `SELECT public.exam_save_progress($1, $2::jsonb, $3) AS result`,
+    [attemptId, answers === null ? null : JSON.stringify(answers), actor]
+  )).rows[0].result;
+
+  it("只寫有送的題目；已存的被覆蓋並清掉計分；不屬於本卷的題目不理；JSON null 照存", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false, 9);
+        await seedExamAnswer(tx, EX.attempt, EX.q.single, "single", 2, 9);
+      });
+      const result = await save(tx, EX.attempt, { [EX.q.tf]: true, [EX.q.multi]: null, [EX.q.short]: "暫存", [EX.plainQ.a]: true, [examId(999)]: 1 });
+      expect(result).toMatchObject({ attemptId: EX.attempt, saved: true, attemptKind: "official", practiceCloseAt: null });
+      expect(result.secondsRemaining).toBeGreaterThan(0);
+      const rows = await answerRows(tx, EX.attempt);
+      expect(Object.keys(rows).sort()).toEqual([EX.q.tf, EX.q.single, EX.q.multi, EX.q.short].sort());
+      expect(rows[EX.q.tf]).toEqual({ response: true, correct: null, points: null });
+      expect(rows[EX.q.single]).toEqual({ response: 2, correct: null, points: 9 });
+      expect(rows[EX.q.multi].response).toBeNull();
+      const { rows: [row] } = await tx.query(
+        `SELECT section, jsonb_typeof(response) AS kind FROM public.exam_answers WHERE attempt_id = $1 AND question_id = $2`,
+        [EX.attempt, EX.q.multi]
+      );
+      expect(row).toEqual({ section: "multiple", kind: "null" });
+    });
+  });
+
+  it("大寫 UUID 當 key 也對得到題目；同一題大小寫都送時，以小寫那筆為準（jsonb 排序較後）", async () => {
+    const upper = id => id.replace(/e/g, "E");
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await save(tx, EX.attempt, { [upper(EX.q.tf)]: "大寫", [upper(EX.q.single)]: "大寫", [EX.q.single]: "小寫" });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.q.tf].response).toBe("大寫");
+      expect(rows[EX.q.single].response).toBe("小寫");
+    });
+  });
+
+  it("key 不是 UUID 就整筆失敗，即使試卷沒有題目；不是物件也失敗；NULL 視同空物件", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, { "not-a-uuid": 1 })).rejects.toThrow(/invalid input syntax for type uuid/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.emptyPaper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, { "not-a-uuid": 1 })).rejects.toThrow(/invalid input syntax for type uuid/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, [1, 2])).rejects.toThrow(/non-object/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      expect(await save(tx, EX.attempt, null)).toMatchObject({ saved: true });
+      expect(await answerRows(tx, EX.attempt)).toEqual({});
+    });
+  });
+
+  it("鎖定情況：已交卷、超過期限 120 秒、別人的作答、複習期限已過", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "submitted" }));
+      await expect(save(tx, EX.attempt, {})).rejects.toThrow(/exam_attempt_locked/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress", deadline: "now() - interval '121 seconds'" }));
+      await expect(save(tx, EX.attempt, {})).rejects.toThrow(/exam_time_up/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress", deadline: "now() - interval '119 seconds'" }));
+      expect(await save(tx, EX.attempt, {})).toMatchObject({ saved: true, secondsRemaining: 0 });
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, {}, ids.other)).rejects.toThrow(/exam_attempt_not_found/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 hour' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      const result = await save(tx, EX.practice, { [EX.q.tf]: true });
+      expect(result).toMatchObject({ saved: true, attemptKind: "practice", secondsRemaining: null });
+      expect(result.practiceCloseAt).toBeTruthy();
+      expect((await answerRows(tx, EX.practice))[EX.q.tf].response).toBe(true);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '2 days' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      // 過期的複習先被 sweep 收走 → 鎖定
+      await expect(save(tx, EX.practice, {})).rejects.toThrow(/exam_attempt_locked/);
+    });
+  });
+});
+
+describe("測驗關卷（#675 特徵）", () => {
+  const sweep = async tx => (await tx.query(`SELECT public._exam_close_expired_papers() AS n`)).rows[0].n;
+  const paperRow = async (tx, id) => (await tx.query(`SELECT status, close_reason, closed_at IS NOT NULL AS has_closed_at FROM public.exam_papers WHERE id = $1`, [id])).rows[0];
+
+  it("過截止時間：卷變 closed、正式作答補滿答案並計分、重作練習不動、試作刪除", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", true);
+        await seedExamAttempt(tx, EX.otherAttempt, EX.paper, ids.other, { status: "submitted" });
+        await seedExamAnswer(tx, EX.otherAttempt, EX.q.tf, "truefalse", true);
+        await seedExamAnswer(tx, EX.otherAttempt, EX.q.short, "shortanswer", "簡答", 4);
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.other, { status: "in_progress", kind: "practice", officialId: EX.otherAttempt });
+        await seedExamAttempt(tx, EX.rehearsal, EX.paper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      expect(await sweep(tx)).toBe(1);
+      expect(await paperRow(tx, EX.paper)).toEqual({ status: "closed", close_reason: "scheduled", has_closed_at: true });
+      // 作答中被收卷：補滿 8 題，簡答沒批改所以停在 submitted
+      expect(Object.keys(await answerRows(tx, EX.attempt))).toHaveLength(8);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "submitted", submit_reason: "auto_close", auto: 2, manual: null, total: null });
+      // 收卷前已交：簡答批改過，自動 graded；沒有被補列
+      expect(Object.keys(await answerRows(tx, EX.otherAttempt))).toHaveLength(2);
+      expect(await attemptRow(tx, EX.otherAttempt)).toMatchObject({ status: "graded", auto: 2, manual: 4, total: 6 });
+      expect((await attemptRow(tx, EX.practice)).status).toBe("in_progress");
+      expect(await attemptRow(tx, EX.rehearsal)).toBeUndefined();
+      // 再跑一次沒有事情做
+      expect(await sweep(tx)).toBe(0);
+    });
+  });
+
+  it("重作練習過了截止後一天自動交卷", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 day' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      await sweep(tx);
+      expect(await attemptRow(tx, EX.practice)).toMatchObject({ status: "submitted", submit_reason: "auto_close" });
+    });
+  });
+
+  it("還沒到截止時間：卷不動；開放前的試作留著，開放後才刪", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET open_at = now() + interval '1 hour', close_at = now() + interval '2 hours' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.rehearsal, EX.plainPaper, ids.admin, { status: "in_progress", isTest: true });
+        await seedExamAttempt(tx, EX.otherAttempt, EX.paper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      expect(await sweep(tx)).toBe(0);
+      expect((await paperRow(tx, EX.plainPaper)).status).toBe("published");
+      expect((await attemptRow(tx, EX.rehearsal)).status).toBe("in_progress");
+      expect(await attemptRow(tx, EX.otherAttempt)).toBeUndefined();
+    });
+  });
+
+  it("exam_recompute_scores 重算正式與重作練習；改正解後分數跟著變", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 hour' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.attempt, EX.plainPaper, ids.member, { status: "graded" });
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.b, "single", 0);
+        await seedExamAttempt(tx, EX.practice, EX.plainPaper, ids.member, { status: "submitted", kind: "practice", officialId: EX.attempt });
+        await seedExamAnswer(tx, EX.practice, EX.plainQ.b, "single", 0);
+        await tx.query(`UPDATE public.exam_questions SET answer_key = '0'::jsonb WHERE id = $1`, [EX.plainQ.b]);
+      });
+      const { rows: [{ result }] } = await tx.query(`SELECT public.exam_recompute_scores($1, $2) AS result`, [EX.plainPaper, ids.admin]);
+      expect(result).toEqual({ paperId: EX.plainPaper, recomputed: 1, practiceRecomputed: 1 });
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 5, total: 5 });
+      expect(await attemptRow(tx, EX.practice)).toMatchObject({ status: "graded", auto: 3, total: 3 });
+    });
+  });
+});
+
+describe("首頁測驗卡片（#675：不再執行關卷寫入，到時間仍立刻看到已截止）", () => {
+  const homeExams = async (tx, actor = ids.member) =>
+    (await tx.query(`SELECT public.exam_home_exams($1) AS result`, [actor])).rows[0].result;
+  const homeBanner = async (tx, actor = ids.member) =>
+    (await tx.query(`SELECT public.exam_home_banner($1) AS result`, [actor])).rows[0].result;
+  const paperStatus = async (tx, id) =>
+    (await tx.query(`SELECT status FROM public.exam_papers WHERE id = $1`, [id])).rows[0].status;
+  const onlyPaper = (tx, id) => tx.query(`DELETE FROM public.exam_papers WHERE id <> $1`, [id]);
+  const withoutClock = ({ serverNow: _serverNow, ...card }) => card;
+
+  it("作答期間：可進入、作答中都照實回報", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => onlyPaper(tx, EX.paper));
+      expect((await homeExams(tx))[0]).toMatchObject({
+        paperId: EX.paper, status: "published", stage: "open", inWindow: true, canEnter: true,
+        myAttemptStatus: null, canReviewOfficial: false, canPractice: false, resultReady: false
+      });
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      expect((await homeBanner(tx))).toMatchObject({
+        paperId: EX.paper, status: "published", stage: "open", canEnter: false,
+        myAttemptStatus: "in_progress", canReviewOfficial: false, canPractice: false
+      });
+    });
+  });
+
+  it("已排程未開放：顯示 scheduled，不能進入", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET open_at = now() + interval '1 hour', close_at = now() + interval '2 hours' WHERE id = $1`, [EX.paper]);
+      });
+      expect((await homeExams(tx))[0]).toMatchObject({ status: "published", stage: "scheduled", inWindow: false, canEnter: false });
+    });
+  });
+
+  it("過了截止時間、排程還沒跑：卡片跟關卷後一模一樣", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+      });
+      const before = await homeExams(tx);
+      expect(before).toHaveLength(1);
+      expect(before[0]).toMatchObject({
+        status: "closed", stage: "grading", inWindow: false, canEnter: false,
+        myAttemptStatus: "submitted", canReviewOfficial: true, canPractice: true, resultReady: false, myTotalScore: null
+      });
+      const banner = await homeBanner(tx);
+      await tx.query(`SELECT public._exam_close_expired_papers()`);
+      expect(await paperStatus(tx, EX.paper)).toBe("closed");
+      const after = await homeExams(tx);
+      expect(after.map(withoutClock)).toEqual(before.map(withoutClock));
+      expect(withoutClock(await homeBanner(tx))).toEqual(withoutClock(banner));
+    });
+  });
+
+  it("過了截止時間又沒作答：首頁不顯示這份卷", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+      });
+      expect(await homeExams(tx)).toEqual([]);
+      expect(await homeBanner(tx)).toBeNull();
+    });
+  });
+
+  it("首頁兩支 RPC 不寫入：卷、作答、試作都原封不動", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAttempt(tx, EX.rehearsal, EX.paper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      await homeExams(tx);
+      await homeBanner(tx);
+      expect(await paperStatus(tx, EX.paper)).toBe("published");
+      expect((await attemptRow(tx, EX.attempt)).status).toBe("in_progress");
+      expect((await attemptRow(tx, EX.rehearsal)).status).toBe("in_progress");
+      expect(await answerRows(tx, EX.attempt)).toEqual({});
+    });
+  });
+
+  it("重作練習到期還沒被收：卡片不再顯示作答中", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 day' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      const { rows: [{ result }] } = await tx.query(`SELECT public._exam_member_paper_summary($1, $2, FALSE) AS result`, [EX.paper, ids.member]);
+      expect(result).toMatchObject({ practiceAttemptStatus: "submitted", canPractice: false, practiceReviewReady: true });
+    });
+  });
+
+  it("功能關閉時回空", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => tx.query(`UPDATE public.app_feature_settings SET enabled = FALSE WHERE key = 'speed_reading_exam'`));
+      expect(await homeExams(tx)).toEqual([]);
+      expect(await homeBanner(tx)).toBeNull();
+    });
+  });
+
+  it("其他觸發點都還在：排程，以及進入作答／查成績／我的測驗／後台試卷／統計／交卷", async () => {
+    const { rows } = await db.query(`SELECT schedule, command FROM cron.job WHERE jobname = 'exam-auto-close'`);
+    expect(rows).toEqual([{ schedule: "* * * * *", command: "SELECT public._exam_close_expired_papers();" }]);
+    const triggers = [
+      tx => tx.query(`SELECT public.exam_get_for_attempt($1, $2)`, [EX.paper, ids.member]),
+      tx => tx.query(`SELECT public.exam_get_my_result($1, $2)`, [EX.paper, ids.member]),
+      tx => tx.query(`SELECT public.exam_my_papers($1)`, [ids.member]),
+      tx => tx.query(`SELECT public.exam_get_paper_admin($1, $2)`, [EX.paper, ids.admin]),
+      tx => tx.query(`SELECT public.exam_get_stats($1, $2)`, [EX.paper, ids.admin]),
+      tx => tx.query(`SELECT public.exam_finalize_expired($1, $2)`, [EX.paper, ids.admin])
+    ];
+    for (const trigger of triggers) {
+      await withExam(async (tx, seed) => {
+        await seed(() => tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]));
+        await trigger(tx);
+        expect(await paperStatus(tx, EX.paper)).toBe("closed");
+      });
+    }
+  });
+});
+
+describe("測驗統計 exam_get_stats（#675 特徵）", () => {
+  const statId = n => `f${String(n).padStart(7, "0")}-0000-4000-8000-000000000000`;
+  const S = {
+    paper: statId(1),
+    q: statId(2),
+    teamOld: statId(3), team3: statId(4), team6: statId(5),
+    leader: statId(9),
+    user: n => statId(100 + n),
+    attempt: n => statId(200 + n),
+    plan: n => statId(300 + n)
+  };
+  // 1,2,6,10-14 讀完一遍；3 沒讀完；4 只有個人計畫；5 沒計畫；7 交卷未批改；8 作答中；9 試作不算
+  const USERS = [
+    [1, "大區甲", "牧區一", "小組一", "graded", 90], [2, "大區甲", "牧區一", "小組一", "graded", 80],
+    [3, "大區甲", "牧區一", "小組二", "graded", 70], [4, "大區乙", "牧區二", "小組三", "graded", 60],
+    [5, "大區乙", "牧區二", "小組三", "graded", 50], [6, "大區乙", "牧區二", "小組四", "graded", 40],
+    [7, "大區甲", "牧區一", "小組一", "submitted", null], [8, "大區乙", "牧區二", "小組三", "in_progress", null],
+    [9, "大區甲", "牧區一", "小組一", "graded", 100], [10, "大區甲", "牧區一", "小組一", "graded", 30],
+    [11, "大區甲", "", "", "graded", 20],
+    // 讓牧區一、小組一在開篩選時母體也滿 5 人，prZone／prGroup 才算得出來
+    [12, "大區甲", "牧區一", "小組一", "graded", 85], [13, "大區甲", "牧區一", "小組一", "graded", 75],
+    [14, "大區甲", "牧區一", "小組一", "graded", 65]
+  ];
+
+  async function seedStats(tx) {
+    const role = async code => (await tx.query(`SELECT id FROM public.role_definitions WHERE code = $1`, [code])).rows[0].id;
+    const memberRole = await role("member");
+    await seedExamPaper(tx, S.paper, { linkedPlan: ids.plan, closeAt: "now() - interval '1 hour'", openAt: "now() - interval '2 hours'", status: "closed" });
+    await seedExamQuestion(tx, S.q, S.paper, "single", 1, 10, 1);
+    for (const [n, region, zone, group, status, total] of USERS) {
+      await tx.query(
+        `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, is_active) VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+        [S.user(n), `統計會友 ${String(n).padStart(2, "0")}`, memberRole, region, zone, group]
+      );
+      await seedExamAttempt(tx, S.attempt(n), S.paper, S.user(n), { status, total, isTest: n === 9 });
+      if (status !== "in_progress") await seedExamAnswer(tx, S.attempt(n), S.q, "single", n % 2);
+    }
+    await tx.query(
+      `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, managed_zones, is_active) VALUES ($1, '統計牧區長', $2, '大區甲', '牧區一', '小組一', '牧區一', TRUE)`,
+      [S.leader, await role("zone_leader")]
+    );
+    const plan = (n, round, personal = false, globalPlan = ids.plan) => tx.query(
+      `INSERT INTO public.reading_plans (id, user_id, global_plan_id, name, start_date, end_date, target_books, current_round, is_personal)
+       VALUES ($1, $2, $3, '統計計畫', '2026-09-01', '2026-12-31', ARRAY['GEN'], $4, $5)`,
+      [S.plan(n), S.user(n), globalPlan, round, personal]
+    );
+    await plan(1, 2);
+    await plan(2, 1);
+    await plan(3, 1);
+    await plan(4, 2, true, null);
+    await plan(6, 3);
+    await plan(10, 2);
+    await plan(11, 2);
+    await plan(12, 2);
+    await plan(13, 2);
+    await plan(14, 2);
+    const logs = (n, chapters) => Promise.all(chapters.map(chapter => tx.query(
+      `INSERT INTO public.reading_logs (user_id, plan_id, book, chapter, round) VALUES ($1, $2, 'GEN', $3, 1)`,
+      [S.user(n), S.plan(n), chapter]
+    )));
+    await logs(2, [1, 2, 3]);
+    await logs(3, [1, 2]);
+    await logs(4, [1, 2, 3]); // 個人計畫的紀錄不算
+    await tx.query(
+      `INSERT INTO public.reading_teams (id, global_plan_id, division, name, captain_id, invite_code, carried_from_team_id, created_at) VALUES
+         ($1, $4, 3, '舊三人隊', $5, 'STATOLD001', NULL, now() - interval '30 days'),
+         ($2, $4, 3, '三人隊', $5, 'STATNEW001', $1, now() - interval '1 day'),
+         ($3, $4, 6, '六人隊', $6, 'STATSIX001', NULL, now() - interval '1 day')`,
+      [S.teamOld, S.team3, S.team6, ids.plan, S.user(1), S.user(4)]
+    );
+    const members = (team, division, users) => Promise.all(users.map(n => tx.query(
+      `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role) VALUES ($1, $2, $3, $4, 'member')`,
+      [team, ids.plan, division, S.user(n)]
+    )));
+    await members(S.team3, 3, [1, 2, 3]);
+    await members(S.team6, 6, [4, 5, 6]);
+  }
+
+  const stats = async (tx, actor, firstRound = false, book = null, chapters = null) => (await tx.query(
+    `SELECT public.exam_get_stats($1, $2, $3, $4, $5) AS result`, [S.paper, actor, firstRound, book, chapters]
+  )).rows[0].result;
+
+  /** 去掉隨每次執行變動的 id、把名單壓成一行，讓快照讀得懂。 */
+  const view = r => ({
+    meta: [r.scope, r.prVisible, r.resultsPublished, r.readingBook, r.requireFirstRound].join("|"),
+    overall: r.overall,
+    byRegion: r.byRegion,
+    byZone: r.byZone,
+    byGroup: r.byGroup,
+    byTeamSize: r.byTeamSize,
+    teamRanking: r.teamRanking.map(({ teamId: _teamId, ...team }) => team),
+    byQuestion: r.byQuestion,
+    roster: r.roster.map(row => [row.name.slice(-2), row.status, row.totalScore, row.timeSeconds, row.teamLabel, row.firstRoundDone, row.prChurch, row.prZone, row.prGroup].join("|"))
+  });
+
+  // 快照是改寫前的函式產生的（#675），之後不該因為效能改寫而變動
+  const expectStatsGolden = (result, name) =>
+    expect(`${JSON.stringify(view(result), null, 1)}\n`).toMatchFileSnapshot(`./fixtures/exam-stats-${name}.json`);
+
+  it("管理員、開「讀完一遍」篩選：母體、PR、缺口都只算讀完的人", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expectStatsGolden(await stats(tx, ids.admin, true, " GEN ", 3), "admin-first-round");
+    });
+  });
+
+  it("管理員、不開篩選但給書卷：統計全算，名單仍標出誰讀完", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expectStatsGolden(await stats(tx, ids.admin, false, "GEN", 3), "admin-book-only");
+    });
+  });
+
+  it("管理員、沒給書卷：firstRoundDone 是 NULL，notReadCount 是 0", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      const result = await stats(tx, ids.admin);
+      expect(result.overall.notReadCount).toBe(0);
+      expect(result.roster.every(row => row.firstRoundDone === null)).toBe(true);
+      // 開關開著但書卷空白：等於沒開
+      const blank = await stats(tx, ids.admin, true, "   ", 3);
+      expect(blank.requireFirstRound).toBe(false);
+      expect(blank.readingBook).toBeNull();
+      expect(view(blank).roster).toEqual(view(result).roster);
+    });
+  });
+
+  it("章數沒給或是 0：只有 current_round>=2 才算讀完", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      for (const chapters of [null, 0]) {
+        const flags = Object.fromEntries((await stats(tx, ids.admin, false, "GEN", chapters)).roster.map(row => [row.name.slice(-2), row.firstRoundDone]));
+        expect(flags).toMatchObject({ "01": true, "02": false, "03": false, "04": false, "05": false, "06": true, "10": true, "11": true });
+      }
+    });
+  });
+
+  it("牧區長只看自己牧區；成績未公布時看不到 PR", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expectStatsGolden(await stats(tx, S.leader, true, "GEN", 3), "zone-leader-first-round");
+    });
+  });
+
+  it("會友不能看", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expect(stats(tx, ids.member)).rejects.toThrow(/exam_admin_required/);
+    });
+  });
+});
