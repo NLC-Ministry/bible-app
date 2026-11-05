@@ -9,6 +9,7 @@ import { refreshTeamCarryHomeCard } from "./team-carry.mjs";
 import { getRoundProgressDisplay } from "../data/round-progress-display.mjs";
 import { formatPlanEndDate, getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
 import { isPlanCheckInClosed } from "../data/plan-checkin-window.mjs";
+import { createDashboardRefreshGate } from "./dashboard-refresh-gate.mjs";
 import {
   accountSwitchHintMarkup,
   bindAccountSwitchHint,
@@ -19,6 +20,20 @@ import {
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
 let dashboardSecondaryWorkTimer = null;
+
+// 打卡、背景資料回來都會要求重整首頁；每次重整要發一輪讀取，打卡又會清掉共用結果（#672）。
+// 不在首頁就只更新本機進度（其他畫面會讀），切回首頁時 switchTab 本來就會重畫。
+const dashboardRefreshGate = createDashboardRefreshGate({
+  isVisible: () => appRouter.currentTab === "dashboard-view",
+  refresh: () => updateDashboardView(),
+  whenHidden: () => {
+    try {
+      if (typeof calculatePlanProgress === "function") calculatePlanProgress();
+    } catch (e) {
+      console.warn("[Home] calculatePlanProgress error:", e);
+    }
+  }
+});
 
 function applyPastoralSharingWallVisibility(enabled) {
   pastoralSharingWallEnabled = enabled === true;
@@ -61,10 +76,8 @@ function scheduleDashboardSecondaryWork() {
   scheduleAfterPaint(() => {
     dashboardSecondaryWorkTimer = window.setTimeout(() => {
       dashboardSecondaryWorkTimer = null;
-      calculateAndRenderPersonalRankings();
       loadTodayDevotional();
       refreshPastoralSharingWallAvailability();
-      renderPilgrimageTrail();
       if (typeof hydrateIcons === "function") {
         hydrateIcons(document.getElementById("dashboard-view"));
       }
@@ -647,53 +660,6 @@ async function renderPilgrimageTrail(customMembers = null, customPlan = null, ta
   if (legendEl) {
     legendEl.innerHTML = `
       <span class="px-2 py-0.5 rounded-full flex items-center gap-1" style="display:inline-flex;align-items:center;white-space:nowrap;background: color-mix(in srgb, var(--text-primary) 5%, var(--bg-card));"><span style="display:inline-block;width:6px;height:6px;background:${pal.myStroke};border-radius:50%;"></span>隊友軌跡</span>`;
-  }
-}
-
-async function calculateAndRenderPersonalRankings() {
-  const rankGroupEl = document.getElementById("rank-group");
-  const rankZoneEl = document.getElementById("rank-zone");
-  const rankRegionEl = document.getElementById("rank-region");
-  const rankChurchEl = document.getElementById("rank-church");
-
-  if (!rankGroupEl || !rankZoneEl || !rankRegionEl || !rankChurchEl) return;
-
-  const hasPlan = state.activePlans && state.activePlans.length > 0;
-  if (!hasPlan) {
-    rankGroupEl.textContent = "未加入計畫";
-    rankZoneEl.textContent = "未加入計畫";
-    rankRegionEl.textContent = "未加入計畫";
-    rankChurchEl.textContent = "未加入計畫";
-    return;
-  }
-
-  try {
-    const rankSkeleton = typeof ComponentSkeletonLoader !== "undefined"
-      ? ComponentSkeletonLoader.getHtml("inline", { width: "5.5rem", height: "1.4rem" })
-      : "—";
-    if (firstPaint(rankGroupEl)) rankGroupEl.innerHTML = rankSkeleton;
-    if (firstPaint(rankZoneEl)) rankZoneEl.innerHTML = rankSkeleton;
-    if (firstPaint(rankRegionEl)) rankRegionEl.innerHTML = rankSkeleton;
-    if (firstPaint(rankChurchEl)) rankChurchEl.innerHTML = rankSkeleton;
-
-    const rankings = await db.getUserRankings();
-    if (rankings) {
-      rankGroupEl.textContent = rankings.groupRank > 0 ? `第 ${rankings.groupRank} 名 / 共 ${rankings.groupTotal} 人` : "尚無資料";
-      rankZoneEl.textContent = rankings.zoneRank > 0 ? `第 ${rankings.zoneRank} 名 / 共 ${rankings.zoneTotal} 人` : "尚無資料";
-      rankRegionEl.textContent = rankings.regionRank > 0 ? `第 ${rankings.regionRank} 名 / 共 ${rankings.regionTotal} 人` : "尚無資料";
-      rankChurchEl.textContent = rankings.churchRank > 0 ? `第 ${rankings.churchRank} 名 / 共 ${rankings.churchTotal} 人` : "尚無資料";
-    } else {
-      rankGroupEl.textContent = "無資料";
-      rankZoneEl.textContent = "無資料";
-      rankRegionEl.textContent = "無資料";
-      rankChurchEl.textContent = "無資料";
-    }
-  } catch (err) {
-    console.error("Error rendering personal rankings:", err);
-    rankGroupEl.textContent = "載入失敗";
-    rankZoneEl.textContent = "載入失敗";
-    rankRegionEl.textContent = "載入失敗";
-    rankChurchEl.textContent = "載入失敗";
   }
 }
 
@@ -1863,37 +1829,42 @@ async function fetchPastoralVerseWall() {
     try {
       const user = await db.getCurrentDbUser();
       const pastoralZone = (state.currentUser && state.currentUser.pastoral_zone) || "";
-      // 沒有 pastoralZone 時（帳號還沒設牧區）不能只查一頁——那等於查全教會，
-      // 沒分頁的話超過 PostgREST 預設 1000 列上限就會悄悄漏掉後面的人。
-      const { data: profiles, error: pError } = await db.fetchAllRows(() => {
-        let q = state.supabase.from("profiles").select("id, name, small_group");
-        if (pastoralZone) q = q.eq("pastoral_zone", pastoralZone);
-        return q;
-      });
-
-      if (pError) throw pError;
-      if (!profiles || profiles.length === 0) {
-        container.innerHTML = `<div class="text-xs text-center py-6" style="color: var(--text-muted);">尚無同工在該牧區</div>`;
-        return;
+      const onlyMine = Boolean(isHistory && historyFilter === "mine" && user);
+      // 心得表沒有牧區欄位，要篩牧區只能先拿到牧區名單。沒有牧區、或只看自己的心得不用篩，
+      // 範圍由伺服器決定，等心得回來再補查作者就好（#672）。
+      let zoneProfiles = null;
+      if (pastoralZone && !onlyMine) {
+        const { data, error: pError } = await db.fetchAllRows(() => state.supabase
+          .from("profiles")
+          .select("id, name, small_group")
+          .eq("pastoral_zone", pastoralZone));
+        if (pError) throw pError;
+        if (!data || data.length === 0) {
+          container.innerHTML = `<div class="text-xs text-center py-6" style="color: var(--text-muted);">尚無同工在該牧區</div>`;
+          return;
+        }
+        zoneProfiles = data;
       }
 
-      const userIds = profiles.map(p => p.id);
+      const userIds = zoneProfiles ? zoneProfiles.map(p => p.id) : null;
 
       let notesQuery = state.supabase
         .from("devotional_notes")
         .select("id, user_id, content, created_at, note_date");
 
       if (isHistory) {
-        if (historyFilter === "mine" && user) {
+        if (onlyMine) {
           notesQuery = notesQuery.eq("user_id", user.id);
-        } else {
+        } else if (userIds) {
           notesQuery = notesQuery.in("user_id", userIds);
         }
         notesQuery = notesQuery.order("created_at", { ascending: false }).limit(50);
       } else {
         // 跟上面歷史分頁同樣加 limit(50)：這是一面牆的展示用途，不是統計數字，
         // 沒有必要（也不該）把全教會今天貼的心得全部抓下來。
-        notesQuery = notesQuery.eq("note_date", todayStr).in("user_id", userIds).order("created_at", { ascending: false }).limit(50);
+        notesQuery = notesQuery.eq("note_date", todayStr);
+        if (userIds) notesQuery = notesQuery.in("user_id", userIds);
+        notesQuery = notesQuery.order("created_at", { ascending: false }).limit(50);
       }
 
       const { data: notes, error: nError } = await notesQuery;
@@ -1912,16 +1883,29 @@ async function fetchPastoralVerseWall() {
       const noteIds = activeNotes.map(n => n.id);
       // 這兩個沒有天然上限——熱門心得的讚/留言數不會被 noteIds 的數量限制住，
       // 一樣要分頁抓，不然愛心數字會算錯、留言串底部（最新的留言）會憑空消失。
-      const { data: likes } = await db.fetchAllRows(() => state.supabase
-        .from("devotional_likes")
-        .select("note_id, user_id")
-        .in("note_id", noteIds));
+      const [{ data: likes }, { data: comments }] = await Promise.all([
+        db.fetchAllRows(() => state.supabase
+          .from("devotional_likes")
+          .select("note_id, user_id")
+          .in("note_id", noteIds)),
+        db.fetchAllRows(() => state.supabase
+          .from("devotional_comments")
+          .select("id, note_id, user_id, content, created_at")
+          .in("note_id", noteIds)
+          .order("created_at", { ascending: true }))
+      ]);
 
-      const { data: comments } = await db.fetchAllRows(() => state.supabase
-        .from("devotional_comments")
-        .select("id, note_id, user_id, content, created_at")
-        .in("note_id", noteIds)
-        .order("created_at", { ascending: true }));
+      let profiles = zoneProfiles;
+      if (!profiles) {
+        // 卡片只顯示心得作者和留言者的名字，讚只算數量
+        const authorIds = [...new Set([...activeNotes, ...(comments || [])].map(row => row.user_id).filter(Boolean))];
+        const { data, error: pError } = await db.fetchAllRows(() => state.supabase
+          .from("profiles")
+          .select("id, name, small_group")
+          .in("id", authorIds));
+        if (pError) throw pError;
+        profiles = data || [];
+      }
 
       const profileMap = {};
       profiles.forEach(p => {
@@ -2590,14 +2574,13 @@ export function init() {
   window.addEventListener("app:dataRefresh", (e) => {
     const scope = e.detail && e.detail.scope;
     if (scope === "plan" || scope === "all") {
-      if (typeof updateDashboardView === "function") {
-        updateDashboardView();
-      }
+      dashboardRefreshGate.request();
     }
   });
 }
 
-window.updateDashboardView = updateDashboardView;
+// 其他分頁打卡時呼叫的是這個全域版本；切回首頁時 switchTab 直接呼叫模組匯出的版本，一定會重畫。
+window.updateDashboardView = () => dashboardRefreshGate.request();
 window.fetchPastoralVerseWall = fetchPastoralVerseWall;
 window.initDevotionalControls = init;
 window.changeVerseCardBackground = changeVerseCardBackground;

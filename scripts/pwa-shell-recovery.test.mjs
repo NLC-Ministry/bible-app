@@ -13,11 +13,6 @@ describe("PWA shell recovery", () => {
     expect(auth).not.toMatch(/filter\(key => key\.startsWith\("church-bible-"\)\)/);
   });
 
-  it("checks the Service Worker when the user refreshes app data", () => {
-    expect(app).toContain('navigator.serviceWorker.getRegistration("/")');
-    expect(app).toContain("await registration?.update()");
-  });
-
   it("uses one complete navigation fallback and build-injected shell assets", () => {
     expect(sw).toContain('const VERSION = "__BUILD_VERSION__"');
     expect(sw).toContain('const BUILD_JS_PATH = "__BUILD_JS_PATH__"');

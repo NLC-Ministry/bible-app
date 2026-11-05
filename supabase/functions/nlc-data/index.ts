@@ -553,7 +553,7 @@ const RPC_FUNCTIONS = new Set([
   ADMIN_USER_DIRECTORY_RPC,
   ...ISSUE_RPC_FUNCTIONS
 ]);
-// 可以放進 action:"batch" 的 RPC（#631）：只收首頁會用到、只讀不寫的。要加新的先確認
+// 可以放進 action:"batch" 的 RPC（#631）：只收同一瞬間會一起發、只讀不寫的。要加新的先確認
 // 函式本身沒有 INSERT/UPDATE/DELETE，且不在管理／稽核清單裡；前端 js/data/nlc-read-coalescer.mjs
 // 的 BATCHABLE_RPC_FUNCTIONS 要同步（scripts/nlc-read-coalescer.test.mjs 會比對）。
 const BATCH_RPC_FUNCTIONS = new Set([
@@ -568,7 +568,12 @@ const BATCH_RPC_FUNCTIONS = new Set([
   "issue_thread_unread_summary",
   "get_commentary_review_notifications",
   // 首頁的帶隊狀態（#678），跟其他首頁讀取併成同一個請求
-  "get_reading_team_carry_status"
+  "get_reading_team_carry_status",
+  // 排行分頁一次發三支，團隊計畫各查一次自己的隊伍（#672）
+  "get_reading_team_leaderboards",
+  "get_personal_plan_ranking_summary",
+  "get_pastoral_zone_leaderboard",
+  "get_my_reading_team"
 ]);
 
 function jsonResponse(body: unknown, status = 200) {

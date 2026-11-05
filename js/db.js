@@ -505,7 +505,7 @@ const db = {
     if (!identity) return false;
 
     if (markAsOffline) state.offlineMode = true;
-    state.supabase = this.createNlcDataClient();
+    this.useNlcDataClient(identity.profile.id);
     this.applyNlcProfile(identity.profile, identity.lockedFields || []);
     if (markAsOffline) {
       document.documentElement.dataset.appConnection = "offline-reader";
@@ -1104,6 +1104,24 @@ const db = {
     };
   },
 
+  // 同一個人一直用同一個 client（#672）：讀取合併器和 3 秒內共用的結果都在 client 裡，
+  // 每次重建就等於沒有合併。只有確定是同一個身分（Logto sub＋profile id 都一樣）、
+  // 而且目前用的就是這個 client 才沿用；換人、認不出身分、state.supabase 被換掉都建新的，
+  // 共用結果不可能跨帳號。登出一定整頁重載，這裡不用處理。
+  _heldNlcClient: null,
+  useNlcDataClient(profileId) {
+    const subject = typeof auth !== "undefined" && typeof auth.getLogtoSubject === "function"
+      ? auth.getLogtoSubject()
+      : null;
+    const owner = subject && profileId ? `${subject}|${profileId}` : null;
+    const held = this._heldNlcClient;
+    if (owner && held && held.owner === owner && state.supabase === held.client) return held.client;
+    const client = this.createNlcDataClient();
+    this._heldNlcClient = owner ? { owner, client } : null;
+    state.supabase = client;
+    return client;
+  },
+
   // Collapse `Promise.all([ builder1, builder2, ... ])` of read-only
   // `state.supabase.from(t).select(...)` calls into ONE request when the NLC
   // data-layer shim is active (one Logto verification + one HTTP round trip on
@@ -1171,7 +1189,7 @@ const db = {
       "";
     // Same reasoning as `name` above: a partial/incomplete sync response
     // (more likely now that resyncs happen automatically and more often —
-    // see refreshCurrentAppView / retryPlanEligibilityQuietly) must never
+    // see retryPlanEligibilityQuietly) must never
     // silently blank out org placement the user already had. Only replace
     // it when the fresh payload actually supplies a value.
     state.currentUser.great_region = profile.great_region || state.currentUser.great_region || "";
@@ -1228,10 +1246,11 @@ const db = {
     const cachedExpiresAt = Number(localStorage.getItem("nlc_edge_session_expires_at") || "0");
     const cachedProfile = localStorage.getItem("nlc_supabase_profile");
     if (!force && cachedExpiresAt > Date.now() + 60000) {
-      state.supabase = this.createNlcDataClient();
+      const profile = cachedProfile ? JSON.parse(cachedProfile) : null;
+      this.useNlcDataClient(profile?.id || state.currentProfileId);
       const cachedLockedFields = JSON.parse(localStorage.getItem("nlc_profile_locked_fields") || "[]");
-      if (cachedProfile) this.applyNlcProfile(JSON.parse(cachedProfile), cachedLockedFields);
-      return { edge_session: true, profile: cachedProfile ? JSON.parse(cachedProfile) : null, locked_fields: cachedLockedFields };
+      if (profile) this.applyNlcProfile(profile, cachedLockedFields);
+      return { edge_session: true, profile, locked_fields: cachedLockedFields };
     }
 
     // #398: one nlc-session round trip at a time. A boot with an expired
@@ -1324,7 +1343,9 @@ const db = {
     }
     localStorage.setItem("nlc_profile_locked_fields", JSON.stringify(payload.locked_fields || []));
 
-    state.supabase = this.createNlcDataClient();
+    this.useNlcDataClient(payload.profile?.id || state.currentProfileId);
+    // 剛跟伺服器確認過身分，角色／牧區可能變了：之後的讀取重新抓
+    state.supabase.invalidateReads?.();
     state.offlineMode = false;
     document.documentElement.dataset.appConnection = "online";
     // tryRestoreOfflineSession() flips this badge to "離線閱讀" styling; any
@@ -3560,79 +3581,6 @@ const db = {
       });
     }
     return localUsers;
-  },
-
-  async getUserRankings() {
-    if (state.isSupabaseMode && state.supabase && state.currentUser && state.currentUser.id) {
-      try {
-        const { data, error } = await state.supabase.rpc('get_user_rankings', { user_uuid: state.currentUser.id });
-        if (error) throw error;
-        if (data && data.length > 0) {
-          return {
-            groupRank: parseInt(data[0].group_rank, 10),
-            groupTotal: parseInt(data[0].group_total, 10),
-            zoneRank: parseInt(data[0].zone_rank, 10),
-            zoneTotal: parseInt(data[0].zone_total, 10),
-            regionRank: parseInt(data[0].region_rank, 10),
-            regionTotal: parseInt(data[0].region_total, 10),
-            churchRank: parseInt(data[0].church_rank, 10),
-            churchTotal: parseInt(data[0].church_total, 10)
-          };
-        }
-      } catch (err) {
-        console.error("Failed to call get_user_rankings RPC:", err);
-      }
-    }
-
-    // Offline / Demo fallback calculation
-    const allMockUsers = [...MOCK_USERS_DATA];
-    const currentMockIdx = allMockUsers.findIndex(u => u.name === state.currentUser.name);
-    const updatedCurrentUser = {
-      name: state.currentUser.name,
-      great_region: state.currentUser.great_region || "東區",
-      pastoral_zone: state.currentUser.pastoral_zone || "大安1",
-      small_group: state.currentUser.small_group || "馬鈴",
-      role_code: getUserRoleCode(state.currentUser) || "member",
-      chapters_read: state.currentUser.chapters_read || 0,
-      plan_progress: state.currentUser.plan_progress || 0,
-      streak: state.currentUser.streak || 0,
-      last_read: state.currentUser.last_read
-    };
-    if (currentMockIdx !== -1) {
-      allMockUsers[currentMockIdx] = updatedCurrentUser;
-    } else {
-      allMockUsers.push(updatedCurrentUser);
-    }
-
-    const getRankAndTotal = (filteredList) => {
-      const sorted = [...filteredList].sort((a, b) => {
-        if (b.chapters_read !== a.chapters_read) {
-          return b.chapters_read - a.chapters_read;
-        }
-        return a.name.localeCompare(b.name);
-      });
-      const myIdx = sorted.findIndex(u => u.name === state.currentUser.name);
-      return {
-        rank: myIdx !== -1 ? myIdx + 1 : 0,
-        total: sorted.length
-      };
-    };
-
-    const churchStats = getRankAndTotal(allMockUsers);
-    const regionStats = getRankAndTotal(allMockUsers.filter(u => u.great_region === updatedCurrentUser.great_region));
-    const zoneStats = getRankAndTotal(allMockUsers.filter(u => u.pastoral_zone === updatedCurrentUser.pastoral_zone));
-    const groupStats = getRankAndTotal(allMockUsers.filter(u => u.pastoral_zone === updatedCurrentUser.pastoral_zone && u.small_group === updatedCurrentUser.small_group));
-
-    return {
-      groupRank: groupStats.rank,
-      groupTotal: groupStats.total,
-      zoneRank: zoneStats.rank,
-      zoneTotal: zoneStats.total,
-      regionRank: regionStats.rank,
-      regionTotal: regionStats.total,
-      churchRank: churchStats.rank,
-      churchTotal: churchStats.total
-    };
   },
 
   async getDevotionalNote(date) {

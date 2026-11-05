@@ -1026,18 +1026,21 @@ function bindPastoralRankingToggle(container) {
 
 async function renderPlanRankingView() {
   ensureChartLib().catch(() => {}); // A2：排名分頁也有成長趨勢圖，提前開始抓 Chart.js
+  // 三區互不依賴，同一瞬間發出才會併成一支 batch（#672）
   const rankingResults = await Promise.allSettled([
     Promise.resolve().then(() => renderReadingTeamLeaderboards()),
-    Promise.resolve().then(() => renderMyPersonalRankings())
+    Promise.resolve().then(() => renderMyPersonalRankings()),
+    Promise.resolve().then(() => renderPastoralZoneRanking())
   ]);
+  const sectionNames = ["reading-team leaderboards", "personal rankings", "pastoral rankings"];
   rankingResults.forEach((result, index) => {
     if (result.status === "rejected") {
-      console.error(index === 0
-        ? "Failed to render reading-team leaderboards"
-        : "Failed to render personal rankings", result.reason);
+      console.error(`Failed to render ${sectionNames[index]}`, result.reason);
     }
   });
+}
 
+async function renderPastoralZoneRanking() {
   const container = document.getElementById("pastoral-ranking-list-container");
   if (!container) return;
   bindPastoralRankingToggle(container);

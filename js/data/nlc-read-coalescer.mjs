@@ -27,12 +27,19 @@ export const BATCHABLE_RPC_FUNCTIONS = new Set([
   "issue_thread_unread_summary",
   "get_commentary_review_notifications",
   // 首頁的帶隊狀態（#678），跟其他首頁讀取併成同一個請求
-  "get_reading_team_carry_status"
+  "get_reading_team_carry_status",
+  // 排行分頁一次發三支，團隊計畫各查一次自己的隊伍（#672）
+  "get_reading_team_leaderboards",
+  "get_personal_plan_ranking_summary",
+  "get_pastoral_zone_leaderboard",
+  "get_my_reading_team"
 ]);
 
 export const MAX_BATCH_QUERIES = 25;
 export const DEFAULT_BATCH_WINDOW_MS = 10;
 export const DEFAULT_DEDUPE_MS = 3000;
+// 伺服器拒絕批次後多久再試一次：client 會活到關閉 App（#672），Edge Function 部署後不能一直走慢路。
+export const UNSUPPORTED_RETRY_MS = 5 * 60 * 1000;
 
 // nlc-data 允許的 RPC 裡，名稱帶 get_／list_ 的都只讀（get_xxx、exam_get_xxx、admin_list_xxx…）
 const READ_ONLY_RPC_NAME = /(^|_)(get|list)_/;
@@ -71,14 +78,17 @@ export function createReadCoalescer({
   windowMs = DEFAULT_BATCH_WINDOW_MS,
   maxBatch = MAX_BATCH_QUERIES,
   dedupeMs = DEFAULT_DEDUPE_MS,
+  unsupportedRetryMs = UNSUPPORTED_RETRY_MS,
   schedule = (fn, ms) => setTimeout(fn, ms),
   now = () => Date.now()
 }) {
   let pending = [];
   let scheduled = false;
-  let batchUnsupported = false;
-  // 舊版伺服器的 batch 只收 select：被退一次之後 RPC 就直接單支送，不再每批多繞一趟
-  let rpcBatchUnsupported = false;
+  let batchUnsupportedAt = null;
+  // 舊版伺服器的白名單沒有這支 RPC：被退一次之後這支就直接單支送，不再每批多繞一趟；其他 RPC 照樣合併
+  const rpcRefusedAt = new Map();
+  const stillRefused = (at) => at !== null && at !== undefined && now() - at < unsupportedRetryMs;
+  const batchUnsupported = () => stillRefused(batchUnsupportedAt);
   // 請求內容（JSON）→ { settledAt, shared }；settledAt 為 null 表示還在路上
   const recent = new Map();
 
@@ -91,7 +101,7 @@ export function createReadCoalescer({
   };
 
   const flushChunk = async (entries) => {
-    if (entries.length === 1 || batchUnsupported) {
+    if (entries.length === 1 || batchUnsupported()) {
       sendEach(entries);
       return;
     }
@@ -104,7 +114,7 @@ export function createReadCoalescer({
     }
     const rows = outcome && Array.isArray(outcome.data) ? outcome.data : null;
     if (!rows) {
-      if (isBatchUnsupported(outcome && outcome.error)) batchUnsupported = true;
+      if (isBatchUnsupported(outcome && outcome.error)) batchUnsupportedAt = now();
       sendEach(entries);
       return;
     }
@@ -112,7 +122,7 @@ export function createReadCoalescer({
       const row = rows[index];
       // 舊版伺服器還不收 batch 裡的 RPC：這一格改成單支送
       if (!row || row.error === "batch_read_only") {
-        if (row && entry.request.action === "rpc") rpcBatchUnsupported = true;
+        if (row && entry.request.action === "rpc") rpcRefusedAt.set(String(entry.request.function || ""), now());
         sendEach([entry]);
         return;
       }
@@ -135,8 +145,8 @@ export function createReadCoalescer({
   };
 
   const sendRead = (request) => {
-    if (batchUnsupported || !isBatchable(request)) return sendOne(request);
-    if (rpcBatchUnsupported && request.action === "rpc") return sendOne(request);
+    if (batchUnsupported() || !isBatchable(request)) return sendOne(request);
+    if (request.action === "rpc" && stillRefused(rpcRefusedAt.get(String(request.function || "")))) return sendOne(request);
     return new Promise((resolve, reject) => {
       pending.push({ request, resolve, reject });
       if (!scheduled) {
