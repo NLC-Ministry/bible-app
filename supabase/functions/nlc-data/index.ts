@@ -4,9 +4,11 @@ import {
   PASTORAL_OVERVIEW_RPC,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
+  PLAN_STATS_ROSTER_SUMMARY_RPC,
   buildPastoralOverviewArgs,
   buildPlanReadingLogDigestArgs,
   buildPlanStatsRosterArgs,
+  buildPlanStatsRosterSummaryArgs,
 } from "./plan-stats-scope.ts";
 import {
   AUDITED_ADMIN_RPCS,
@@ -515,7 +517,7 @@ const READING_ACTIVITY_RPC_FUNCTIONS = new Set([
   "admin_get_reading_hour_heatmap"
 ]);
 // 計畫統計／組員總覽的精簡打卡紀錄（#394）和一次回傳的名單（#397）：
-// PLAN_READING_LOG_DIGEST_RPC、PLAN_STATS_ROSTER_RPC 定義在 plan-stats-scope.ts。
+// PLAN_READING_LOG_DIGEST_RPC、PLAN_STATS_ROSTER_RPC、彙總版 PLAN_STATS_ROSTER_SUMMARY_RPC（#673）定義在 plan-stats-scope.ts。
 // 可見範圍跟 profiles／reading_logs select 一樣由 getVisibleProfileIds 決定（每個請求只算一次），
 // p_whole_church、p_visible_ids、p_actor_id 一律由這裡覆寫。App 管理分頁的統計 PASTORAL_OVERVIEW_RPC（#551）同一套，
 // 而且只給 canManagePlans 的角色。
@@ -550,6 +552,7 @@ const RPC_FUNCTIONS = new Set([
   ...COMMENTARY_REVIEW_RPC_FUNCTIONS,
   PLAN_READING_LOG_DIGEST_RPC,
   PLAN_STATS_ROSTER_RPC,
+  PLAN_STATS_ROSTER_SUMMARY_RPC,
   PASTORAL_OVERVIEW_RPC,
   ADMIN_USER_DIRECTORY_RPC,
   ...ISSUE_RPC_FUNCTIONS
@@ -1155,6 +1158,9 @@ async function runRpcRequest(
   } else if (functionName === PLAN_STATS_ROSTER_RPC) {
     const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
     rpcArgs = buildPlanStatsRosterArgs(body.args, visibleIds, profile.id);
+  } else if (functionName === PLAN_STATS_ROSTER_SUMMARY_RPC) {
+    const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
+    rpcArgs = buildPlanStatsRosterSummaryArgs(body.args, visibleIds, profile.id);
   } else if (functionName === PASTORAL_OVERVIEW_RPC) {
     const visibleIds = await requestVisibleProfileIds(supabaseAdmin, profile, requestCache);
     rpcArgs = buildPastoralOverviewArgs(body.args, visibleIds, profile.id);

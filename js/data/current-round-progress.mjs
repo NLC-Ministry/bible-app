@@ -3,14 +3,19 @@ function toNonNegativeNumber(value) {
   return Number.isFinite(number) ? Math.max(0, number) : 0;
 }
 
-export function getCurrentRoundChapterProgress(logs, currentRound, totalChapters) {
+export function getRoundChapterProgressFromCount(read, currentRound, totalChapters) {
   const round = Math.max(1, Math.floor(toNonNegativeNumber(currentRound) || 1));
   const total = toNonNegativeNumber(totalChapters);
+  const progress = total > 0 ? Math.min(100, Math.round(read / total * 100)) : 0;
+  return { round, read, total, progress };
+}
+
+export function getCurrentRoundChapterProgress(logs, currentRound, totalChapters) {
+  const round = Math.max(1, Math.floor(toNonNegativeNumber(currentRound) || 1));
   const read = (Array.isArray(logs) ? logs : []).filter(log =>
     Number(log && (log.round || 1)) === round
   ).length;
-  const progress = total > 0 ? Math.min(100, Math.round(read / total * 100)) : 0;
-  return { round, read, total, progress };
+  return getRoundChapterProgressFromCount(read, round, totalChapters);
 }
 // 確認遍數的規則和伺服器共用（#564）
 export { getConfirmedReadingRound } from "../../supabase/functions/_shared/progress/reading-round.mjs";

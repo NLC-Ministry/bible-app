@@ -33,6 +33,10 @@
 3. `offline_operations` 在線上正常寫入後應為空；若有 `pending`，查看 `lastError`、`attempts`、`nextAttemptAt`。`failed` 且錯誤為 401/403 代表權限問題，不應自動重試。
 4. 到 Supabase Table Editor 以相同 `user_id + plan_id + book + chapter + round` 查詢。Supabase 是最終真相；若資料不同，重新載入後 `server_cache` 應被 Supabase 結果完整覆蓋。
 
+### 4. 計畫統計名冊（#673）
+
+管理者開計畫統計時，名冊先走 RPC `get_plan_stats_roster_summary`（每人彙總，不帶逐筆打卡），連續天數與補讀天數由 SQL 依裝置時區算。migration 未套用、`nlc-data` 未部署或回應不對時，前端自動退回舊 RPC `get_plan_stats_roster` 與前端算法，兩條路的數字由 `scripts/db-behavior.test.mjs` 逐人比對鎖住。Network 看到舊 RPC 代表正在走退回路徑。
+
 ## Console 診斷欄位
 
 可在 Console 執行：

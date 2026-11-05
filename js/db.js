@@ -1,6 +1,6 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchNlcTracked } from './diagnostics/report-diagnostics.mjs';
-import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
+import { expandReadingLogDigest, fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
 import { createReadCoalescer } from './data/nlc-read-coalescer.mjs';
 import { createLeaderboardCache } from './data/leaderboard-cache.mjs';
 import {
@@ -12,6 +12,13 @@ import {
 } from './data/boot-snapshot.mjs';
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
+import {
+  buildMergedUserFromRosterSummary,
+  fetchPlanStatsRosterSummary,
+  rosterSummaryPlan,
+  rosterSummaryProfile,
+  rosterSummaryStats
+} from './data/plan-stats-roster-summary.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { PLAN_CHECKIN_CLOSED_CODE, isPlanCheckInClosed, normalizeGraceDays } from './data/plan-checkin-window.mjs';
 import {
@@ -3218,8 +3225,8 @@ const db = {
       return fallback;
     }
   },
-  async fetchMergedUsersList(filterPresetKey = null, ignorePlanFilter = false) {
-    const { users } = await this.fetchMergedUsersWithLogs(filterPresetKey, { ignorePlanFilter });
+  async fetchMergedUsersList(filterPresetKey = null, ignorePlanFilter = false, options = {}) {
+    const { users } = await this.fetchMergedUsersWithLogs(filterPresetKey, { ignorePlanFilter, ...options });
     return users;
   },
 
@@ -3228,13 +3235,16 @@ const db = {
   // 會出現「A 的名單配 B 的紀錄」。logsByUserId 是 Map(user_id → 該計畫的 logs)。
   // maxAgeMs 預設 60 秒；成員排行傳 Infinity，沿用舊的「同一個計畫不重抓」行為，
   // 要重抓就呼叫 invalidateMergedUsersCache()。
-  async fetchMergedUsersWithLogs(filterPresetKey = null, { ignorePlanFilter = false, maxAgeMs = 60000, pastoralZone = "" } = {}) {
+  // rosterSchedule（#673，buildPlanStatsRosterSchedule 的結果）：要看補讀天數的畫面帶比對尺，彙總才算得出來；
+  // false＝這份日程不能交給伺服器，走逐筆路徑。尺不同的結果不共用快取。
+  async fetchMergedUsersWithLogs(filterPresetKey = null, { ignorePlanFilter = false, maxAgeMs = 60000, pastoralZone = "", rosterSchedule } = {}) {
     if (ignorePlanFilter) {
       filterPresetKey = false;
     } else if (!filterPresetKey && state.activePlan) {
       filterPresetKey = state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id;
     }
-    const cacheKey = (filterPresetKey || 'all') + (pastoralZone ? `|zone:${pastoralZone}` : '');
+    const cacheKey = (filterPresetKey || 'all') + (pastoralZone ? `|zone:${pastoralZone}` : '')
+      + (rosterSchedule === undefined ? '' : `|schedule:${JSON.stringify(rosterSchedule)}`);
 
     // 1. Concurrent request deduplication
     if (this._mergedUsersPromise[cacheKey]) {
@@ -3251,7 +3261,7 @@ const db = {
     const loadPromise = (async () => {
       try {
         const sink = { logsByUserId: new Map() };
-        const users = await this._executeFetchMergedUsersList(filterPresetKey, sink, { pastoralZone });
+        const users = await this._executeFetchMergedUsersList(filterPresetKey, sink, { pastoralZone, rosterSchedule });
         const result = { users, logsByUserId: sink.logsByUserId };
         this._mergedUsersCache[cacheKey] = {
           data: result,
@@ -3323,7 +3333,19 @@ const db = {
     return { usersProfiles, allPlans, allLogs, todayNotes };
   },
 
-  async _executeFetchMergedUsersList(filterPresetKey, sink = { logsByUserId: new Map() }, { pastoralZone = "" } = {}) {
+  // 名冊彙總（#673）的一份結果 → users。書卷空白的報名伺服器回逐筆打卡，跑跟舊路徑相同的 mapProfile。
+  _buildUsersFromRosterSummary(summary, mapProfile) {
+    return summary.people.map(person => {
+      if (!Array.isArray(person.l)) {
+        return buildMergedUserFromRosterSummary(person, summary, { bibleBooks: BIBLE_BOOKS });
+      }
+      const uPlan = rosterSummaryPlan(person, summary);
+      const uLogs = expandReadingLogDigest([{ u: person.i, p: person.p, l: person.l }]);
+      return { ...mapProfile(rosterSummaryProfile(person, summary), uPlan, uLogs, null), roster_stats: rosterSummaryStats(person) };
+    });
+  },
+
+  async _executeFetchMergedUsersList(filterPresetKey, sink = { logsByUserId: new Map() }, { pastoralZone = "", rosterSchedule } = {}) {
     const planFilterAliases = getPlanFilterAliases(filterPresetKey);
     const planFilterAliasSet = new Set(planFilterAliases);
     const currentPlanId = state.activePlan ? state.activePlan.id : null;
@@ -3367,72 +3389,8 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        // 今天的靈修筆記日期由前端用台北時區算好（伺服器不換算）。
-        const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-        // 一次 RPC 拿名單＋報名＋打卡＋今天的靈修（#397）；失敗就退回分頁路徑。
-        // 兩條路徑還原出來的四份資料相同，後面的計算不分路徑。
-        const roster = await fetchPlanStatsRoster(state.supabase, {
-          planAliases: filterPresetKey ? planFilterAliases : null,
-          pastoralZone,
-          noteDate: todayStr
-        }) || await this._fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone, todayStr });
-        const { usersProfiles, allPlans, allLogs, todayNotes } = roster;
-
-        const notesByUser = {};
-        if (todayNotes) {
-          todayNotes.forEach(n => {
-            notesByUser[n.user_id] = n.content;
-          });
-        }
-
-        window.userPlanIdCache = {};
-        if (allPlans) {
-          allPlans.forEach(p => {
-            if (p.user_id && p.preset_key) {
-              window.userPlanIdCache[p.user_id + '_' + p.preset_key] = p.id;
-            }
-            if (p.user_id && p.name) {
-              window.userPlanIdCache[p.user_id + '_' + p.name] = p.id;
-            }
-            if (p.user_id && p.global_plan_id) {
-              window.userPlanIdCache[p.user_id + '_' + p.global_plan_id] = p.id;
-            }
-          });
-        }
-
-        if (usersProfiles) {
-          // Pre-group plans by user_id
-          const plansByUser = {};
-          if (allPlans) {
-            allPlans.forEach(p => {
-              if (p.user_id) {
-                if (!plansByUser[p.user_id]) plansByUser[p.user_id] = [];
-                plansByUser[p.user_id].push(p);
-              }
-            });
-          }
-
-          // Pre-group logs by user_id
-          const logsByUser = {};
-          if (allLogs) {
-            allLogs.forEach(l => {
-              if (l.user_id) {
-                if (!logsByUser[l.user_id]) logsByUser[l.user_id] = [];
-                logsByUser[l.user_id].push(l);
-              }
-            });
-          }
-          sink.logsByUserId = new Map(Object.entries(logsByUser));
-
-          return usersProfiles.map(profile => {
-            const userPlans = plansByUser[profile.id] || [];
-            const uPlan = filterPresetKey
-              ? userPlans.find(p => [p.preset_key, p.global_plan_id, p.name, p.id].some(value => value && planFilterAliasSet.has(String(value))))
-              : userPlans[0] || null;
-
-            if (filterPresetKey && !uPlan) return null;
-
-            const uLogs = logsByUser[profile.id] || [];
+        // 一個人的報名＋打卡紀錄 → 名單上的一列（逐筆路徑）。
+        const mapProfile = (profile, uPlan, uLogs, todayDevotional) => {
             // 書卷範圍：enrollment 自己的 target_books，沒有就退回對應 global_plan 的 books
             // （同 loadPlans 的 effectiveBooks）；兩者都沒有就不過濾。
             const linkedGlobalPlan = uPlan
@@ -3507,8 +3465,93 @@ const db = {
               presetKey: uPlan ? uPlan.preset_key : null,
               globalPlanId: uPlan ? uPlan.global_plan_id : null,
               current_round: confirmedRound,
-              today_devotional: notesByUser[profile.id] || null
+              today_devotional: todayDevotional
             };
+        };
+
+        // 名冊彙總（#673）：只回每人的數字，不回逐筆打卡。還沒部署或失敗就回 null，走下面的舊路徑。
+        if (rosterSchedule !== false) {
+          const summary = await fetchPlanStatsRosterSummary(state.supabase, {
+            planAliases: filterPresetKey ? planFilterAliases : null,
+            pastoralZone,
+            schedule: rosterSchedule || null
+          });
+          if (summary) {
+            try {
+              return this._buildUsersFromRosterSummary(summary, mapProfile);
+            } catch (summaryError) {
+              console.warn("Plan stats roster summary could not be read; falling back to the full roster.", summaryError);
+            }
+          }
+        }
+
+        // 今天的靈修筆記日期由前端用台北時區算好（伺服器不換算）。
+        const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+        // 一次 RPC 拿名單＋報名＋打卡＋今天的靈修（#397）；失敗就退回分頁路徑。
+        // 兩條路徑還原出來的四份資料相同，後面的計算不分路徑。
+        const roster = await fetchPlanStatsRoster(state.supabase, {
+          planAliases: filterPresetKey ? planFilterAliases : null,
+          pastoralZone,
+          noteDate: todayStr
+        }) || await this._fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone, todayStr });
+        const { usersProfiles, allPlans, allLogs, todayNotes } = roster;
+
+        const notesByUser = {};
+        if (todayNotes) {
+          todayNotes.forEach(n => {
+            notesByUser[n.user_id] = n.content;
+          });
+        }
+
+        window.userPlanIdCache = {};
+        if (allPlans) {
+          allPlans.forEach(p => {
+            if (p.user_id && p.preset_key) {
+              window.userPlanIdCache[p.user_id + '_' + p.preset_key] = p.id;
+            }
+            if (p.user_id && p.name) {
+              window.userPlanIdCache[p.user_id + '_' + p.name] = p.id;
+            }
+            if (p.user_id && p.global_plan_id) {
+              window.userPlanIdCache[p.user_id + '_' + p.global_plan_id] = p.id;
+            }
+          });
+        }
+
+        if (usersProfiles) {
+          // Pre-group plans by user_id
+          const plansByUser = {};
+          if (allPlans) {
+            allPlans.forEach(p => {
+              if (p.user_id) {
+                if (!plansByUser[p.user_id]) plansByUser[p.user_id] = [];
+                plansByUser[p.user_id].push(p);
+              }
+            });
+          }
+
+          // Pre-group logs by user_id
+          const logsByUser = {};
+          if (allLogs) {
+            allLogs.forEach(l => {
+              if (l.user_id) {
+                if (!logsByUser[l.user_id]) logsByUser[l.user_id] = [];
+                logsByUser[l.user_id].push(l);
+              }
+            });
+          }
+          sink.logsByUserId = new Map(Object.entries(logsByUser));
+
+          return usersProfiles.map(profile => {
+            const userPlans = plansByUser[profile.id] || [];
+            const uPlan = filterPresetKey
+              ? userPlans.find(p => [p.preset_key, p.global_plan_id, p.name, p.id].some(value => value && planFilterAliasSet.has(String(value))))
+              : userPlans[0] || null;
+
+            if (filterPresetKey && !uPlan) return null;
+
+            const uLogs = logsByUser[profile.id] || [];
+            return mapProfile(profile, uPlan, uLogs, notesByUser[profile.id] || null);
           }).filter(Boolean);
         }
         return [mockUser];

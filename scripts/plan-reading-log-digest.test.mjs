@@ -148,6 +148,8 @@ function createFakeSupabase(calls, { rpc = "roster" } = {}) {
   };
   if (rpc === "roster" || rpc === "digest" || rpc === "malformed") {
     client.rpc = async (name, args) => {
+      // #673 的彙總 RPC 不在這裡的比較範圍：當它還沒部署，db.js 退回這裡要比的路徑。
+      if (name === "get_plan_stats_roster_summary") return { data: null, error: { code: "PGRST202" } };
       calls.push({ rpc: name, args });
       if (name === "get_plan_stats_roster") {
         if (rpc === "roster") return { data: rosterRpc(args), error: null };
@@ -158,6 +160,7 @@ function createFakeSupabase(calls, { rpc = "roster" } = {}) {
     };
   } else if (rpc === "error") {
     client.rpc = async name => {
+      if (name === "get_plan_stats_roster_summary") return { data: null, error: { code: "PGRST202" } };
       calls.push({ rpc: name });
       return { data: null, error: { message: "forbidden_rpc" } };
     };

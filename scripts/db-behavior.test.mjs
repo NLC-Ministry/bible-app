@@ -1,5 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMigratedDb } from "./lib/pglite-supabase.mjs";
+import { createRosterApp } from "./lib/plan-stats-roster-app.mjs";
+import { BIBLE_BOOK_CHAPTERS } from "../supabase/functions/_shared/progress/bible-chapters.mjs";
+import { buildChurchCampaignDays, getChurchCampaignStageDefinition } from "../supabase/functions/_shared/progress/church-campaign.mjs";
+import { buildRound1ReadDateMap, countLateCompletedDays } from "../supabase/functions/_shared/progress/schedule-progress.mjs";
+import { computePlanScopedStreak } from "../supabase/functions/_shared/progress/team-progress.mjs";
+import {
+  PLAN_STATS_ROSTER_SUMMARY_RPC,
+  buildPlanStatsRosterArgs,
+  buildPlanStatsRosterSummaryArgs
+} from "../supabase/functions/nlc-data/plan-stats-scope.ts";
 
 // #594：在 PGlite 從空資料庫套用 supabase/migrations/ 的全部 migration，實際執行重要 RPC，把行為鎖住
 //（test:changed 靠這個路徑字串，改了 migration 就會跑這支）。
@@ -1784,4 +1794,715 @@ describe("月初隊伍接不上：帶隊狀態、隊員接手、補帶、重名�
     expect(rows).toHaveLength(4);
     rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
   });
+});
+
+// ── #673 計畫統計名冊彙總：新 RPC 和舊前端算法逐人逐欄比對 ──────────────────────────
+// 同一份資料走兩條路：舊的 get_plan_stats_roster＋前端算法，新的 get_plan_stats_roster_summary。
+// 比對資料層的每個欄位（連續天數、補讀天數不經畫面的「有沒有讀」閘門）、組員總覽每一列、
+// 組織統計樹、兩份 CSV。有差異時訊息會寫出情境、人、欄位、兩邊的值。
+describe("計畫統計名冊彙總和舊算法逐人一致（get_plan_stats_roster_summary，#673）", () => {
+  const GLOBAL_PLAN = "71000000-0000-4000-8000-000000000001";
+  const OTHER_GLOBAL_PLAN = "71000000-0000-4000-8000-000000000002";
+  const PLAN_NAME = "十月速讀";
+  const ORG_STRUCTURE = {
+    regions: ["大區一", "大區二"],
+    zones: { 大區一: ["牧區一", "牧區二"], 大區二: ["牧區三"] },
+    groups: { 牧區一: ["小組一", "小組二"], 牧區二: ["小組三"], 牧區三: ["小組四"] }
+  };
+  const ACTOR = "72000000-0000-4000-8000-000000000000";
+  // 別名展開：全域計畫的 id、預設代號、名稱都算同一個計畫（getPlanFilterAliases）
+  const GLOBAL_PLANS = [{ id: GLOBAL_PLAN, presetKey: "十月-preset", name: PLAN_NAME, books: ["利未記"] }];
+  let memberRoleId;
+  let app;
+
+  const pad = (value, length) => String(value).padStart(length, "0");
+  const taipei = (date, time = "12:00:00") => `${date}T${time}+08:00`;
+  const addDays = (date, days) => {
+    const value = new Date(`${date}T00:00:00Z`);
+    value.setUTCDate(value.getUTCDate() + days);
+    return value.toISOString().slice(0, 10);
+  };
+
+  function mulberry32(seed) {
+    let a = seed;
+    return () => {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // 一份情境資料。id 是固定的（失敗可重現），打卡 id 由亂數決定，順序跟插入順序無關。
+  function createFixture(seed = 1) {
+    const rng = mulberry32(seed);
+    const randomUuid = () => {
+      const hex = n => Array.from({ length: n }, () => Math.floor(rng() * 16).toString(16)).join("");
+      return `${hex(8)}-${hex(4)}-4${hex(3)}-8${hex(3)}-${hex(12)}`;
+    };
+    const fixture = { rng, profiles: [], plans: [], logs: [], randomUuid };
+    fixture.person = (name, { region = "大區一", zone = "牧區一", group = "小組一" } = {}) => {
+      const id = `72000000-0000-4000-8000-${pad(fixture.profiles.length + 1, 12)}`;
+      fixture.profiles.push({ id, name, region, zone, group });
+      return id;
+    };
+    // n：想要的 id 順序（一個人多筆報名時，「第一筆」看的就是 id）
+    fixture.enroll = (userId, { books = ["利未記"], round = 1, handled = false, global = GLOBAL_PLAN, preset = null, name = PLAN_NAME, personal = false, n = null } = {}) => {
+      const id = `73000000-0000-4000-8000-${pad(n ?? fixture.plans.length + 1, 12)}`;
+      fixture.plans.push({ id, userId, books, round, handled, global, preset, name, personal });
+      return id;
+    };
+    fixture.read = (userId, planId, book, chapter, at, round = 1) => {
+      fixture.logs.push({ id: randomUuid(), userId, planId, book, chapter, at, round });
+    };
+    return fixture;
+  }
+
+  async function insertFixture(tx, fixture) {
+    for (const person of fixture.profiles) {
+      await tx.query(
+        `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+        [person.id, person.name, memberRoleId, person.region, person.zone, person.group]
+      );
+    }
+    for (const plan of fixture.plans) {
+      await tx.query(
+        `INSERT INTO public.reading_plans (id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, is_personal)
+         VALUES ($1, $2, $3, $4, '2026-10-01', '2026-12-31', $5::text[], $6, $7, $8, $9)`,
+        [plan.id, plan.userId, plan.personal ? null : plan.global, plan.name, plan.books, plan.personal ? null : plan.preset, plan.round, plan.handled, plan.personal]
+      );
+    }
+    if (fixture.logs.length) {
+      await tx.query(
+        `INSERT INTO public.reading_logs (id, user_id, plan_id, book, chapter, round, read_at)
+         SELECT (row ->> 'id')::uuid, (row ->> 'userId')::uuid, (row ->> 'planId')::uuid, row ->> 'book',
+                (row ->> 'chapter')::integer, (row ->> 'round')::integer, (row ->> 'at')::timestamptz
+         FROM jsonb_array_elements($1::jsonb) AS row`,
+        [JSON.stringify(fixture.logs)]
+      );
+    }
+  }
+
+  // 寫入都先關掉 trigger（階段開放時間那些），外部的計畫列也不用真的存在。測試結束 rollback。
+  async function inRosterTx(fn) {
+    let result;
+    let failure;
+    try {
+      await db.transaction(async tx => {
+        await tx.exec(`SET LOCAL session_replication_role = replica`);
+        try {
+          result = await fn(tx);
+        } catch (error) {
+          failure = error;
+        }
+        await tx.rollback();
+      });
+    } catch (error) {
+      if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+    }
+    if (failure) throw failure;
+    return result;
+  }
+
+  // 假的 nlc-data：參數一律走真的 args builder，SQL 在 PGlite 用 service_role 跑。
+  function createClient(tx, { summary = true, visibleIds = null, calls = [] } = {}) {
+    const run = async (sql, params) => {
+      await tx.exec(`SAVEPOINT roster_rpc; SET LOCAL ROLE service_role`);
+      try {
+        const { rows: [{ result }] } = await tx.query(sql, params);
+        await tx.exec(`RESET ROLE; RELEASE SAVEPOINT roster_rpc`);
+        return { data: result, error: null };
+      } catch (error) {
+        await tx.exec(`ROLLBACK TO SAVEPOINT roster_rpc; RESET ROLE`);
+        return { data: null, error: { message: String(error?.message) } };
+      }
+    };
+    return {
+      rpc: async (name, args) => {
+        calls.push(name);
+        if (name === PLAN_STATS_ROSTER_SUMMARY_RPC) {
+          if (!summary) return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${name}` } };
+          const built = buildPlanStatsRosterSummaryArgs(JSON.parse(JSON.stringify(args)), visibleIds, ACTOR);
+          return run(
+            `SELECT public.get_plan_stats_roster_summary($1::text[], $2, $3, $4::date, $5::jsonb, $6, $7::uuid[], $8) AS result`,
+            [built.p_plan_aliases, built.p_pastoral_zone, built.p_timezone, built.p_start_date,
+              built.p_schedule === null ? null : JSON.stringify(built.p_schedule),
+              built.p_whole_church, built.p_visible_ids, built.p_actor_id]
+          );
+        }
+        if (name === "get_plan_stats_roster") {
+          const built = buildPlanStatsRosterArgs(args, visibleIds, ACTOR);
+          return run(
+            `SELECT public.get_plan_stats_roster($1::text[], $2, $3::date, $4, $5::uuid[], $6) AS result`,
+            [built.p_plan_aliases, built.p_pastoral_zone, built.p_note_date, built.p_whole_church, built.p_visible_ids, built.p_actor_id]
+          );
+        }
+        return { data: null, error: { message: `unexpected rpc ${name}` } };
+      }
+    };
+  }
+
+  const show = value => (value === undefined ? "undefined" : JSON.stringify(value));
+
+  function diffRosterRuns(label, legacy, summary, statsPlan) {
+    const diffs = [];
+    const usersOf = run => new Map(run.merged.users.map(user => [user.id, user]));
+    const oldUsers = usersOf(legacy);
+    const newUsers = usersOf(summary);
+    for (const id of new Set([...oldUsers.keys(), ...newUsers.keys()])) {
+      const before = oldUsers.get(id);
+      const after = newUsers.get(id);
+      const who = `${label}／${(before || after).name}（${id}）`;
+      if (!before || !after) {
+        diffs.push(`${who}：名單不同，舊=${Boolean(before)} 新=${Boolean(after)}`);
+        continue;
+      }
+      for (const field of new Set([...Object.keys(before), ...Object.keys(after)])) {
+        // 靈修全文沒有任何畫面在讀（#673 不再回傳）；roster_stats 下面另外比
+        if (field === "today_devotional" || field === "roster_stats") continue;
+        if (show(before[field]) !== show(after[field])) diffs.push(`${who}.${field}：舊=${show(before[field])} 新=${show(after[field])}`);
+      }
+      const logs = legacy.merged.logsByUserId.get(id) || [];
+      const oldStreak = computePlanScopedStreak(logs, { preFiltered: true });
+      if (oldStreak !== after.roster_stats?.streak) diffs.push(`${who}.最高連續：舊=${oldStreak} 新=${show(after.roster_stats?.streak)}`);
+      if (statsPlan) {
+        const oldMakeup = countLateCompletedDays(statsPlan.days, statsPlan.startDate, buildRound1ReadDateMap(logs));
+        if (oldMakeup !== after.roster_stats?.makeup) diffs.push(`${who}.補讀天數：舊=${oldMakeup} 新=${show(after.roster_stats?.makeup)}`);
+      }
+    }
+    if (legacy.rows && summary.rows) {
+      const rowKey = row => row.id;
+      const oldRows = new Map(legacy.rows.map(row => [rowKey(row), row]));
+      summary.rows.forEach((row, index) => {
+        const before = oldRows.get(rowKey(row));
+        if (legacy.rows[index]?.id !== row.id) diffs.push(`${label}／組員總覽第 ${index + 1} 列順序：舊=${legacy.rows[index]?.name} 新=${row.name}`);
+        for (const field of Object.keys(row)) {
+          if (show(before?.[field]) !== show(row[field])) diffs.push(`${label}／組員總覽 ${row.name}.${field}：舊=${show(before?.[field])} 新=${show(row[field])}`);
+        }
+      });
+      if (legacy.rows.length !== summary.rows.length) diffs.push(`${label}／組員總覽人數：舊=${legacy.rows.length} 新=${summary.rows.length}`);
+      if (legacy.participantsCsv !== summary.participantsCsv) diffs.push(`${label}／組員總覽 CSV 不同\n舊：\n${legacy.participantsCsv}\n新：\n${summary.participantsCsv}`);
+      if (legacy.orgTree !== summary.orgTree) diffs.push(`${label}／組織統計樹不同`);
+      if (legacy.zoneCsv !== summary.zoneCsv) diffs.push(`${label}／牧區 CSV 不同\n舊：\n${legacy.zoneCsv}\n新：\n${summary.zoneCsv}`);
+    }
+    return diffs;
+  }
+
+  async function withTimezone(timezone, fn) {
+    const previous = process.env.TZ;
+    process.env.TZ = timezone;
+    try {
+      return await fn();
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
+  }
+
+  // 同一份資料跑兩條路。回傳差異清單（空的才對）＋兩邊的結果給呼叫端再驗。
+  async function compareRoster(tx, label, { statsPlan, filter = GLOBAL_PLAN, timezone = "Asia/Taipei", visibleIds = null, pastoralZone = "", globalPlans = GLOBAL_PLANS }) {
+    return withTimezone(timezone, async () => {
+      const options = { filter, statsPlan, globalPlans, orgStructure: ORG_STRUCTURE, pastoralZone };
+      const oldCalls = [];
+      const legacy = await app.render({ ...options, client: createClient(tx, { summary: false, visibleIds, calls: oldCalls }) });
+      const newCalls = [];
+      const summary = await app.render({ ...options, client: createClient(tx, { summary: true, visibleIds, calls: newCalls }) });
+      // 確認兩條路真的是兩條路：舊路有逐筆打卡；新路只呼叫新 RPC、沒有逐筆打卡
+      expect(oldCalls).toContain("get_plan_stats_roster");
+      expect(new Set(newCalls)).toEqual(new Set([PLAN_STATS_ROSTER_SUMMARY_RPC]));
+      expect(summary.merged.logsByUserId.size).toBe(0);
+      // 畫面真的畫出來了，比對才有意義
+      if (statsPlan && !pastoralZone) {
+        expect(summary.rows.length).toBe(summary.merged.users.length);
+        expect(summary.participantsCsv).toContain(summary.rows[0]?.name ?? "人數");
+        expect(summary.orgTree).toContain("總閱讀章數");
+        expect(summary.zoneCsv).toContain("牧區一");
+      }
+      return { diffs: diffRosterRuns(`${label}［${timezone}］`, legacy, summary, statsPlan), legacy, summary };
+    });
+  }
+
+  const dayOf = (...chapters) => ({ chapters: chapters.map(([book, chapter]) => ({ book, chapter })) });
+  const lev = n => ["利未記", n];
+  // 第 2、5 天是休息日（比對尺上沒有章節）
+  const BASE_DAYS = [
+    dayOf(lev(1), lev(2)), dayOf(lev(3)), dayOf(), dayOf(lev(4), lev(5)), dayOf(lev(6)), dayOf(),
+    dayOf(lev(7), lev(8), lev(9)), dayOf(lev(10)), dayOf(lev(11)), dayOf(lev(12))
+  ];
+  const makeStatsPlan = (days = BASE_DAYS, overrides = {}) => ({
+    id: "stats-plan", globalPlanId: GLOBAL_PLAN, presetKey: null, name: "統計的計畫",
+    startDate: "2026-10-01", endDate: "2026-10-10", days, ...overrides
+  });
+
+  // 每個情境 build(f) 建資料，回傳 compareRoster 的選項；至少要有一個人才有比到東西。
+  const SCENARIOS = {
+    遲到加入: f => {
+      const late = f.person("晚加入");
+      const plan = f.enroll(late);
+      // 第五天才開始，前面全部當天補完
+      [1, 2, 3, 4, 5, 6].forEach(chapter => f.read(late, plan, "利未記", chapter, taipei("2026-10-05")));
+      const onTime = f.person("準時");
+      const planB = f.enroll(onTime);
+      f.read(onTime, planB, "利未記", 1, taipei("2026-10-01"));
+      f.read(onTime, planB, "利未記", 2, taipei("2026-10-01"));
+      f.read(onTime, planB, "利未記", 3, taipei("2026-10-02"));
+      return {};
+    },
+    補讀: f => {
+      const u = f.person("補讀的人");
+      const plan = f.enroll(u);
+      // 第 0 天兩章：一章當天、一章隔兩天 → 補讀；第 1 天沒讀完整 → 不算；第 3 天當天完成 → 不算
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "利未記", 2, taipei("2026-10-03"));
+      f.read(u, plan, "利未記", 4, taipei("2026-10-04"));
+      f.read(u, plan, "利未記", 5, taipei("2026-10-04"));
+      f.read(u, plan, "利未記", 7, taipei("2026-10-09"));
+      // 第 6 天只讀了 2/3 章：不算補讀
+      f.read(u, plan, "利未記", 8, taipei("2026-10-09"));
+      // 提早讀不算補讀
+      f.read(u, plan, "利未記", 12, taipei("2026-10-02"));
+      return {};
+    },
+    休息日: f => {
+      const u = f.person("跨休息日");
+      const plan = f.enroll(u);
+      // 休息日也有打卡：連續天數算、補讀天數不受影響
+      ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"].forEach((date, index) => f.read(u, plan, "利未記", index + 1, taipei(date)));
+      return { statsPlan: makeStatsPlan([dayOf(), dayOf(lev(1)), dayOf(), dayOf(lev(2), lev(3)), dayOf()]) };
+    },
+    多遍: f => {
+      const confirmed = f.person("第二遍已確認");
+      const a = f.enroll(confirmed, { round: 2, handled: true });
+      for (let chapter = 1; chapter <= 27; chapter += 1) f.read(confirmed, a, "利未記", chapter, taipei("2026-10-02"));
+      f.read(confirmed, a, "利未記", 1, taipei("2026-10-08"), 2);
+      f.read(confirmed, a, "利未記", 2, taipei("2026-10-09"), 2);
+      const unconfirmed = f.person("存第二遍但沒確認也沒紀錄");
+      const b = f.enroll(unconfirmed, { round: 2, handled: false });
+      f.read(unconfirmed, b, "利未記", 1, taipei("2026-10-01"));
+      const advanced = f.person("存第三遍有第三遍紀錄");
+      const c = f.enroll(advanced, { round: 3, handled: false });
+      f.read(advanced, c, "利未記", 1, taipei("2026-10-01"), 3);
+      f.read(advanced, c, "利未記", 2, taipei("2026-10-02"), 2);
+      const stuck = f.person("存第三遍只有第二遍紀錄");
+      const d = f.enroll(stuck, { round: 3, handled: false });
+      f.read(stuck, d, "利未記", 1, taipei("2026-10-01"), 2);
+      // 只有第二遍紀錄：第一遍日期沒有，補讀應該是 0
+      const onlySecond = f.person("只有第二遍紀錄");
+      const e = f.enroll(onlySecond, { round: 2, handled: true });
+      f.read(onlySecond, e, "利未記", 1, taipei("2026-10-09"), 2);
+      f.read(onlySecond, e, "利未記", 2, taipei("2026-10-09"), 2);
+      const finished = f.person("第一遍剛好讀完");
+      const g = f.enroll(finished);
+      for (let chapter = 1; chapter <= 27; chapter += 1) f.read(finished, g, "利未記", chapter, taipei("2026-10-03"));
+      return {};
+    },
+    沒報名: f => {
+      f.person("完全沒報名");
+      const other = f.person("只報別的計畫");
+      const otherPlan = f.enroll(other, { global: OTHER_GLOBAL_PLAN, name: "別的計畫" });
+      f.read(other, otherPlan, "利未記", 1, taipei("2026-10-01"));
+      const noLogs = f.person("有報名沒打卡");
+      f.enroll(noLogs);
+      return {};
+    },
+    退出後重加: f => {
+      // 退出＝報名列刪掉、打卡跟著 CASCADE 刪掉（這裡不插入舊資料）；重加是新的一列，只剩新打卡
+      const u = f.person("退出又回來");
+      const plan = f.enroll(u, { n: 900 });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-08"));
+      f.read(u, plan, "利未記", 2, taipei("2026-10-09"));
+      return {};
+    },
+    同一人多筆報名: f => {
+      // 別名同時對到兩筆：章數只算 id 第一筆；連續天數、補讀天數看兩筆全部，同章後面的 plan 蓋前面的
+      const u = f.person("兩筆報名");
+      const first = f.enroll(u, { n: 10, global: null, preset: "十月-preset", books: ["利未記"] });
+      const second = f.enroll(u, { n: 20, global: GLOBAL_PLAN, books: ["利未記"] });
+      f.read(u, first, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, first, "利未記", 2, taipei("2026-10-01"));
+      f.read(u, second, "利未記", 1, taipei("2026-10-05"));
+      f.read(u, second, "利未記", 3, taipei("2026-10-02"));
+      f.read(u, second, "利未記", 4, taipei("2026-10-03"));
+      // 反過來：全域計畫那筆 id 比較小
+      const v = f.person("兩筆報名（反序）");
+      const low = f.enroll(v, { n: 30, global: GLOBAL_PLAN, books: ["利未記"] });
+      const high = f.enroll(v, { n: 40, global: null, preset: "十月-preset", books: ["民數記"], round: 2, handled: true });
+      f.read(v, low, "利未記", 1, taipei("2026-10-05"));
+      f.read(v, high, "利未記", 1, taipei("2026-10-01"));
+      f.read(v, high, "利未記", 2, taipei("2026-10-01"));
+      f.read(v, high, "民數記", 1, taipei("2026-10-09"));
+      return {};
+    },
+    自訂計畫與個人計畫: f => {
+      // 同名的個人計畫不能混進來；統計對象也可以是不是教會活動的一般計畫（用名稱當別名）
+      const u = f.person("有個人計畫");
+      const plan = f.enroll(u, { global: null, preset: "custom-key", name: "自訂讀經" });
+      const personal = f.enroll(u, { personal: true, name: "自訂讀經" });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-02"));
+      f.read(u, personal, "利未記", 2, taipei("2026-10-03"));
+      f.read(u, personal, "利未記", 3, taipei("2026-10-04"));
+      return { filter: "custom-key", statsPlan: makeStatsPlan(BASE_DAYS, { globalPlanId: null, presetKey: "custom-key", name: "自訂讀經" }) };
+    },
+    書卷範圍外的打卡: f => {
+      // 計畫外的書卷不算章數、也不算最後打卡，但連續天數和補讀的日期照舊算得到（舊算法就是這樣）
+      const u = f.person("讀到別卷");
+      const plan = f.enroll(u, { books: ["利未記"] });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "民數記", 1, taipei("2026-10-02"));
+      f.read(u, plan, "民數記", 2, taipei("2026-10-03"));
+      const outOnly = f.person("全部讀到別卷");
+      const planB = f.enroll(outOnly, { books: ["利未記"] });
+      f.read(outOnly, planB, "民數記", 1, taipei("2026-10-02"));
+      // 舊的半卷寫法：書卷名稱對不上「詩篇」，全部被濾掉，總章數也是 0
+      const half = f.person("半卷寫法");
+      const planC = f.enroll(half, { books: ["詩篇 1-110"] });
+      f.read(half, planC, "詩篇", 1, taipei("2026-10-01"));
+      const blank = f.person("書卷只有空字串");
+      const planD = f.enroll(blank, { books: [""] });
+      f.read(blank, planD, "民數記", 1, taipei("2026-10-01"));
+      return { statsPlan: makeStatsPlan([dayOf(lev(1), ["民數記", 1]), dayOf(["民數記", 2])]) };
+    },
+    報名沒有書卷清單: f => {
+      // target_books 空的要退回 state.globalPlans 的 books：伺服器算不出來，只有這種人回逐筆
+      const u = f.person("沒有書卷清單");
+      const plan = f.enroll(u, { books: [] });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "民數記", 1, taipei("2026-10-02"));
+      const none = f.person("沒有書卷清單也沒打卡");
+      f.enroll(none, { books: [] });
+      const normal = f.person("正常的人");
+      const planB = f.enroll(normal);
+      f.read(normal, planB, "利未記", 1, taipei("2026-10-01"));
+      return {};
+    },
+    同一毫秒與微秒: f => {
+      const u = f.person("同毫秒");
+      const plan = f.enroll(u);
+      f.read(u, plan, "利未記", 1, "2026-10-01T03:00:00.123456+00:00");
+      f.read(u, plan, "利未記", 2, "2026-10-01T03:00:00.123999+00:00");
+      f.read(u, plan, "利未記", 3, "2026-10-01T03:00:00.123001+00:00");
+      f.read(u, plan, "利未記", 4, "2026-10-01T02:59:59.999999+00:00");
+      const v = f.person("同一批打卡");
+      const planB = f.enroll(v);
+      f.read(v, planB, "利未記", 1, "2026-10-02T03:00:00.5+00:00");
+      f.read(v, planB, "利未記", 2, "2026-10-02T03:00:00.5+00:00");
+      return {};
+    },
+    進度四捨五入: f => {
+      // 7 / 40 × 100 用浮點數算會落在 17.5 附近；總數用出埃及記 40 章
+      const u = f.person("七章");
+      const plan = f.enroll(u, { books: ["出埃及記"] });
+      for (let chapter = 1; chapter <= 7; chapter += 1) f.read(u, plan, "出埃及記", chapter, taipei("2026-10-02"));
+      const v = f.person("一章");
+      const planB = f.enroll(v, { books: ["詩篇"] });
+      f.read(v, planB, "詩篇", 1, taipei("2026-10-02"));
+      const w = f.person("三十三章");
+      const planC = f.enroll(w, { books: ["出埃及記", "利未記"] });
+      for (let chapter = 1; chapter <= 33; chapter += 1) f.read(w, planC, "出埃及記", (chapter % 40) + 1, taipei("2026-10-02"));
+      return {};
+    }
+  };
+
+  beforeAll(async () => {
+    memberRoleId = (await db.query(`SELECT id FROM public.role_definitions WHERE code = 'member'`)).rows[0].id;
+    app = createRosterApp({ bibleBooks: BIBLE_BOOK_CHAPTERS });
+  });
+
+  afterAll(() => {
+    app?.close();
+  });
+
+  for (const [name, build] of Object.entries(SCENARIOS)) {
+    it(`情境：${name}`, async () => {
+      const diffs = await inRosterTx(async tx => {
+        const fixture = createFixture();
+        const options = build(fixture);
+        await insertFixture(tx, fixture);
+        const { diffs: found, summary } = await compareRoster(tx, name, { statsPlan: makeStatsPlan(), ...options });
+        return { found, people: summary.merged.users.length, enrolled: fixture.plans.length };
+      });
+      expect(diffs.found).toEqual([]);
+      expect(diffs.people).toBeGreaterThan(0);
+    }, 60_000);
+  }
+
+  it("情境：跨時區邊界（台北午夜前後、看的人在其他時區）", async () => {
+    const found = await inRosterTx(async tx => {
+      const f = createFixture();
+      const u = f.person("午夜前後");
+      const plan = f.enroll(u);
+      // UTC 15:59:59／16:00:00＝台北的當天最後一秒／隔天第一秒
+      f.read(u, plan, "利未記", 1, "2026-09-30T15:59:59+00:00");
+      f.read(u, plan, "利未記", 2, "2026-09-30T16:00:00+00:00");
+      f.read(u, plan, "利未記", 3, "2026-10-01T15:59:59+00:00");
+      f.read(u, plan, "利未記", 4, "2026-10-02T16:00:00+00:00");
+      f.read(u, plan, "利未記", 5, "2026-10-03T23:30:00+00:00");
+      f.read(u, plan, "利未記", 6, "2026-10-05T00:30:00+00:00");
+      // 紐約 11/1 日光節約結束那一天（一天 25 小時），前後都有打卡
+      const dst = f.person("跨日光節約");
+      const planB = f.enroll(dst);
+      ["2026-10-31T12:00:00Z", "2026-11-01T12:00:00Z", "2026-11-02T12:00:00Z"].forEach((at, index) => f.read(dst, planB, "利未記", index + 1, at));
+      await insertFixture(tx, f);
+      const all = [];
+      for (const timezone of ["Asia/Taipei", "UTC", "America/New_York", "Asia/Kolkata", "Pacific/Auckland"]) {
+        all.push(...(await compareRoster(tx, "跨時區", { statsPlan: makeStatsPlan(), timezone })).diffs);
+      }
+      return all;
+    });
+    expect(found).toEqual([]);
+  }, 120_000);
+
+  it("情境：教會原始日程（真的活動定義鋪出來的比對尺）", async () => {
+    const found = await inRosterTx(async tx => {
+      const definition = getChurchCampaignStageDefinition(1);
+      const days = buildChurchCampaignDays(definition, BIBLE_BOOK_CHAPTERS, []);
+      const startDate = definition.startDate;
+      const f = createFixture(7);
+      const books = [...new Set(days.flatMap(day => day.chapters.map(chapter => chapter.book)))];
+      for (const [index, lag] of [0, 1, 3, 10].entries()) {
+        const u = f.person(`落後 ${lag} 天`);
+        const plan = f.enroll(u, { books });
+        days.slice(0, 30).forEach((day, dayIndex) => {
+          day.chapters.forEach(chapter => f.read(u, plan, chapter.book, chapter.chapter, taipei(addDays(startDate, dayIndex + lag), `0${index}:30:00`)));
+        });
+      }
+      await insertFixture(tx, f);
+      return (await compareRoster(tx, "教會原始日程", {
+        statsPlan: makeStatsPlan(days, { startDate, endDate: definition.endDate })
+      })).diffs;
+    });
+    expect(found).toEqual([]);
+  }, 120_000);
+
+  it("情境：限定牧區（首頁的同牧區路徑）和沒有計畫篩選", async () => {
+    const found = await inRosterTx(async tx => {
+      const f = createFixture();
+      const a = f.person("牧區一的人", { zone: "牧區一" });
+      const b = f.person("牧區二的人", { zone: "牧區二", group: "小組三" });
+      const none = f.person("牧區一沒報名", { zone: "牧區一" });
+      f.enroll(none, { global: OTHER_GLOBAL_PLAN, name: "別的計畫", n: 1 });
+      const planA = f.enroll(a, { n: 2 });
+      const planA2 = f.enroll(a, { global: OTHER_GLOBAL_PLAN, name: "別的計畫", books: ["民數記"], n: 3 });
+      const planB = f.enroll(b, { n: 4 });
+      f.read(a, planA, "利未記", 1, taipei("2026-10-01"));
+      f.read(a, planA2, "民數記", 1, taipei("2026-10-02"));
+      // 沒有計畫篩選時兩筆報名的同一章要去重、留最早的時間
+      f.read(a, planA2, "利未記", 1, taipei("2026-09-20"));
+      f.read(b, planB, "利未記", 1, taipei("2026-10-01"));
+      f.read(b, planB, "利未記", 2, taipei("2026-10-02"), 2);
+      f.profiles.push({ id: ACTOR, name: "沒有計畫的人", region: "大區一", zone: "牧區一", group: "小組一" });
+      await insertFixture(tx, f);
+      return [
+        ...(await compareRoster(tx, "限定牧區", { statsPlan: null, pastoralZone: "牧區一" })).diffs,
+        ...(await compareRoster(tx, "沒有計畫篩選", { statsPlan: null, filter: null })).diffs,
+        ...(await compareRoster(tx, "沒有計畫篩選＋牧區", { statsPlan: null, filter: null, pastoralZone: "牧區二" })).diffs
+      ];
+    });
+    expect(found).toEqual([]);
+  }, 60_000);
+
+  it("情境：管理範圍（不是全教會時只算可見名單裡的人）", async () => {
+    const found = await inRosterTx(async tx => {
+      const f = createFixture();
+      const inside = f.person("範圍內");
+      const outside = f.person("範圍外");
+      const planA = f.enroll(inside);
+      const planB = f.enroll(outside);
+      f.read(inside, planA, "利未記", 1, taipei("2026-10-03"));
+      f.read(outside, planB, "利未記", 1, taipei("2026-10-03"));
+      await insertFixture(tx, f);
+      const { diffs, summary } = await compareRoster(tx, "管理範圍", { statsPlan: makeStatsPlan(), visibleIds: [inside] });
+      expect(summary.merged.users.map(user => user.id)).toEqual([inside]);
+      return diffs;
+    });
+    expect(found).toEqual([]);
+  }, 60_000);
+
+  // 亂數資料：每個種子一份資料、一個時區，各種邊界混在一起。
+  const RANDOM_TIMEZONES = ["Asia/Taipei", "America/New_York", "UTC", "Asia/Kolkata", "Pacific/Auckland", "Asia/Taipei"];
+  function buildRandomFixture(seed) {
+    const f = createFixture(seed);
+    const { rng } = f;
+    const pick = list => list[Math.floor(rng() * list.length)];
+    const int = (min, max) => min + Math.floor(rng() * (max - min + 1));
+    const days = Array.from({ length: int(10, 30) }, () => {
+      if (rng() < 0.15) return dayOf();
+      return dayOf(...Array.from({ length: int(1, 3) }, () => [pick(["利未記", "民數記"]), int(1, 20)]));
+    });
+    const randomMoment = () => {
+      const date = addDays("2026-09-28", int(0, 40));
+      const roll = rng();
+      if (roll < 0.25) return taipei(date, "00:00:00"); // 台北午夜
+      if (roll < 0.4) return taipei(date, "23:59:59.999");
+      if (roll < 0.5) return `${date}T00:00:00+00:00`; // UTC 午夜
+      if (roll < 0.6) return `${date}T03:00:00.${pad(int(0, 999999), 6)}+00:00`; // 微秒、同毫秒
+      return taipei(date, `${pad(int(0, 23), 2)}:${pad(int(0, 59), 2)}:${pad(int(0, 59), 2)}`);
+    };
+    const count = int(20, 40);
+    for (let index = 0; index < count; index += 1) {
+      const region = pick(["大區一", "大區二"]);
+      const zone = region === "大區一" ? pick(["牧區一", "牧區二"]) : "牧區三";
+      const group = rng() < 0.1 ? "" : pick(["小組一", "小組二", "小組三", "小組四"]);
+      const user = f.person(`人${index}`, { region, zone, group });
+      if (rng() < 0.1) continue; // 沒報名
+      const planSeed = rng();
+      const books = planSeed < 0.6 ? ["利未記", "民數記"]
+        : planSeed < 0.75 ? ["利未記"]
+          : planSeed < 0.85 ? []
+            : planSeed < 0.95 ? ["利未記", "民數記", "詩篇 1-110"] : [""];
+      // 這個人的報名 id 順序打亂：「第一筆」不一定是全域計畫那筆
+      const slots = [0, 1, 2, 3].map(slot => ({ slot, order: rng() })).sort((x, y) => x.order - y.order).map(({ slot }) => 1000 + index * 10 + slot);
+      const enrollments = [f.enroll(user, { books, round: int(1, 3), handled: rng() < 0.4, n: slots[0] })];
+      if (rng() < 0.2) enrollments.push(f.enroll(user, { global: null, preset: "十月-preset", n: slots[1], books: ["利未記"], round: int(1, 2) }));
+      if (rng() < 0.15) enrollments.push(f.enroll(user, { personal: true, name: PLAN_NAME, n: slots[2] }));
+      if (rng() < 0.2) enrollments.push(f.enroll(user, { global: OTHER_GLOBAL_PLAN, name: "別的計畫", n: slots[3] }));
+      for (const planId of enrollments) {
+        if (rng() < 0.1) continue;
+        const seen = new Set();
+        const logCount = int(0, 40);
+        for (let n = 0; n < logCount; n += 1) {
+          const book = pick(["利未記", "利未記", "民數記", "申命記"]);
+          const chapter = int(1, 20);
+          const round = pick([1, 1, 1, 2, 3]);
+          const key = `${book}_${chapter}_${round}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          f.read(user, planId, book, chapter, randomMoment(), round);
+        }
+      }
+    }
+    return { f, days };
+  }
+
+  for (const [index, timezone] of RANDOM_TIMEZONES.entries()) {
+    const seed = 6730 + index;
+    it(`亂數資料：種子 ${seed}（${timezone}）`, async () => {
+      const result = await inRosterTx(async tx => {
+        const { f, days } = buildRandomFixture(seed);
+        await insertFixture(tx, f);
+        const { diffs, summary } = await compareRoster(tx, `亂數 ${seed}`, {
+          statsPlan: makeStatsPlan(days),
+          timezone
+        });
+        return { diffs, people: summary.merged.users.length, logs: f.logs.length };
+      });
+      expect(result.diffs).toEqual([]);
+      expect(result.people).toBeGreaterThan(5);
+      expect(result.logs).toBeGreaterThan(50);
+    }, 60_000);
+  }
+
+  it("同一份報名不可能有重複的 (書卷, 章, 遍)：彙總直接照這個資料庫約束數章數", async () => {
+    await inRosterTx(async tx => {
+      const f = createFixture();
+      const u = f.person("重複");
+      const plan = f.enroll(u);
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "利未記", 1, taipei("2026-10-02"));
+      await expect(insertFixture(tx, f)).rejects.toThrow(/reading_logs_unique/);
+    });
+  });
+
+  describe("權限與範圍", () => {
+    const SIGNATURE = "public.get_plan_stats_roster_summary(text[], text, text, date, jsonb, boolean, uuid[], uuid)";
+    const callWith = (tx, wholeChurch, visibleIds, actor = ACTOR, timezone = "Asia/Taipei") => tx.query(
+      `SELECT public.get_plan_stats_roster_summary($1::text[], NULL, $2, '2026-10-01', '[]'::jsonb, $3, $4::uuid[], $5) AS result`,
+      [[GLOBAL_PLAN], timezone, wholeChurch, visibleIds, actor]
+    );
+
+    it("不是全教會、可見名單是空的或 NULL、沒有呼叫者 → 什麼都不回（fail closed）", async () => {
+      const people = await inRosterTx(async tx => {
+        const f = createFixture();
+        const u = f.person("某人");
+        const plan = f.enroll(u);
+        f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+        await insertFixture(tx, f);
+        await tx.exec(`SET LOCAL ROLE service_role`);
+        const results = [];
+        for (const [wholeChurch, visibleIds, actor] of [[false, [], ACTOR], [false, null, ACTOR], [null, null, ACTOR], [true, null, null]]) {
+          const { rows: [{ result }] } = await callWith(tx, wholeChurch, visibleIds, actor);
+          results.push(result.people.length, result.plans.length);
+        }
+        const { rows: [{ result: allowed }] } = await callWith(tx, true, null);
+        return { results, allowed: allowed.people.length };
+      });
+      expect(people.results).toEqual(new Array(8).fill(0));
+      expect(people.allowed).toBe(1);
+    });
+
+    it("沒帶時區回 NULL（前端退回舊路徑），不是算出錯的日期", async () => {
+      const result = await inRosterTx(async tx => {
+        await tx.exec(`SET LOCAL ROLE service_role`);
+        return (await callWith(tx, true, null, ACTOR, null)).rows[0].result;
+      });
+      expect(result).toBeNull();
+    });
+
+    it("只有 service_role 能呼叫；是 SECURITY DEFINER，search_path 是空的", async () => {
+      const { rows: [row] } = await db.query(
+        `SELECT p.prosecdef, p.proconfig,
+                has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+                has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+                has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+         FROM pg_proc p WHERE p.oid = $1::regprocedure`,
+        [SIGNATURE]
+      );
+      expect(row).toMatchObject({ prosecdef: true, anon: false, authenticated: false, service: true });
+      expect(row.proconfig.join(",")).toMatch(/search_path=("")?/);
+      await expect(as("authenticated", { sub: ids.adminAuth }, tx => callWith(tx, true, null)))
+        .rejects.toThrow(/permission denied/);
+    });
+  });
+
+  // 驗收：合成 800 人 × 250 章。PGlite 只看相對差距，不代表正式站的絕對耗時。
+  it("回應大小：800 人 × 250 章，彙總在舊的 1/10 以下", async () => {
+    const measured = await inRosterTx(async tx => {
+      const chapters = [];
+      for (const book of BIBLE_BOOK_CHAPTERS) {
+        for (let chapter = 1; chapter <= book.chapters && chapters.length < 250; chapter += 1) chapters.push([book.name, chapter]);
+      }
+      const books = [...new Set(chapters.map(([book]) => book))];
+      await tx.query(
+        `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, is_active)
+         SELECT ('74000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, '會友' || n, $1, '大區一', '牧區' || (n % 20), '小組' || (n % 80), TRUE
+         FROM generate_series(1, 800) AS n`,
+        [memberRoleId]
+      );
+      await tx.query(
+        `INSERT INTO public.reading_plans (id, user_id, global_plan_id, name, start_date, end_date, target_books)
+         SELECT ('75000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, ('74000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+                $1, $2, '2026-10-01', '2026-12-31', $3::text[]
+         FROM generate_series(1, 800) AS n`,
+        [GLOBAL_PLAN, PLAN_NAME, books]
+      );
+      await tx.query(
+        `INSERT INTO public.reading_logs (user_id, plan_id, book, chapter, round, read_at)
+         SELECT ('74000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, ('75000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+                entry ->> 0, (entry ->> 1)::integer, 1,
+                '2026-10-01 08:00:00+08'::timestamptz + (ordinality * interval '6 hours') + (n * interval '1 second') + interval '123 milliseconds'
+         FROM generate_series(1, 800) AS n
+         CROSS JOIN jsonb_array_elements($1::jsonb) WITH ORDINALITY AS item(entry, ordinality)`,
+        [JSON.stringify(chapters)]
+      );
+      const schedule = chapters.map(([book, chapter], index) => [Math.floor(index / 3), book, chapter]);
+      await tx.exec(`SET LOCAL ROLE service_role`);
+      const timed = async (sql, params) => {
+        const started = Date.now();
+        const { rows: [{ bytes }] } = await tx.query(sql, params);
+        return { bytes: Number(bytes), ms: Date.now() - started };
+      };
+      const before = await timed(
+        `SELECT octet_length(public.get_plan_stats_roster($1::text[], NULL, '2026-11-05', TRUE, NULL, $2)::text) AS bytes`,
+        [[GLOBAL_PLAN], ACTOR]
+      );
+      const after = await timed(
+        `SELECT octet_length(public.get_plan_stats_roster_summary($1::text[], NULL, 'Asia/Taipei', '2026-10-01', $2::jsonb, TRUE, NULL, $3)::text) AS bytes`,
+        [[GLOBAL_PLAN], JSON.stringify(schedule), ACTOR]
+      );
+      return { before, after };
+    });
+    console.info(`#673 size: old ${measured.before.bytes} bytes, ${measured.before.ms} ms; new ${measured.after.bytes} bytes, ${measured.after.ms} ms; ratio 1/${(measured.before.bytes / measured.after.bytes).toFixed(1)}`);
+    expect(measured.after.bytes).toBeLessThan(measured.before.bytes / 10);
+  }, 240_000);
 });

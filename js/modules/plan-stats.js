@@ -11,6 +11,7 @@ import {
 } from "../data/schedule-progress.mjs";
 import { computePlanScopedStreak } from "./team-progress-metrics.mjs";
 import { computeOrgUnitStats as computePlanOrgUnitStats } from "../data/plan-stats-rules.mjs";
+import { buildPlanStatsRosterSchedule } from "../data/plan-stats-roster-summary.mjs";
 import { formatTaiwanDate, prependTaiwanExportTime } from "./export-time.mjs";
 import { csvCell } from "./csv-cell.mjs";
 import { ensureChartLib } from "./chart-loader.mjs";
@@ -312,6 +313,15 @@ function getPlanStatsCacheKey(plan) {
   return plan ? (plan.globalPlanId || plan.presetKey || plan.name || plan.id) : null;
 }
 
+// 名冊彙總（#673）：補讀天數由伺服器算，比對尺（教會原始日程）還是前端這一份，送過去。
+// 同一個計畫的組員總覽、組織統計樹、CSV 都帶同一把尺，才會共用同一個快取項目。
+function getPlanStatsRosterOptions(plan) {
+  const baselineDays = typeof window.getCanonicalStageScheduleDays === "function"
+    ? window.getCanonicalStageScheduleDays(plan)
+    : (plan.days || []);
+  return { rosterSchedule: buildPlanStatsRosterSchedule(baselineDays, plan.startDate) };
+}
+
 async function renderPlanHistoryView() {
   if (!getOrgStatsContextPlan()) return;
 
@@ -475,7 +485,7 @@ async function renderOrgStatsTree() {
 
   let allUsers = [];
   try {
-    allUsers = await db.fetchMergedUsersList(getPlanStatsCacheKey(contextPlan));
+    allUsers = await db.fetchMergedUsersList(getPlanStatsCacheKey(contextPlan), false, getPlanStatsRosterOptions(contextPlan));
   } catch (e) {
     console.warn('Failed to fetch users for org stats tree', e);
   }
@@ -536,7 +546,7 @@ async function exportZoneCompletionCSV() {
 
   let allUsers = [];
   try {
-    allUsers = await db.fetchMergedUsersList(getPlanStatsCacheKey(contextPlan));
+    allUsers = await db.fetchMergedUsersList(getPlanStatsCacheKey(contextPlan), false, getPlanStatsRosterOptions(contextPlan));
   } catch (e) {
     console.warn('Failed to fetch users for zone export', e);
   }
@@ -1327,7 +1337,7 @@ async function renderGroupParticipantsRankingTable() {
     let logsByUserId = new Map();
     try {
       const statsKey = getPlanStatsCacheKey(statsPlan);
-      const merged = await db.fetchMergedUsersWithLogs(statsKey, { maxAgeMs: Infinity });
+      const merged = await db.fetchMergedUsersWithLogs(statsKey, { maxAgeMs: Infinity, ...getPlanStatsRosterOptions(statsPlan) });
       allUsers = merged.users || [];
       logsByUserId = merged.logsByUserId || new Map();
     } catch (e) {
@@ -1476,6 +1486,8 @@ async function renderGroupParticipantsRankingTable() {
       const isMe = u.name === state.currentUser.name;
       const useMyLiveData = isMe && isViewingOwnPlan;
       const memberLogs = logsByUserId.get(u.id) || [];
+      // 名冊彙總（#673）已經帶這兩個數字；退回逐筆路徑時才在這裡算。
+      const rosterStats = u.roster_stats || null;
       const hasAnyPlanRead = useMyLiveData
         ? myPlanReadCount > 0
         : ((u.chapters_read || 0) > 0 || ((u.plan_progress || 0) > 0 && Boolean(u.last_read)));
@@ -1485,7 +1497,9 @@ async function renderGroupParticipantsRankingTable() {
         ? 0
         : useMyLiveData
           ? personalStreak
-          : computePlanScopedStreak(memberLogs, { preFiltered: true });
+          : rosterStats
+            ? rosterStats.streak
+            : computePlanScopedStreak(memberLogs, { preFiltered: true });
 
       let completed = 0;
       let makeup = 0;
@@ -1502,7 +1516,7 @@ async function renderGroupParticipantsRankingTable() {
           memberIsCompletedOnce = state.activePlan.isPlanCompleted || (state.activePlan.currentRound || 1) > 1;
         } else {
           completed = u.chapters_read || 0;
-          makeup = calculateCatchUpDays(memberLogs);
+          makeup = rosterStats && rosterStats.makeup !== null ? rosterStats.makeup : calculateCatchUpDays(memberLogs);
           memberIsCompletedOnce = (u.current_round || 1) > 1;
         }
         // 讀完一遍後直接視為天數全滿，避免進入二三遍後被誤判落後。
