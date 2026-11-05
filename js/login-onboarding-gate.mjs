@@ -25,7 +25,7 @@ export function getLoginGateCopy(block, { hasTokens, returnedFromHub = false } =
     return {
       enterApp: false,
       title: "新生命聖經速讀計畫",
-      subtitle: "跟弟兄姊妹一起速讀聖經。登入後，換手機也能接著讀。第一次使用也從這裡開始。",
+      subtitle: "跟弟兄姊妹一起速讀聖經。登入後，換裝置也能接著讀。第一次使用也從這裡開始。",
       button: "登入",
       mode: "sso",
     };

@@ -141,9 +141,9 @@ describe("readLastLoginMethod", () => {
 describe("loginMethodHintText", () => {
   it("names the method and masked account when known", () => {
     expect(loginMethodHintText({ method: "phone", masked: "0912-***-678" }))
-      .toBe("上次在這支手機是用手機 0912-***-678 登入，請用同一個方式才看得到你的計畫。");
+      .toBe("上次在這台裝置是用手機 0912-***-678 登入，請用同一個方式才看得到你的計畫。");
     expect(loginMethodHintText({ method: "email", masked: "ab***@gmail.com" }))
-      .toBe("上次在這支手機是用 Email ab***@gmail.com 登入，請用同一個方式才看得到你的計畫。");
+      .toBe("上次在這台裝置是用 Email ab***@gmail.com 登入，請用同一個方式才看得到你的計畫。");
   });
 
   it("falls back to the generic line with no record or an unknown method", () => {

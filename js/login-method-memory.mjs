@@ -90,10 +90,10 @@ export function loginMethodHintText(record) {
   const copy = (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.loginMethodHint) || {};
   const fill = template => template.replace("{account}", () => record.masked);
   if (record && record.method === "phone") {
-    return fill(copy.phone || "上次在這支手機是用手機 {account} 登入，請用同一個方式才看得到你的計畫。");
+    return fill(copy.phone || "上次在這台裝置是用手機 {account} 登入，請用同一個方式才看得到你的計畫。");
   }
   if (record && record.method === "email") {
-    return fill(copy.email || "上次在這支手機是用 Email {account} 登入，請用同一個方式才看得到你的計畫。");
+    return fill(copy.email || "上次在這台裝置是用 Email {account} 登入，請用同一個方式才看得到你的計畫。");
   }
   return copy.unknown || "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。";
 }
