@@ -2,6 +2,7 @@ import { getResponsePayloadBytes, networkMetrics } from './performance/network-m
 import { fetchNlcTracked } from './diagnostics/report-diagnostics.mjs';
 import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
 import { createReadCoalescer } from './data/nlc-read-coalescer.mjs';
+import { createLeaderboardCache } from './data/leaderboard-cache.mjs';
 import {
   BOOT_SNAPSHOT_KEY,
   BOOT_SNAPSHOT_STORE,
@@ -2748,6 +2749,7 @@ const db = {
       localStorage.setItem("reading_logs", JSON.stringify(state.readingLogs));
     }
 
+    if (targetPlan) this.invalidateLeaderboards(targetPlan);
     this.calculateStreak();
     this.saveLocalUserStats();
 
@@ -4018,6 +4020,7 @@ const db = {
       const { data, error } = await state.supabase.rpc(functionName, args);
       if (error) return { success: false, error, authExpired: this._isReadingTeamAuthError(error), message: this._readingTeamErrorMessage(error) };
       if (this.READING_TEAM_MUTATING_RPCS.has(functionName)) {
+        this.invalidateLeaderboards();
         window.dispatchEvent(new CustomEvent("reading-team:changed", { detail: { rpc: functionName } }));
       }
       return { success: true, data };
@@ -5300,30 +5303,32 @@ const db = {
         }
       };
     }
-    const result = await this._callReadingTeamRpc("get_reading_team_leaderboards", {
-      p_global_plan_id: planId
-    });
-    if (!result.success) return result;
-
-    const context = result.data || { division3: [], division6: [] };
-    const leaderboardTeams = [
-      ...(Array.isArray(context.division3) ? context.division3 : []),
-      ...(Array.isArray(context.division6) ? context.division6 : [])
-    ];
-    if (!leaderboardTeams.some(team => typeof team.isMine === "boolean")) {
-      const ownResult = await this.getMyReadingTeam(plan);
-      const ownContexts = ownResult.success && ownResult.context
-        ? (Array.isArray(ownResult.context.teams) ? ownResult.context.teams : [ownResult.context])
-        : [];
-      const ownTeamIds = new Set(ownContexts.map(item => item && item.team && String(item.team.id)).filter(Boolean));
-      ["division3", "division6"].forEach(key => {
-        context[key] = (Array.isArray(context[key]) ? context[key] : []).map(team => ({
-          ...team,
-          isMine: ownTeamIds.has(String(team.id))
-        }));
+    return this._readLeaderboard("teams", plan, planId, async () => {
+      const result = await this._callReadingTeamRpc("get_reading_team_leaderboards", {
+        p_global_plan_id: planId
       });
-    }
-    return { success: true, context };
+      if (!result.success) return result;
+
+      const context = result.data || { division3: [], division6: [] };
+      const leaderboardTeams = [
+        ...(Array.isArray(context.division3) ? context.division3 : []),
+        ...(Array.isArray(context.division6) ? context.division6 : [])
+      ];
+      if (!leaderboardTeams.some(team => typeof team.isMine === "boolean")) {
+        const ownResult = await this.getMyReadingTeam(plan);
+        const ownContexts = ownResult.success && ownResult.context
+          ? (Array.isArray(ownResult.context.teams) ? ownResult.context.teams : [ownResult.context])
+          : [];
+        const ownTeamIds = new Set(ownContexts.map(item => item && item.team && String(item.team.id)).filter(Boolean));
+        ["division3", "division6"].forEach(key => {
+          context[key] = (Array.isArray(context[key]) ? context[key] : []).map(team => ({
+            ...team,
+            isMine: ownTeamIds.has(String(team.id))
+          }));
+        });
+      }
+      return { success: true, context };
+    });
   },
 
   async getPastoralZoneLeaderboard(plan) {
@@ -5342,12 +5347,14 @@ const db = {
         }
       };
     }
-    const result = await this._callReadingTeamRpc("get_pastoral_zone_leaderboard", {
-      p_global_plan_id: planId
+    return this._readLeaderboard("zones", plan, planId, async () => {
+      const result = await this._callReadingTeamRpc("get_pastoral_zone_leaderboard", {
+        p_global_plan_id: planId
+      });
+      return result.success
+        ? { success: true, context: result.data || { zones: [], unassignedCount: 0 } }
+        : result;
     });
-    return result.success
-      ? { success: true, context: result.data || { zones: [], unassignedCount: 0 } }
-      : result;
   },
 
   async getPersonalPlanRankingSummary(plan) {
@@ -5365,21 +5372,60 @@ const db = {
         }
       };
     }
-    const result = await this._callReadingTeamRpc("get_personal_plan_ranking_summary", {
-      p_global_plan_id: planId
-    });
-    return result.success
-      ? {
-          success: true,
-          context: result.data || {
-            churchRank: null,
-            churchTotal: 0,
-            zoneName: null,
-            zoneRank: null,
-            zoneTotal: 0
+    return this._readLeaderboard("personal", plan, planId, async () => {
+      const result = await this._callReadingTeamRpc("get_personal_plan_ranking_summary", {
+        p_global_plan_id: planId
+      });
+      return result.success
+        ? {
+            success: true,
+            context: result.data || {
+              churchRank: null,
+              churchTotal: 0,
+              zoneName: null,
+              zoneRank: null,
+              zoneTotal: 0
+            }
           }
-        }
-      : result;
+        : result;
+    });
+  },
+
+  // 排行榜記憶體快取（#667）：規則見 js/data/leaderboard-cache.mjs。
+  // 舊資料背景更新後、或自己寫入清掉快取後，發 leaderboards:changed，排行畫面（plan-stats.js）原地重畫。
+  _leaderboardCache: createLeaderboardCache({
+    onChange: detail => window.dispatchEvent(new CustomEvent("leaderboards:changed", { detail }))
+  }),
+
+  _readLeaderboard(kind, plan, planId, fetcher) {
+    return this._leaderboardCache.read({
+      kind,
+      planId,
+      userId: state.currentProfileId,
+      // 過了截止＋寬限期就不會再有人打卡，排名不會再變
+      ended: isPlanCheckInClosed(plan),
+      fetcher
+    });
+  },
+
+  // 給計畫：清那個計畫的排行（個人計畫沒有排行，不做事）。不給：清所有還在進行的計畫（團隊異動、離線佇列送出）。
+  invalidateLeaderboards(plan) {
+    if (plan === undefined) {
+      this._leaderboardCache.invalidate();
+      return;
+    }
+    const planId = this._readingTeamPlanId(plan);
+    if (planId) this._leaderboardCache.invalidate(planId);
+  },
+
+  // 回前景時呼叫：看著排行才需要，超過新鮮期就背景重抓，有變才重畫
+  revalidateLeaderboards(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (planId) this._leaderboardCache.revalidateStale({ planId, userId: state.currentProfileId });
+  },
+
+  clearLeaderboardCache() {
+    this._leaderboardCache.clear();
   },
 
   async createReadingTeam(plan, division, name) {
@@ -5754,6 +5800,7 @@ const db = {
       }
     }
 
+    this.invalidateLeaderboards();
     state.activePlans = state.activePlans.filter(p => p.id !== planId && p.presetKey !== presetKey);
     state.readingLogs = state.readingLogs.filter(l => l.plan_id !== planId && l.presetKey !== presetKey);
     state.readingLogDigest = removePlanFromDigest(state.readingLogDigest, planId);

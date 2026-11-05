@@ -270,6 +270,8 @@ export class PwaCoordinator {
       error.status = Number(result.status || result.error.status || 0);
       throw error;
     }
+    // 佇列裡是 reading_plans.id，對不到排行用的計畫 id：進行中的全部清掉（#667）
+    window.db.invalidateLeaderboards?.();
     window.dispatchEvent(new CustomEvent("app:dataRefresh", { detail: { scope: "plan", source: "offline-sync" } }));
   }
 
