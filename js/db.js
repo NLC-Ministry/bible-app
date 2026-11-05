@@ -5225,6 +5225,21 @@ const db = {
       ? { success: true, context: { sent: true, fallback: true } }
       : { success: false, error: fallback && fallback.error, message: this._readingTeamErrorMessage(fallback && fallback.error) };
   },
+  // 一次提醒一批（#676）。回 unavailable 或 RPC 不能用的錯誤時，呼叫端退回逐筆 sendPlanJoinInvitation；
+  // 訊息內容、範圍、今天已提醒都由伺服器決定，這裡只傳人。
+  async sendPlanJoinInvitationsBatch(plan, recipientIds) {
+    const planId = this._resolveManagementGlobalPlanId(plan);
+    if (!state.isSupabaseMode || !state.supabase || !planId || !this._managementPlanUsesTeamRpc(plan)) {
+      return { success: false, unavailable: true };
+    }
+    const result = await this._callReadingTeamRpc("send_plan_join_invitations_batch", {
+      p_global_plan_id: planId,
+      p_recipient_ids: recipientIds,
+      p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+    });
+    if (!result.success) return result;
+    return { success: true, results: result.data && result.data.results };
+  },
   async getReadingTeamStatistics(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊統計。" };

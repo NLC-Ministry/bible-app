@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMigratedDb } from "./lib/pglite-supabase.mjs";
+import { PLAN_INVITE_BATCH_MAX_RECIPIENTS } from "../js/modules/admin-bulk-plan-invite.mjs";
 
 // #594：在 PGlite 從空資料庫套用 supabase/migrations/ 的全部 migration，實際執行重要 RPC，把行為鎖住
 //（test:changed 靠這個路徑字串，改了 migration 就會跑這支）。
@@ -1783,5 +1784,276 @@ describe("月初隊伍接不上：帶隊狀態、隊員接手、補帶、重名�
     );
     expect(rows).toHaveLength(4);
     rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
+  });
+});
+
+describe("批次提醒未報名者（send_plan_join_invitations_batch，#676）", () => {
+  const person = n => `20000000-0000-4000-8000-0000000676${String(n).padStart(2, "0")}`;
+  const STAGE_PLAN_KEY = "stage-676";
+  const OTHER_PRESET_PLAN = "40000000-0000-4000-8000-000000000676";
+  // 收件人：組織三層都分得開，才測得出每個角色的範圍
+  const R = {
+    sameGroup: person(1),
+    otherGroup: person(2),
+    otherZone: person(3),
+    otherRegion: person(4),
+    inactive: person(5),
+    joined: person(6),
+    joinedByPreset: person(7),
+    noOrg: person(8),
+    unknown: "20000000-0000-4000-8000-000000067699"
+  };
+  // 發送者：含「管理範圍是空的」三種，一定要 fail closed
+  const A = {
+    pastor: person(20),
+    greatManaged: person(21),
+    greatFallback: person(22),
+    greatEmpty: person(23),
+    zoneManaged: person(24),
+    zoneFallback: person(25),
+    zoneEmpty: person(26),
+    groupManaged: person(27),
+    groupFallback: person(28),
+    groupEmpty: person(29),
+    otherZoneLeader: person(30),
+    member: person(31)
+  };
+
+  const addPerson = (tx, id, role, { region = "", zone = "", group = "", managedRegions = "", managedZones = "", managedGroups = "", active = true } = {}) => tx.query(
+    `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, is_active)
+     SELECT $1, '測試會友 0676', definition.id, $3, $4, $5, $6, $7, $8, $9 FROM public.role_definitions AS definition WHERE definition.code = $2`,
+    [id, role, region, zone, group, managedRegions, managedZones, managedGroups, active]
+  );
+
+  const seedPeople = async tx => {
+    const home = { region: "大區 A", zone: "牧區 A-1", group: "小組 A-1-1" };
+    await addPerson(tx, R.sameGroup, "member", home);
+    await addPerson(tx, R.otherGroup, "member", { ...home, group: "小組 A-1-2" });
+    await addPerson(tx, R.otherZone, "member", { region: "大區 A", zone: "牧區 A-2", group: "小組 A-2-1" });
+    await addPerson(tx, R.otherRegion, "member", { region: "大區 B", zone: "牧區 B-1", group: "小組 B-1-1" });
+    await addPerson(tx, R.inactive, "member", { ...home, active: false });
+    await addPerson(tx, R.joined, "member", home);
+    await addPerson(tx, R.joinedByPreset, "member", home);
+    await addPerson(tx, R.noOrg, "member");
+
+    await addPerson(tx, A.pastor, "pastor");
+    await addPerson(tx, A.greatManaged, "great_zone_leader", { region: "大區 B", managedRegions: "大區 A" });
+    await addPerson(tx, A.greatFallback, "great_zone_leader", { region: "大區 A" });
+    await addPerson(tx, A.greatEmpty, "great_zone_leader");
+    await addPerson(tx, A.zoneManaged, "zone_leader", { zone: "牧區 B-1", managedZones: "牧區 A-1, 牧區 A-2" });
+    await addPerson(tx, A.zoneFallback, "zone_leader", { zone: "牧區 A-1" });
+    await addPerson(tx, A.zoneEmpty, "zone_leader");
+    await addPerson(tx, A.groupManaged, "group_leader", { group: "小組 B-1-1", managedGroups: "小組 A-1-1" });
+    await addPerson(tx, A.groupFallback, "group_leader", { group: "小組 A-1-1" });
+    await addPerson(tx, A.groupEmpty, "group_leader");
+    await addPerson(tx, A.otherZoneLeader, "zone_leader", { zone: "牧區 B-1" });
+    await addPerson(tx, A.member, "member", home);
+
+    await tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books) VALUES ($1, '另一個計畫', '2026-09-01', '2026-12-31', ARRAY['GEN'])`,
+      [OTHER_PRESET_PLAN]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+       SELECT $1, id, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`,
+      [R.joined, ids.plan]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_plans (user_id, global_plan_id, preset_key, name, start_date, end_date, target_books)
+       SELECT $1, id, $3, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`,
+      [R.joinedByPreset, OTHER_PRESET_PLAN, STAGE_PLAN_KEY]
+    );
+  };
+
+  const batch = async (tx, actorId, recipientIds, planKey = STAGE_PLAN_KEY, planId = ids.plan) => (await tx.query(
+    `SELECT public.send_plan_join_invitations_batch(p_global_plan_id => $1, p_recipient_ids => $2::uuid[], p_plan_key => $3, p_actor_id => $4) AS result`,
+    [planId, recipientIds, planKey, actorId]
+  )).rows[0].result.results;
+  const single = async (tx, actorId, recipientId, planKey = STAGE_PLAN_KEY) => (await tx.query(
+    `SELECT public.send_plan_join_invitation($1, $2, $3, $4) AS result`,
+    [ids.plan, recipientId, planKey, actorId]
+  )).rows[0].result;
+  const statusById = results => Object.fromEntries(results.map(row => [row.recipient_id, row.status]));
+  const reminders = async (tx, senderId) => (await tx.query(
+    `SELECT sender_id, recipient_id, global_plan_id, plan_key, reason, message, status, sent_on::text AS sent_on
+     FROM public.care_reminders WHERE sender_id = $1 ORDER BY recipient_id`,
+    [senderId]
+  )).rows;
+  const uuids = count => Array.from({ length: count }, (_, index) =>
+    `90000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
+
+  // 單筆的結果換成批次的狀態名稱，兩邊才比得起來
+  const SINGLE_ERROR_STATUS = {
+    plan_invitation_recipient_not_found: "not_found",
+    plan_invitation_self_not_allowed: "self",
+    plan_member_outside_scope: "outside_scope",
+    plan_invitation_recipient_already_joined: "already_joined"
+  };
+  const singleStatus = async (tx, actorId, recipientId) => {
+    await tx.exec("SAVEPOINT single_676");
+    try {
+      const result = await single(tx, actorId, recipientId);
+      return result.sent ? "sent" : "duplicate";
+    } catch (error) {
+      const code = Object.keys(SINGLE_ERROR_STATUS).find(key => String(error.message).includes(key));
+      if (!code) throw error;
+      return SINGLE_ERROR_STATUS[code];
+    } finally {
+      await tx.exec("ROLLBACK TO SAVEPOINT single_676");
+    }
+  };
+
+  it("每個角色、每種收件人，結果都跟單筆 RPC 一樣（含空範圍 fail closed）", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const recipients = Object.values(R);
+      const actors = [ids.admin, ...Object.values(A).filter(id => id !== A.member)];
+      const seen = new Set();
+      for (const actorId of actors) {
+        const everyone = [...recipients, actorId];
+        await tx.exec("SAVEPOINT batch_676");
+        const results = statusById(await batch(tx, actorId, everyone));
+        await tx.exec("ROLLBACK TO SAVEPOINT batch_676");
+        for (const recipientId of everyone) {
+          expect(results[recipientId], `actor ${actorId} → ${recipientId}`).toBe(await singleStatus(tx, actorId, recipientId));
+          seen.add(results[recipientId]);
+        }
+      }
+      // 這張表真的走過每一種結果，不是全部同一個答案剛好相等
+      expect([...seen].sort()).toEqual(["already_joined", "not_found", "outside_scope", "self", "sent"]);
+    });
+  }, 60_000);
+
+  it("超範圍的人明確回 outside_scope、不寫入；同一批範圍內的人照送", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const results = statusById(await batch(tx, A.zoneFallback, [R.sameGroup, R.otherGroup, R.otherZone, R.otherRegion]));
+      expect(results).toEqual({
+        [R.sameGroup]: "sent",
+        [R.otherGroup]: "sent",
+        [R.otherZone]: "outside_scope",
+        [R.otherRegion]: "outside_scope"
+      });
+      expect((await reminders(tx, A.zoneFallback)).map(row => row.recipient_id).sort()).toEqual([R.sameGroup, R.otherGroup].sort());
+    });
+  });
+
+  it.each([
+    ["大區長", "greatEmpty"],
+    ["區長", "zoneEmpty"],
+    ["小組長", "groupEmpty"]
+  ])("%s沒有管理範圍：所有人都 outside_scope、一筆都不寫（連組織也空白的人）", async (_label, key) => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const results = await batch(tx, A[key], [R.sameGroup, R.otherRegion, R.noOrg]);
+      expect(results.map(row => row.status)).toEqual(["outside_scope", "outside_scope", "outside_scope"]);
+      expect(await reminders(tx, A[key])).toEqual([]);
+    });
+  });
+
+  it("寫進去的內容和單筆完全一樣（訊息由伺服器決定）", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      await single(tx, A.pastor, R.sameGroup);
+      await batch(tx, A.greatFallback, [R.sameGroup]);
+      const [fromSingle] = await reminders(tx, A.pastor);
+      const [fromBatch] = await reminders(tx, A.greatFallback);
+      expect({ ...fromBatch, sender_id: null }).toEqual({ ...fromSingle, sender_id: null });
+      expect(fromBatch).toMatchObject({
+        sender_id: A.greatFallback,
+        plan_key: `plan-invite:${ids.plan}`,
+        reason: "encouragement",
+        message: "邀請你加入「測試計畫」讀經計畫，一起開始讀經吧！",
+        status: "unread"
+      });
+    });
+  });
+
+  it("今天已提醒的人不重複：批次再送、單筆先送都回 duplicate；別的發送者、昨天的不算", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      expect(statusById(await batch(tx, A.pastor, [R.sameGroup]))).toEqual({ [R.sameGroup]: "sent" });
+      expect(statusById(await batch(tx, A.pastor, [R.sameGroup, R.otherGroup]))).toEqual({ [R.sameGroup]: "duplicate", [R.otherGroup]: "sent" });
+      expect(await reminders(tx, A.pastor)).toHaveLength(2);
+
+      // 批次送過 → 單筆看得到
+      expect(await single(tx, A.pastor, R.otherGroup)).toEqual({ sent: false, duplicate: true });
+      // 單筆送過 → 批次看得到
+      await single(tx, A.pastor, R.otherZone);
+      expect(statusById(await batch(tx, A.pastor, [R.otherZone]))).toEqual({ [R.otherZone]: "duplicate" });
+
+      // 去重是每位發送者各自算，跟單筆的唯一鍵一樣
+      expect(statusById(await batch(tx, A.greatFallback, [R.sameGroup]))).toEqual({ [R.sameGroup]: "sent" });
+
+      // 昨天提醒過的，今天可以再提醒
+      await tx.query(
+        `INSERT INTO public.care_reminders (sender_id, recipient_id, global_plan_id, plan_key, reason, message, status, sent_on)
+         VALUES ($1, $2, $3, $4, 'encouragement', '昨天的提醒', 'unread', CURRENT_DATE - 1)`,
+        [A.pastor, R.otherRegion, ids.plan, `plan-invite:${ids.plan}`]
+      );
+      expect(statusById(await batch(tx, A.pastor, [R.otherRegion]))).toEqual({ [R.otherRegion]: "sent" });
+    });
+  });
+
+  it("重複的 id 只算一次、NULL 略過；空名單回空結果", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const results = await batch(tx, A.pastor, [R.sameGroup, R.sameGroup, null, R.sameGroup]);
+      expect(results).toEqual([{ recipient_id: R.sameGroup, status: "sent" }]);
+      expect(await reminders(tx, A.pastor)).toHaveLength(1);
+      expect(await batch(tx, A.pastor, [])).toEqual([]);
+      expect(await batch(tx, A.pastor, null)).toEqual([]);
+    });
+  });
+
+  it(`上限 ${PLAN_INVITE_BATCH_MAX_RECIPIENTS} 人（跟前端分批一致），算的是去重後的人數`, async () => {
+    await asService(async tx => {
+      const atLimit = await batch(tx, ids.admin, uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS));
+      expect(atLimit).toHaveLength(PLAN_INVITE_BATCH_MAX_RECIPIENTS);
+      expect(new Set(atLimit.map(row => row.status))).toEqual(new Set(["not_found"]));
+      const withDuplicates = await batch(tx, ids.admin, [...uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS), ...uuids(10)]);
+      expect(withDuplicates).toHaveLength(PLAN_INVITE_BATCH_MAX_RECIPIENTS);
+    });
+    await expect(asService(tx => batch(tx, ids.admin, uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS + 1))))
+      .rejects.toThrow(/plan_invitation_batch_too_large/);
+  }, 60_000);
+
+  it("超過上限整批不寫", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      await tx.exec("SAVEPOINT too_large_676");
+      await expect(batch(tx, A.pastor, [R.sameGroup, ...uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS)]))
+        .rejects.toThrow(/plan_invitation_batch_too_large/);
+      await tx.exec("ROLLBACK TO SAVEPOINT too_large_676");
+      expect(await reminders(tx, A.pastor)).toEqual([]);
+    });
+  });
+
+  it("身分：沒帶 actor、不存在的 actor、一般會友都拒絕", async () => {
+    await expect(asService(tx => batch(tx, null, [ids.member]))).rejects.toThrow(/profile_required/);
+    await expect(asService(tx => batch(tx, person(98), [ids.member]))).rejects.toThrow(/profile_required/);
+    await expect(asService(tx => batch(tx, ids.member, [ids.other]))).rejects.toThrow(/plan_management_scope_required/);
+  });
+
+  it("計畫不存在回 plan_not_found", async () => {
+    await expect(asService(tx => batch(tx, ids.admin, [ids.member], "", "40000000-0000-4000-8000-00000000dead")))
+      .rejects.toThrow(/plan_not_found/);
+  });
+
+  it("只開給 service_role：client 不能直接呼叫，也不能傳別人的 actor", async () => {
+    const { rows } = await db.query(
+      `SELECT has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+              has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public' AND p.proname = 'send_plan_join_invitations_batch'`
+    );
+    expect(rows).toEqual([{ anon: false, authenticated: false, service: true }]);
+    await expect(as("authenticated", { sub: ids.adminAuth }, tx => batch(tx, null, [ids.member])))
+      .rejects.toThrow(/permission denied/);
+    await expect(as("authenticated", { sub: ids.memberAuth }, tx => batch(tx, ids.admin, [ids.other])))
+      .rejects.toThrow(/permission denied/);
+    await expect(as("anon", {}, tx => batch(tx, ids.admin, [ids.other])))
+      .rejects.toThrow(/permission denied/);
   });
 });

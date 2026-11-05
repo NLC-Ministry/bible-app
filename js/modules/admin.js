@@ -5371,6 +5371,7 @@ async function renderAdminUnjoinedPlanMembers(forceRefresh = false) {
         members: eligibleMembers,
         plan: planAtStart,
         sendInvitation: (targetPlan, memberId) => db.sendPlanJoinInvitation(targetPlan, memberId),
+        sendInvitationBatch: (targetPlan, memberIds) => db.sendPlanJoinInvitationsBatch(targetPlan, memberIds),
         onProgress: progress => setBulkPlanInviteButton(inviteAllButton, eligibleMembers, {
           busy: true,
           completed: progress.completed,

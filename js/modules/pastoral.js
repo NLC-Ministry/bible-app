@@ -1017,6 +1017,7 @@ async function inviteAll(button) {
       members,
       plan,
       sendInvitation: (target, id) => window.db.sendPlanJoinInvitation(target, id),
+      sendInvitationBatch: (target, ids) => window.db.sendPlanJoinInvitationsBatch(target, ids),
       onProgress: ({ completed, total }) => { button.textContent = `提醒中 ${completed}/${total}`; }
     });
     members.filter((member) => member.remindedToday).forEach((member) => view.invited.add(member.id));

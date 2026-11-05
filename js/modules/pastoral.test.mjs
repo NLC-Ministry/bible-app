@@ -347,6 +347,51 @@ describe("管理分頁（#551、#570、#584）", () => {
     }));
   });
 
+  describe("全部提醒加入（#676）", () => {
+    const openInviteAll = async () => {
+      window.confirm = vi.fn(() => true);
+      const mod = await load();
+      mod.openPastoralTab("join-status");
+      await mod.renderPastoralView();
+      const roster = panel("roster");
+      await vi.waitFor(() => expect(roster.querySelectorAll(".pastoral-row")).toHaveLength(1));
+      roster.querySelector('[data-pastoral-action="invite-all"]').click();
+      return roster;
+    };
+
+    it("走批次 RPC；結果和按鈕文字照舊", async () => {
+      db.sendPlanJoinInvitationsBatch = vi.fn(async () => ({
+        success: true,
+        results: [{ recipient_id: "u2", status: "sent" }]
+      }));
+      const roster = await openInviteAll();
+      await vi.waitFor(() => expect(window.showToast).toHaveBeenCalled());
+      expect(db.sendPlanJoinInvitationsBatch).toHaveBeenCalledTimes(1);
+      expect(db.sendPlanJoinInvitationsBatch).toHaveBeenCalledWith(expect.objectContaining({ id: PLAN_ID }), ["u2"]);
+      expect(db.sendPlanJoinInvitation).not.toHaveBeenCalled();
+      expect(window.showToast.mock.calls.at(-1)[0]).toBe("已提醒 1 人");
+      expect(roster.querySelector('[data-pastoral-action="invite-all"]').textContent).toBe("全部提醒加入");
+    });
+
+    it("今天已提醒的人照舊顯示", async () => {
+      db.sendPlanJoinInvitationsBatch = vi.fn(async () => ({
+        success: true,
+        results: [{ recipient_id: "u2", status: "duplicate" }]
+      }));
+      await openInviteAll();
+      await vi.waitFor(() => expect(window.showToast).toHaveBeenCalled());
+      expect(window.showToast.mock.calls.at(-1)[0]).toBe("已提醒 0 人，1 人今天已提醒過");
+    });
+
+    it("批次 RPC 還沒上線：退回單筆，一樣送得出去", async () => {
+      db.sendPlanJoinInvitationsBatch = vi.fn(async () => ({ success: false, error: { error: "forbidden_rpc" } }));
+      await openInviteAll();
+      await vi.waitFor(() => expect(window.showToast).toHaveBeenCalled());
+      expect(db.sendPlanJoinInvitation).toHaveBeenCalledWith(expect.objectContaining({ id: PLAN_ID }), "u2");
+      expect(window.showToast.mock.calls.at(-1)[0]).toBe("已提醒 1 人");
+    });
+  });
+
   it("leaving the 管理 tab closes any open page without touching the scroll position", async () => {
     const mod = await load();
     await mod.renderPastoralView();
