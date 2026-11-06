@@ -170,18 +170,27 @@ describe("提示卡", () => {
     const card = render();
     expect(card.querySelector(".account-switch-hint__title").textContent.trim()).toBe("找不到你的讀經計畫嗎？");
     expect(card.querySelector(".account-switch-hint__body").textContent).toBe(
-      "你之前在這台裝置上是用 Email（ab***@gmail.com）登入的，你的計畫和閱讀紀錄都在那裡。用 Email 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。"
+      "你之前在這台裝置上是用 ab***@gmail.com 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分（有設密碼也可以輸入密碼），就能把它們找回來，之後用之前或現在的方式登入都看得到。"
     );
-    expect(card.querySelector("[data-account-recover-plan]").textContent).toBe("用 Email 找回我的計畫");
+    expect(card.querySelector("[data-account-recover-plan]").textContent).toBe("確認身分，找回我的計畫");
     expect(card.querySelector("[data-account-switch-dismiss]").textContent).toBe("不是我／我是第一次參加");
     expect(card.textContent).not.toMatch(/帳號|合併/);
     expect(card.querySelector("[data-account-switch-logout]")).toBeNull();
   });
 
-  it("手機版文案", () => {
+  it("手機帳號也不斷定是用手機登入（#682）", () => {
     const card = render({ method: "phone", masked: "0912-***-678" });
-    expect(card.querySelector("[data-account-recover-plan]").textContent).toBe("用 手機 找回我的計畫");
-    expect(card.querySelector(".account-switch-hint__body").textContent).toContain("是用 手機（0912-***-678）登入的");
+    expect(card.querySelector("[data-account-recover-plan]").textContent).toBe("確認身分，找回我的計畫");
+    const body = card.querySelector(".account-switch-hint__body").textContent;
+    expect(body).toContain("是用 0912-***-678 登入的");
+    expect(body).toContain("用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分");
+    expect(body).not.toMatch(/手機|Email/);
+  });
+
+  it("其他 Email 列出所有方式，不只叫他按 Google（#682）", () => {
+    const body = render({ method: "email", masked: "ab***@church.org" }).querySelector(".account-switch-hint__body").textContent;
+    expect(body).toContain("用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分");
+    expect(body).not.toContain("按 Google 確認一次身分");
   });
 
   it("zh-Hant 的文案也不提帳號、合併，而且和程式內的預設相同", () => {
@@ -190,9 +199,14 @@ describe("提示卡", () => {
     const texts = block.slice(0, block.indexOf("loginMethodHint:"));
     expect(texts).not.toMatch(/帳號|合併/);
     const hintSource = readFileSync("js/modules/account-switch-hint.mjs", "utf8");
-    expect(hintSource).toContain("你之前在這台裝置上是用 {method}（{account}）登入的");
-    expect(texts).toContain("你之前在這台裝置上是用 {method}（{account}）登入的");
+    expect(hintSource).toContain("你之前在這台裝置上是用 {account} 登入的");
+    expect(texts).toContain("你之前在這台裝置上是用 {account} 登入的");
+    for (const line of ["按 Google 確認一次身分（有設密碼也可以輸入密碼）", "用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分"]) {
+      expect(hintSource).toContain(line);
+      expect(copy).toContain(line);
+    }
     expect(hintSource + texts).not.toContain("這支手機");
+    expect(texts).not.toContain("{method}");
   });
 
   it("遮罩值會跳脫", () => {
@@ -459,14 +473,17 @@ describe("登入舊的方式回來", () => {
     expect(allStored()).not.toContain(TARGET.access);
   });
 
-  it("確認畫面的文案：說出用什麼確認、兩種方式看到同一份、無法復原；不提帳號、合併", () => {
+  it("確認畫面的文案：說出遮罩後的識別、不斷定登入方式（#682）、兩種方式看到同一份、無法復原；不提帳號、合併", () => {
     const phone = planRecoveryConfirmBody({ phone_number: "886912345678" });
-    expect(phone).toContain("你已用 手機（");
-    expect(phone).toContain("***");
+    expect(phone).toContain("你已用 0912-***-678 確認身分");
     expect(phone).not.toContain("912345");
+    expect(phone).not.toMatch(/手機|Email/);
+    expect(phone).toContain("用之前或現在的方式登入");
     expect(phone).toContain("同一份計畫");
     expect(phone).toContain("無法復原");
-    expect(planRecoveryConfirmBody({ email: "abcdef@gmail.com" })).toContain("你已用 Email（ab***@gmail.com）");
+    const email = planRecoveryConfirmBody({ email: "abcdef@gmail.com" });
+    expect(email).toContain("你已用 ab***@gmail.com 確認身分");
+    expect(email).not.toMatch(/手機|Email/);
     // 說不出是哪一種（兩個都有或都沒有）就不猜
     for (const claims of [{}, null, { email: "abcdef@gmail.com", phone_number: "886912345678" }]) {
       expect(planRecoveryConfirmBody(claims)).toMatch(/^你已完成身分確認/);
@@ -482,7 +499,7 @@ describe("登入舊的方式回來", () => {
     await signedInAgain(() => json({ ok: true }));
     const confirm = vi.fn(async () => false);
     await finish({ confirm });
-    expect(confirm.mock.calls[0][0]).toContain("你已用 手機（");
+    expect(confirm.mock.calls[0][0]).toMatch(/^你已用 \S*\*\*\*\S* 確認身分/);
     expect(confirm.mock.calls[0][0]).not.toContain("zz***");
   });
 
@@ -515,7 +532,7 @@ describe("登入舊的方式回來", () => {
     const { result, message, showResult, reload } = await finish();
 
     expect(result).toEqual({ status: "merged" });
-    expect(message).toBe("已找回你的計畫和閱讀紀錄。之後用手機或 Email 登入都可以。");
+    expect(message).toBe("已找回你的計畫和閱讀紀錄。之後用之前或現在的方式登入都可以。");
     expect(calls[1]).toEqual({
       action: "complete",
       source_token: SOURCE.access,

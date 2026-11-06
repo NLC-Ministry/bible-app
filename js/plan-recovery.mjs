@@ -52,7 +52,7 @@ async function postRecoverPlan(config, body, { fetchImpl = fetchWithTimeout } = 
 export function planRecoveryMessage(code) {
   const copy = planRecoveryCopy();
   const messages = {
-    merged: copy.merged || "已找回你的計畫和閱讀紀錄。之後用手機或 Email 登入都可以。",
+    merged: copy.merged || "已找回你的計畫和閱讀紀錄。之後用之前或現在的方式登入都可以。",
     cancelled: copy.cancelled || "這次沒有完成確認，你的資料都沒有變動。想再試一次時，可以再按一次「找回我的計畫」。",
     same_account: copy.sameMethod || "剛才登入的還是現在這個方式，所以沒有找到計畫。請換成你之前用的方式再試一次。",
     not_eligible: copy.notEligible || "這個方式沒有辦法自動找回計畫。如果你的計畫還是不見，請找教會同工協助。",
@@ -64,19 +64,18 @@ export function planRecoveryMessage(code) {
 }
 
 /**
- * 確認畫面的說明。方式與遮罩取自剛登入的 id_token，只用來顯示：
- * 裝置紀錄不一定是剛才登入的那個方式，不能拿來告訴會友他用什麼確認了身分。
+ * 確認畫面的說明。遮罩取自剛登入的 id_token，只用來顯示：
+ * 裝置紀錄不一定是剛才登入的那個帳號，不能拿來告訴會友他用什麼確認了身分。
+ * #682：id_token 分不出密碼、Google、LINE，所以只說帳號，不斷定登入方式。
  */
 export function planRecoveryConfirmBody(idClaims) {
   const copy = planRecoveryCopy();
   const { method, masked } = currentLoginMethod({ phone: idClaims?.phone_number, email: idClaims?.email });
   if (!method) {
-    return copy.confirmBodyUnknown || "你已完成身分確認。找回後，用手機或 Email 登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。";
+    return copy.confirmBodyUnknown || "你已完成身分確認。找回後，用之前或現在的方式登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。";
   }
-  const template = copy.confirmBody || "你已用 {method}（{account}）確認身分。找回後，用手機或 Email 登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。";
-  return template
-    .replace("{method}", () => (method === "phone" ? "手機" : "Email"))
-    .replace("{account}", () => masked);
+  const template = copy.confirmBody || "你已用 {account} 確認身分。找回後，用之前或現在的方式登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。";
+  return template.replace("{account}", () => masked);
 }
 
 /**

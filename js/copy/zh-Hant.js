@@ -53,20 +53,21 @@ window.APP_COPY = {
     loginSwitchAccount: "找不到以前的進度？換回上次的登入方式",
   },
   // #615：換一種方式登入而開出新的空帳號時，在沒有計畫的畫面提示改回原本的方式。
-  // #663：說出現在用的是手機還是 Email（{account} 是遮罩後的號碼／信箱），不預設原本是手機。
+  // #663：說出現在的帳號（{account} 是遮罩後的號碼／信箱）。
+  // #682：只知道帳號有手機或 Email，分不出密碼、Google、LINE，所以不斷定登入方式。
   accountSwitchHint: {
     title: "找不到你的讀經計畫嗎？",
-    bodyPhone: "你現在是用手機 {account} 登入的。如果你以前參加時是用 Email 或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。",
-    bodyEmail: "你現在是用 Email {account} 登入的。如果你以前參加時是用手機號碼或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。",
+    bodyKnown: "你現在是用 {account} 登入的。如果你以前參加時是用別的方式登入，計畫會在那裡，請登出後改用那個方式登入。",
     bodyUnknown: "如果你以前參加時是用另一種方式（Email 或手機號碼）登入，計畫會在那裡，請登出後改用那個方式登入。",
     switchCta: "登出，換別的方式登入",
     dismissCta: "我是第一次參加",
-    recoverBody: "你之前在這台裝置上是用 {method}（{account}）登入的，你的計畫和閱讀紀錄都在那裡。用 {method} 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。",
-    recoverCta: "用 {method} 找回我的計畫",
+    recoverBody: "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。",
+    recoverBodyGmail: "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分（有設密碼也可以輸入密碼），就能把它們找回來，之後用之前或現在的方式登入都看得到。",
+    recoverCta: "確認身分，找回我的計畫",
     recoverDismissCta: "不是我／我是第一次參加",
   },
   planRecovery: {
-    merged: "已找回你的計畫和閱讀紀錄。之後用手機或 Email 登入都可以。",
+    merged: "已找回你的計畫和閱讀紀錄。之後用之前或現在的方式登入都可以。",
     cancelled: "這次沒有完成確認，你的資料都沒有變動。想再試一次時，可以再按一次「找回我的計畫」。",
     sameMethod: "剛才登入的還是現在這個方式，所以沒有找到計畫。請換成你之前用的方式再試一次。",
     notEligible: "這個方式沒有辦法自動找回計畫。如果你的計畫還是不見，請找教會同工協助。",
@@ -75,17 +76,19 @@ window.APP_COPY = {
     failed: "暫時無法完成找回，請稍後再試，還是不行請找教會同工協助。",
     working: "正在找回你的計畫...",
     confirmTitle: "確認找回你的計畫",
-    confirmBody: "你已用 {method}（{account}）確認身分。找回後，用手機或 Email 登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。",
-    confirmBodyUnknown: "你已完成身分確認。找回後，用手機或 Email 登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。",
+    confirmBody: "你已用 {account} 確認身分。找回後，用之前或現在的方式登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。",
+    confirmBodyUnknown: "你已完成身分確認。找回後，用之前或現在的方式登入都會看到同一份計畫和閱讀紀錄，這個動作無法復原。如果這不是你的計畫，請按取消。",
     confirmCta: "確認找回",
     confirmCancelCta: "取消",
     dialogTitle: "找回你的計畫",
     dialogOk: "知道了",
   },
   loginMethodHint: {
-    phone: "上次在這台裝置是用手機 {account} 登入，請用同一個方式才看得到你的計畫。",
-    email: "上次在這台裝置是用 Email {account} 登入，請用同一個方式才看得到你的計畫。",
-    unknown: "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。",
+    // #682：分不出當時用密碼、Google 還是 LINE。Gmail 按 Google 會連回同一個帳號，可以直接建議；其他就列出所有方式。
+    gmail: "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。",
+    email: "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。",
+    phone: "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。",
+    unknown: "請用跟上次相同的方式（手機、Email、Google 或 LINE）登入，才看得到你的計畫。",
   },
   memberHub: {
     cardTitle: "新生命會員中心",
