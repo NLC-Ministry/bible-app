@@ -127,17 +127,15 @@ describe("account switch hint: current login method", () => {
     expect(currentLoginMethod(undefined).method).toBe("");
   });
 
-  it("a phone login is told it is on the phone and to try Email (the reported case)", () => {
-    const text = bodyText({ phone: "886912345678" });
-    expect(text).toContain("你現在是用手機 0912-***-678 登入的");
-    expect(text).toContain("Email");
-    expect(text).not.toContain("如果你之前用手機號碼");
+  // #682：帳號只有手機或 Email，不代表就是用它登入（可能是 Google、LINE），所以只說帳號。
+  it("names the phone account without claiming the phone was the sign-in method", () => {
+    expect(bodyText({ phone: "886912345678" }))
+      .toBe("你現在是用 0912-***-678 登入的。如果你以前參加時是用別的方式登入，計畫會在那裡，請登出後改用那個方式登入。");
   });
 
-  it("an email login is told it is on Email and to try the phone number", () => {
-    const text = bodyText({ email: "abcdef@gmail.com" });
-    expect(text).toContain("你現在是用 Email ab***@gmail.com 登入的");
-    expect(text).toContain("手機號碼");
+  it("names the email account without claiming Email was the sign-in method", () => {
+    expect(bodyText({ email: "abcdef@gmail.com" }))
+      .toBe("你現在是用 ab***@gmail.com 登入的。如果你以前參加時是用別的方式登入，計畫會在那裡，請登出後改用那個方式登入。");
   });
 
   it("falls back to neutral copy when it can't tell", () => {

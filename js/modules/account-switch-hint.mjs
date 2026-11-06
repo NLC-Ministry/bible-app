@@ -80,8 +80,14 @@ export function maskEmail(email) {
   return `${local.slice(0, local.length > 2 ? 2 : 1)}***${value.slice(at)}`;
 }
 
-// #663：告訴會友「現在」是用什麼登入，他才知道要換成另一種。
+// #682：遮罩後網域不變，可以判斷。Gmail 按 Google 會由 Logto 連回同一個帳號，提示才能直接建議。
+export function isGmailAccount(masked) {
+  return /@gmail\.com$/i.test(String(masked || ""));
+}
+
+// #663：告訴會友「現在」是哪個帳號，他才知道要換成另一個。
 // 帳號只有手機或只有 Email 才說得準；兩者都有（或都沒有）就不猜。
+// #682：method 只代表帳號有什麼資料，不是實際的登入方式（可能是 Google、LINE），不要顯示成「用 Email 登入」。
 export function currentLoginMethod(user) {
   const phone = maskPhone(user && user.phone);
   const email = maskEmail(user && user.email);
@@ -90,14 +96,14 @@ export function currentLoginMethod(user) {
   return { method: "", masked: "" };
 }
 
-// #664：裝置記得上次是用哪個方式登入：改成驗證那個方式就能找回。文案不提帳號、合併。
+// #664：裝置記得上次是哪個帳號：改成驗證當時的方式就能找回。文案不提帳號、合併。
 function recoverPlanMarkup(offer, copy) {
-  const label = offer.method === "phone" ? "手機" : "Email";
-  const fill = template => template
-    .replace(/\{method\}/g, () => label)
+  const template = isGmailAccount(offer.masked)
+    ? (copy.recoverBodyGmail || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分（有設密碼也可以輸入密碼），就能把它們找回來，之後用之前或現在的方式登入都看得到。")
+    : (copy.recoverBody || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。");
+  const body = template
     .replace("{account}", () => `<span class="account-switch-hint__account">${escapeText(offer.masked)}</span>`);
-  const body = fill(copy.recoverBody || "你之前在這台裝置上是用 {method}（{account}）登入的，你的計畫和閱讀紀錄都在那裡。用 {method} 確認一次身分，就能把它們找回來，之後用手機或 Email 登入都看得到。");
-  const cta = (copy.recoverCta || "用 {method} 找回我的計畫").replace("{method}", () => label);
+  const cta = copy.recoverCta || "確認身分，找回我的計畫";
   return `
     <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">
       <h3 class="account-switch-hint__title" id="account-switch-hint-title">
@@ -119,14 +125,9 @@ export function accountSwitchHintMarkup(currentUser, recoveryOffer = null) {
   if (recoveryOffer) return recoverPlanMarkup(recoveryOffer, copy);
   const { method, masked } = currentLoginMethod(currentUser);
   const account = `<span class="account-switch-hint__account">${escapeText(masked)}</span>`;
-  let body;
-  if (method === "phone") {
-    body = (copy.bodyPhone || "你現在是用手機 {account} 登入的。如果你以前參加時是用 Email 或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account);
-  } else if (method === "email") {
-    body = (copy.bodyEmail || "你現在是用 Email {account} 登入的。如果你以前參加時是用手機號碼或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account);
-  } else {
-    body = copy.bodyUnknown || "如果你以前參加時是用另一種方式（Email 或手機號碼）登入，計畫會在那裡，請登出後改用那個方式登入。";
-  }
+  const body = method
+    ? (copy.bodyKnown || "你現在是用 {account} 登入的。如果你以前參加時是用別的方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account)
+    : (copy.bodyUnknown || "如果你以前參加時是用另一種方式（Email 或手機號碼）登入，計畫會在那裡，請登出後改用那個方式登入。");
   return `
     <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">
       <h3 class="account-switch-hint__title" id="account-switch-hint-title">

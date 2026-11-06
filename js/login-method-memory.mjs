@@ -5,7 +5,8 @@
 // 不是原本有計畫的舊帳號。建立時間不明又沒有計畫時也不記。
 import {
   ACCOUNT_SWITCH_HINT_MAX_AGE_DAYS,
-  currentLoginMethod
+  currentLoginMethod,
+  isGmailAccount
 } from "./modules/account-switch-hint.mjs";
 import { OFFLINE_IDENTITY_KEY, parseOfflineIdentity } from "./data/offline-identity.mjs";
 
@@ -95,13 +96,18 @@ export function readLastLoginMethod({ storage = defaultStorage(), now = Date.now
 export function loginMethodHintText(record) {
   const copy = (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.loginMethodHint) || {};
   const fill = template => template.replace("{account}", () => record.masked);
+  // #682：紀錄只知道帳號有手機還是 Email，分不出密碼、Google、LINE，所以不斷定登入方式。
+  // Gmail 例外：Logto 會把相同 Email 的 Google 連到同一個帳號，按 Google 不會開出新帳號。
   if (record && record.method === "phone") {
-    return fill(copy.phone || "上次在這台裝置是用手機 {account} 登入，請用同一個方式才看得到你的計畫。");
+    return fill(copy.phone || "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。");
   }
   if (record && record.method === "email") {
-    return fill(copy.email || "上次在這台裝置是用 Email {account} 登入，請用同一個方式才看得到你的計畫。");
+    if (isGmailAccount(record.masked)) {
+      return fill(copy.gmail || "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。");
+    }
+    return fill(copy.email || "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。");
   }
-  return copy.unknown || "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。";
+  return copy.unknown || "請用跟上次相同的方式（手機、Email、Google 或 LINE）登入，才看得到你的計畫。";
 }
 
 /** 畫在登入卡上；visible=false 用在不是要會友登入的畫面（沒註冊、資料讀不到等）。 */
