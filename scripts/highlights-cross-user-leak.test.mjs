@@ -16,7 +16,8 @@ describe("highlights: same-device account switch does not leak the previous user
   it("logout() clears the highlight cache and its owner tag, not just reading-plan data", () => {
     const idx = auth.indexOf('async logout()');
     expect(idx).toBeGreaterThan(-1);
-    const body = auth.slice(idx, auth.indexOf("_finishLocalLogout", idx));
+    expect(auth.slice(idx, auth.indexOf("_finishLocalLogout", idx))).toContain("await this.clearAccountLocalData()");
+    const body = auth.slice(auth.indexOf("async clearAccountLocalData()"), idx);
     expect(body).toContain('localStorage.removeItem("bible_highlights")');
     expect(body).toContain('localStorage.removeItem("bible_highlight_timestamps")');
     expect(body).toContain('localStorage.removeItem("bible_highlights_owner")');

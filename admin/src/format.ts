@@ -77,12 +77,7 @@ export const REPORT_CATEGORY_LABEL: Record<string, string> = {
 };
 
 // 和會友在 App 回報抽屜看到的字一樣（ignored＝已存檔）
-export const REPORT_STATUS_LABEL: Record<string, string> = {
-  pending: "待處理",
-  processing: "處理中",
-  resolved: "已解決",
-  ignored: "已存檔"
-};
+export { REPORT_STATUS_LABEL } from "../../lib/issue-report/report-status.ts";
 
 export const PROVIDER_LABEL: Record<string, string> = {
   logto: "NLC 登入",

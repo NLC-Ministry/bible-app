@@ -109,6 +109,8 @@ describe("wiring", () => {
 
   it("clears the snapshot on logout", () => {
     const logout = auth.slice(auth.indexOf("  async logout() {"), auth.indexOf("state.supabase.auth.signOut", auth.indexOf("  async logout() {")));
-    expect(logout).toContain("window.db?.clearBootSnapshot?.()");
+    expect(logout).toContain("await this.clearAccountLocalData()");
+    const clear = auth.slice(auth.indexOf("  async clearAccountLocalData() {"), auth.indexOf("  async logout() {"));
+    expect(clear).toContain("window.db?.clearBootSnapshot?.()");
   });
 });

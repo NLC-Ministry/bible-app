@@ -1,7 +1,7 @@
 // 後台首頁（#569）的 admin-api：home_summary 只有數字、不記稽核、不含任何人的名字；
 // 計畫那幾格（需要關心、還沒滿的隊、本期進度）和計畫總覽同一份規則、同一個預設計畫，點進去的人數一定一樣。
 import { describe, expect, it, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 import { buildPlanSummary, preparePlanReport, resolvePlanForReport } from "../supabase/functions/_shared/progress/plan-report.mjs";
 import { ADMIN_ACTIONS } from "../supabase/functions/admin-api/policy.ts";
 import { handleAdminRequest } from "../supabase/functions/admin-api/handler.ts";
@@ -28,7 +28,7 @@ const PEOPLE = [
 ];
 const OVERVIEW = { today: TODAY, people: PEOPLE, meta: { inScope: 4, enrolled: 3 } };
 const COUNTS = {
-  reports: { open: 3, unread: 1, oldest_open_at: "2026-11-08T01:00:00Z" },
+  reports: { pending: 3, processing: 1, unread: 1, oldest_pending_at: "2026-11-08T01:00:00Z" },
   commentary: { pending: 355, approved: 2 },
   quiz: { enabled: true, configured: true, date: "2026-11-12", status: "waiting", needs_attention: true },
   changes: [{ action: "app_feature_settings.update", occurred_at: "2026-11-10T02:00:00Z" }, { action: "publish_global_plan_rules", occurred_at: "2026-11-09T02:00:00Z" }]
@@ -68,14 +68,34 @@ const post = (body) => new Request("https://example.supabase.co/functions/v1/adm
 const json = async (response) => ({ status: response.status, body: await response.json() });
 const sqlCalls = (calls) => calls.filter((call) => /^admin_api_(plan|home)_/.test(call.fn));
 
+describe("home_summary 同時查（#674）", () => {
+  it("計畫報告和首頁數字一起開始：報告要等數字開始查才放行，依序跑會卡住", async () => {
+    const { deps } = setup();
+    const inner = deps.rpc;
+    let countsStarted;
+    const countsStartedPromise = new Promise((resolve) => { countsStarted = resolve; });
+    deps.rpc = vi.fn(async (fn, args) => {
+      if (fn === "admin_api_home_counts") countsStarted();
+      if (fn === "admin_api_plan_info") await countsStartedPromise;
+      return inner(fn, args);
+    });
+    const { status, body } = await json(await handleAdminRequest(post({ action: "home_summary" }), deps));
+    expect(status).toBe(200);
+    expect(body.data.reports.pending).toBe(3);
+    expect(body.data.plan.funnel).toBeTruthy();
+  });
+});
+
 describe("admin-api home_summary (#569)", () => {
   it("default plan → the same summary rules as the plan overview → the other counts; nothing audited", async () => {
     const { deps, calls } = setup();
     const res = await json(await handleAdminRequest(post({ action: "home_summary", params: {} }), deps));
     expect(res.status).toBe(200);
-    expect(sqlCalls(calls).map((call) => call.fn)).toEqual([
-      "admin_api_plan_options", "admin_api_plan_info", "admin_api_plan_people", "admin_api_home_counts"
-    ]);
+    // 預設計畫要先查出來；後面的報告和數字同時跑（#674），先後不固定
+    const fns = sqlCalls(calls).map((call) => call.fn);
+    expect(fns[0]).toBe("admin_api_plan_options");
+    expect([...fns.slice(1)].sort()).toEqual(["admin_api_home_counts", "admin_api_plan_info", "admin_api_plan_people"]);
+    expect(fns.indexOf("admin_api_plan_info")).toBeLessThan(fns.indexOf("admin_api_plan_people"));
     const people = calls.find((call) => call.fn === "admin_api_plan_people");
     expect(people.args).toMatchObject({ p_actor_id: ADMIN_ID, p_global_plan_id: PLAN_ID, p_audit: false });
     expect(calls.find((call) => call.fn === "admin_api_home_counts").args).toEqual({ p_actor_id: ADMIN_ID, p_global_plan_id: PLAN_ID });
@@ -136,7 +156,7 @@ describe("admin-api home_summary (#569)", () => {
 
   it("only needs console access; the SQL re-checks the admin and is service_role only", () => {
     expect(ADMIN_ACTIONS.home_summary.capabilities).toEqual(["console.access"]);
-    const sql = readFileSync(new URL("../supabase/migrations/20261016012410_admin_api_home.sql", import.meta.url), "utf8");
+    const sql = currentMigrationSql("20261016012410_admin_api_home.sql");
     expect(sql).toContain("PERFORM public.admin_api_assert_admin(p_actor_id);");
     expect(sql).toContain("REVOKE ALL ON FUNCTION public.admin_api_home_counts(uuid, uuid) FROM PUBLIC, anon, authenticated;");
     expect(sql).toContain("GRANT EXECUTE ON FUNCTION public.admin_api_home_counts(uuid, uuid) TO service_role;");

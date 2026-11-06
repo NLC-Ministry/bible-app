@@ -18,13 +18,13 @@ describe("nlc-data query composition", () => {
     expect(helper).toContain("return { query");
     expect(helper).not.toMatch(/return query(?:[.;]|\s*$)/m);
     expect(source).toContain(
-      "({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin));"
+      "({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin, requestCache));"
     );
   });
 
   it("applies ordering only after the scoped query builder is recovered", () => {
     const scopeIndex = source.indexOf(
-      "({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin));"
+      "({ query } = await applyForcedScope(query, table, action, profile, supabaseAdmin, requestCache));"
     );
     // #351: ordering moved into the shared applyOrder() helper (multi-column).
     const orderIndex = source.indexOf(

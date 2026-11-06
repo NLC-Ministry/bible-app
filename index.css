@@ -3477,6 +3477,13 @@ body:not(.dark-theme) .settings-row-btn:hover {
   white-space: nowrap;
 }
 
+.account-switch-hint__status {
+  margin: 0 0 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
 .account-switch-hint__actions {
   display: flex;
   flex-wrap: wrap;
@@ -15014,6 +15021,63 @@ body.profile-subpage-open .main-content {
 .lq-voucher__code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.25rem !important; letter-spacing: 0.12em; font-weight: 500; }
 .lq-voucher__meta { margin: 0; font-size: 0.875rem; color: var(--text-secondary); }
 .lq-voucher__redeem { width: 100%; }
+
+/* 克勞斯兌換紀錄：店家帳號查看（#679） */
+.voucher-merchant__lookup { display: grid; gap: 0.4rem; }
+.voucher-merchant__lookup label { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); }
+.voucher-merchant__lookup-row { display: flex; gap: 0.5rem; }
+.voucher-merchant__lookup-row .form-control { flex: 1; min-width: 0; text-transform: uppercase; }
+.voucher-merchant__lookup-row .primary-btn { flex-shrink: 0; }
+.voucher-merchant__lookup-result { margin-top: 0.75rem; }
+.voucher-merchant__message { margin: 0.75rem 0 0; font-size: 0.875rem; color: var(--text-secondary); }
+.voucher-merchant__summary {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+.voucher-merchant__summary-title { font-size: 0.875rem; color: var(--text-secondary); }
+.voucher-merchant__summary-value { font-size: 1.125rem; font-weight: 500; color: var(--text-primary); }
+.voucher-merchant__summary-hint { font-size: 0.875rem; color: var(--text-muted); }
+.voucher-merchant__filters { display: grid; gap: 0.75rem; margin-top: 1rem; }
+.voucher-merchant__filters:empty { display: none; }
+.voucher-merchant__month { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-secondary); }
+.voucher-merchant__month select { flex: 1; min-width: 0; }
+.voucher-merchant__filters .capsule-segmented-control { flex-wrap: wrap; }
+.voucher-merchant__filters .segment-toggle-btn { flex: 1 1 auto; }
+.voucher-merchant__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 0.75rem;
+  margin: 0;
+}
+.voucher-merchant__fields dt { font-size: 0.875rem; color: var(--text-muted); }
+.voucher-merchant__fields dd { margin: 0.1rem 0 0; font-size: 0.9375rem; color: var(--text-primary); overflow-wrap: anywhere; }
+.voucher-merchant__card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.voucher-merchant__card-head .lq-voucher__code { color: var(--text-primary); }
+
+/* 後台「得獎與兌換」的店家帳號（#679） */
+.admin-voucher-merchants__title { margin: 1.5rem 0 0.5rem; }
+.admin-voucher-merchants__hint { margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--text-secondary); }
+.admin-voucher-merchants__search { display: grid; gap: 0.35rem; font-size: 0.875rem; color: var(--text-secondary); }
+.admin-voucher-merchants__list { display: grid; gap: 0.5rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.admin-voucher-merchants__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+}
+.admin-voucher-merchants__who { display: grid; gap: 0.1rem; min-width: 0; color: var(--text-primary); }
+.admin-voucher-merchants__who span { font-size: 0.875rem; color: var(--text-secondary); overflow-wrap: anywhere; }
+.admin-voucher-merchants__note { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--text-muted); }
 
 /* 後台週統計「英雄榜兌換券」（#445） */
 .admin-lq-vouchers__summary { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0.25rem 0 0.5rem; color: var(--text-secondary); font-size: 0.875rem; }

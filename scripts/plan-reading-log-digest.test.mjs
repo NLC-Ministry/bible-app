@@ -148,6 +148,8 @@ function createFakeSupabase(calls, { rpc = "roster" } = {}) {
   };
   if (rpc === "roster" || rpc === "digest" || rpc === "malformed") {
     client.rpc = async (name, args) => {
+      // #673 的彙總 RPC 不在這裡的比較範圍：當它還沒部署，db.js 退回這裡要比的路徑。
+      if (name === "get_plan_stats_roster_summary") return { data: null, error: { code: "PGRST202" } };
       calls.push({ rpc: name, args });
       if (name === "get_plan_stats_roster") {
         if (rpc === "roster") return { data: rosterRpc(args), error: null };
@@ -158,6 +160,7 @@ function createFakeSupabase(calls, { rpc = "roster" } = {}) {
     };
   } else if (rpc === "error") {
     client.rpc = async name => {
+      if (name === "get_plan_stats_roster_summary") return { data: null, error: { code: "PGRST202" } };
       calls.push({ rpc: name });
       return { data: null, error: { message: "forbidden_rpc" } };
     };
@@ -401,7 +404,7 @@ describe("nlc-data injects the plan stats scope and overrides client values (#39
       const start = nlcData.indexOf(marker);
       expect(start).toBeGreaterThan(0);
       const branch = nlcData.slice(start, nlcData.indexOf("} else if", start + 10));
-      expect(branch.match(/await getVisibleProfileIds\(supabaseAdmin, profile\)/g)).toHaveLength(1);
+      expect(branch.match(/await requestVisibleProfileIds\(supabaseAdmin, profile, requestCache\)/g)).toHaveLength(1);
       expect(branch).toContain(builder);
       expect(branch).not.toContain("...(body.args");
     }

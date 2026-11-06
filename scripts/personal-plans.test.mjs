@@ -74,8 +74,10 @@ const PERSONAL_EXCLUDED = [
 ];
 // 之後的 migration 新增、同樣明確排除個人計畫的（不在 #473 那份 migration 裡，所以不跟上面一起檢查授權）。
 //   admin_api_reading_usage（#568）：每天章數和上面三支使用率函式同樣跳過個人計畫的打卡
+//   get_plan_stats_roster_summary（#673）：get_plan_stats_roster 的彙總版，一樣 NOT plan.is_personal
 const PERSONAL_EXCLUDED_LATER = [
-  "admin_api_reading_usage"
+  "admin_api_reading_usage",
+  "get_plan_stats_roster_summary"
 ];
 // 依某個教會計畫（global_plan_id）查：個人計畫的 global_plan_id 一定是空的。
 const SCOPED_TO_CHURCH_PLAN = [
@@ -85,6 +87,7 @@ const SCOPED_TO_CHURCH_PLAN = [
   "get_joined_plan_members",
   "get_unjoined_plan_members",
   "send_plan_join_invitation",
+  "send_plan_join_invitations_batch",
   "get_my_reading_team",
   "get_reading_team_carry_status",
   "_reading_team_enroll_member",
@@ -121,7 +124,9 @@ const ONE_PERSON_SUPPORT_VIEW = [
   "admin_api_user_timeline",
   "_admin_api_section_items",
   // 合併重複帳號（#655）：把同一位會友兩個帳號的計畫（含個人計畫）整批搬到一起，不是排行或統計
-  "admin_merge_profiles"
+  "admin_merge_profiles",
+  // 找回計畫（#664）：只看這個帳號有沒有任何計畫（含個人計畫），不是排行或統計
+  "account_recovery_target_refusal"
 ];
 
 function functionsTouchingReadingTables() {

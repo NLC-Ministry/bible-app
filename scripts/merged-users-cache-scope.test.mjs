@@ -139,7 +139,7 @@ describe("participants overview follows the selected management plan (#369)", ()
     const start = plan.indexOf("async function renderGroupParticipantsRankingTable()");
     const fn = plan.slice(start, plan.indexOf("window.displayParticipantsList = function", start));
     expect(fn).toContain("const statsPlan = getOrgStatsContextPlan();");
-    expect(fn).toContain("db.fetchMergedUsersWithLogs(statsKey, { maxAgeMs: Infinity })");
+    expect(fn).toContain("db.fetchMergedUsersWithLogs(statsKey, { maxAgeMs: Infinity, ...getPlanStatsRosterOptions(statsPlan) })");
     expect(fn).not.toContain("allLogsCache");
     expect(fn).not.toContain("_cachedAllUsersList");
   });

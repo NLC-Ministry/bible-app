@@ -7,6 +7,7 @@ import { renderQuestionReviewHtml, renderDailyQuizReviewHtml, drawMatchReviewLin
 import { installQuizImageViewer } from "./quiz-image.mjs";
 import { PROFILE_EXAMS_HINT_KEY } from "./lightning-quiz-ranking.mjs";
 import { bindMyVouchersPage, refreshMyLightningQuizVouchers } from "./lightning-quiz-vouchers.mjs";
+import { bindVoucherMerchantPage, refreshVoucherMerchantEntry, refreshVoucherMerchantPage } from "./voucher-merchant.mjs";
 import { createCommentaryReviewPage } from "./commentary-review.mjs";
 import { ensureOfflineBiblePack } from "../pwa/OfflineBibleControls.js";
 import { adminConsoleBase } from "../admin-console-link.mjs";
@@ -438,6 +439,11 @@ export async function renderProfileView() {
   if (state.profileDetailOpen === "commentary-review") {
     await commentaryReviewPage.refresh();
   }
+  // 後台指定的店家帳號才有「克勞斯兌換紀錄」（#679）。打開個人頁才查，開機不查；失敗就是沒有入口。
+  if (state.currentUser && state.currentUser.id) void refreshVoucherMerchantEntry();
+  if (state.profileDetailOpen === "voucher-merchant") {
+    await refreshVoucherMerchantPage();
+  }
   if (state.profileDetailOpen === "personal-info") {
     renderPersonalInfoSubpage();
   }
@@ -852,6 +858,7 @@ function openProfileDetail(key) {
     refreshMyQuizzes();
   }
   if (key === "vouchers") void refreshMyLightningQuizVouchers();
+  if (key === "voucher-merchant") void refreshVoucherMerchantPage();
   if (key === "commentary-review") void commentaryReviewPage.refresh();
   if (key === "highlights-notes") {
     hnNotesCache = null;
@@ -1248,6 +1255,7 @@ export function init() {
   });
   bindProfileExamsNavigation();
   bindMyVouchersPage();
+  bindVoucherMerchantPage();
   commentaryReviewPage.bind();
 
   const btnShareApp = document.getElementById("btn-share-app");

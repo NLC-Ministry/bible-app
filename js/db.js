@@ -1,7 +1,8 @@
 import { getResponsePayloadBytes, networkMetrics } from './performance/network-metrics.mjs';
 import { fetchNlcTracked } from './diagnostics/report-diagnostics.mjs';
-import { fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
+import { expandReadingLogDigest, fetchPlanReadingLogs, fetchPlanStatsRoster } from './data/reading-log-batches.mjs';
 import { createReadCoalescer } from './data/nlc-read-coalescer.mjs';
+import { createLeaderboardCache } from './data/leaderboard-cache.mjs';
 import {
   BOOT_SNAPSHOT_KEY,
   BOOT_SNAPSHOT_STORE,
@@ -11,6 +12,13 @@ import {
 } from './data/boot-snapshot.mjs';
 import { DEFAULT_PAGE_SIZE, isLastPage, normalizePageSize } from './data/pagination.mjs';
 import { filterLogsToPlanBooks, getConfirmedReadingRound, getCurrentRoundChapterProgress } from './data/current-round-progress.mjs';
+import {
+  buildMergedUserFromRosterSummary,
+  fetchPlanStatsRosterSummary,
+  rosterSummaryPlan,
+  rosterSummaryProfile,
+  rosterSummaryStats
+} from './data/plan-stats-roster-summary.mjs';
 import { isPlanProgressLocked } from './data/plan-progress-availability.mjs';
 import { PLAN_CHECKIN_CLOSED_CODE, isPlanCheckInClosed, normalizeGraceDays } from './data/plan-checkin-window.mjs';
 import {
@@ -69,6 +77,7 @@ import {
 } from './login-onboarding-gate.mjs';
 import { maybeAutoRedirectToSso } from './login-auto-redirect.mjs';
 import { rememberLoginMethod, renderLoginMethodHint } from './login-method-memory.mjs';
+import { abandonPlanRecovery, finishPlanRecoveryAfterCallback } from './plan-recovery.mjs';
 import { SESSION_EXPIRED_MESSAGE, isAuthExpiredError } from './copy/auth-messages.mjs';
 import { BOOT_FETCH_TIMEOUT_MS, DATA_READ_TIMEOUT_MS, fetchWithTimeout, withSoftTimeout } from './net-timeout.mjs';
 import {
@@ -505,7 +514,7 @@ const db = {
     if (!identity) return false;
 
     if (markAsOffline) state.offlineMode = true;
-    state.supabase = this.createNlcDataClient();
+    this.useNlcDataClient(identity.profile.id);
     this.applyNlcProfile(identity.profile, identity.lockedFields || []);
     if (markAsOffline) {
       document.documentElement.dataset.appConnection = "offline-reader";
@@ -667,11 +676,14 @@ const db = {
         statusBadge.querySelector(".status-text").textContent = "線上模式";
         if (placeholder) placeholder.classList.add("hidden");
 
+        const hasOAuthCallback = urlParams.has("code") || urlParams.has("state") || urlParams.has("error") || urlParams.has("error_description");
+        // 上次按了找回計畫卻沒有回來（#664）：這次的登入流程不留到下一步。
+        if (!hasOAuthCallback) abandonPlanRecovery();
+
         if (navigator.onLine === false && this.tryRestoreOfflineSession()) {
           return true;
         }
 
-        const hasOAuthCallback = urlParams.has("code") || urlParams.has("state") || urlParams.has("error") || urlParams.has("error_description");
         if (!hasOAuthCallback && typeof authLaunch !== "undefined" && typeof authLaunch.maybeResumeInteractiveAuthFromBridge === "function") {
           const resumed = await authLaunch.maybeResumeInteractiveAuthFromBridge();
           if (resumed) {
@@ -689,6 +701,9 @@ const db = {
           if (callbackHandled) {
             console.log("Logto OIDC callback handled successfully.");
           }
+          // 找回計畫（#664）：顯示確認畫面，不等會友回答，開機照原本的登入狀態走下去，
+          // 否則開機保底會在 20 秒後蓋上來。確認並找回後會重新載入。不會丟例外。
+          void finishPlanRecoveryAfterCallback();
 
           // Sync Logto login through the Edge Function so Supabase RLS can resolve profiles.
           if (auth.isLoggedIn()) {
@@ -1104,6 +1119,24 @@ const db = {
     };
   },
 
+  // 同一個人一直用同一個 client（#672）：讀取合併器和 3 秒內共用的結果都在 client 裡，
+  // 每次重建就等於沒有合併。只有確定是同一個身分（Logto sub＋profile id 都一樣）、
+  // 而且目前用的就是這個 client 才沿用；換人、認不出身分、state.supabase 被換掉都建新的，
+  // 共用結果不可能跨帳號。登出一定整頁重載，這裡不用處理。
+  _heldNlcClient: null,
+  useNlcDataClient(profileId) {
+    const subject = typeof auth !== "undefined" && typeof auth.getLogtoSubject === "function"
+      ? auth.getLogtoSubject()
+      : null;
+    const owner = subject && profileId ? `${subject}|${profileId}` : null;
+    const held = this._heldNlcClient;
+    if (owner && held && held.owner === owner && state.supabase === held.client) return held.client;
+    const client = this.createNlcDataClient();
+    this._heldNlcClient = owner ? { owner, client } : null;
+    state.supabase = client;
+    return client;
+  },
+
   // Collapse `Promise.all([ builder1, builder2, ... ])` of read-only
   // `state.supabase.from(t).select(...)` calls into ONE request when the NLC
   // data-layer shim is active (one Logto verification + one HTTP round trip on
@@ -1171,7 +1204,7 @@ const db = {
       "";
     // Same reasoning as `name` above: a partial/incomplete sync response
     // (more likely now that resyncs happen automatically and more often —
-    // see refreshCurrentAppView / retryPlanEligibilityQuietly) must never
+    // see retryPlanEligibilityQuietly) must never
     // silently blank out org placement the user already had. Only replace
     // it when the fresh payload actually supplies a value.
     state.currentUser.great_region = profile.great_region || state.currentUser.great_region || "";
@@ -1228,10 +1261,11 @@ const db = {
     const cachedExpiresAt = Number(localStorage.getItem("nlc_edge_session_expires_at") || "0");
     const cachedProfile = localStorage.getItem("nlc_supabase_profile");
     if (!force && cachedExpiresAt > Date.now() + 60000) {
-      state.supabase = this.createNlcDataClient();
+      const profile = cachedProfile ? JSON.parse(cachedProfile) : null;
+      this.useNlcDataClient(profile?.id || state.currentProfileId);
       const cachedLockedFields = JSON.parse(localStorage.getItem("nlc_profile_locked_fields") || "[]");
-      if (cachedProfile) this.applyNlcProfile(JSON.parse(cachedProfile), cachedLockedFields);
-      return { edge_session: true, profile: cachedProfile ? JSON.parse(cachedProfile) : null, locked_fields: cachedLockedFields };
+      if (profile) this.applyNlcProfile(profile, cachedLockedFields);
+      return { edge_session: true, profile, locked_fields: cachedLockedFields };
     }
 
     // #398: one nlc-session round trip at a time. A boot with an expired
@@ -1324,7 +1358,9 @@ const db = {
     }
     localStorage.setItem("nlc_profile_locked_fields", JSON.stringify(payload.locked_fields || []));
 
-    state.supabase = this.createNlcDataClient();
+    this.useNlcDataClient(payload.profile?.id || state.currentProfileId);
+    // 剛跟伺服器確認過身分，角色／牧區可能變了：之後的讀取重新抓
+    state.supabase.invalidateReads?.();
     state.offlineMode = false;
     document.documentElement.dataset.appConnection = "online";
     // tryRestoreOfflineSession() flips this badge to "離線閱讀" styling; any
@@ -2041,7 +2077,8 @@ const db = {
         rememberLoginMethod({
           user: state.currentUser,
           accountCreatedAt: state.currentUser?.account_created_at,
-          hasAnyPlan: state.activePlans.length > 0
+          hasAnyPlan: state.activePlans.length > 0,
+          profileId: state.currentProfileId
         });
       }
     }
@@ -2727,6 +2764,7 @@ const db = {
       localStorage.setItem("reading_logs", JSON.stringify(state.readingLogs));
     }
 
+    if (targetPlan) this.invalidateLeaderboards(targetPlan);
     this.calculateStreak();
     this.saveLocalUserStats();
 
@@ -3195,8 +3233,8 @@ const db = {
       return fallback;
     }
   },
-  async fetchMergedUsersList(filterPresetKey = null, ignorePlanFilter = false) {
-    const { users } = await this.fetchMergedUsersWithLogs(filterPresetKey, { ignorePlanFilter });
+  async fetchMergedUsersList(filterPresetKey = null, ignorePlanFilter = false, options = {}) {
+    const { users } = await this.fetchMergedUsersWithLogs(filterPresetKey, { ignorePlanFilter, ...options });
     return users;
   },
 
@@ -3205,13 +3243,16 @@ const db = {
   // 會出現「A 的名單配 B 的紀錄」。logsByUserId 是 Map(user_id → 該計畫的 logs)。
   // maxAgeMs 預設 60 秒；成員排行傳 Infinity，沿用舊的「同一個計畫不重抓」行為，
   // 要重抓就呼叫 invalidateMergedUsersCache()。
-  async fetchMergedUsersWithLogs(filterPresetKey = null, { ignorePlanFilter = false, maxAgeMs = 60000, pastoralZone = "" } = {}) {
+  // rosterSchedule（#673，buildPlanStatsRosterSchedule 的結果）：要看補讀天數的畫面帶比對尺，彙總才算得出來；
+  // false＝這份日程不能交給伺服器，走逐筆路徑。尺不同的結果不共用快取。
+  async fetchMergedUsersWithLogs(filterPresetKey = null, { ignorePlanFilter = false, maxAgeMs = 60000, pastoralZone = "", rosterSchedule } = {}) {
     if (ignorePlanFilter) {
       filterPresetKey = false;
     } else if (!filterPresetKey && state.activePlan) {
       filterPresetKey = state.activePlan.globalPlanId || state.activePlan.presetKey || state.activePlan.name || state.activePlan.id;
     }
-    const cacheKey = (filterPresetKey || 'all') + (pastoralZone ? `|zone:${pastoralZone}` : '');
+    const cacheKey = (filterPresetKey || 'all') + (pastoralZone ? `|zone:${pastoralZone}` : '')
+      + (rosterSchedule === undefined ? '' : `|schedule:${JSON.stringify(rosterSchedule)}`);
 
     // 1. Concurrent request deduplication
     if (this._mergedUsersPromise[cacheKey]) {
@@ -3228,7 +3269,7 @@ const db = {
     const loadPromise = (async () => {
       try {
         const sink = { logsByUserId: new Map() };
-        const users = await this._executeFetchMergedUsersList(filterPresetKey, sink, { pastoralZone });
+        const users = await this._executeFetchMergedUsersList(filterPresetKey, sink, { pastoralZone, rosterSchedule });
         const result = { users, logsByUserId: sink.logsByUserId };
         this._mergedUsersCache[cacheKey] = {
           data: result,
@@ -3300,7 +3341,19 @@ const db = {
     return { usersProfiles, allPlans, allLogs, todayNotes };
   },
 
-  async _executeFetchMergedUsersList(filterPresetKey, sink = { logsByUserId: new Map() }, { pastoralZone = "" } = {}) {
+  // 名冊彙總（#673）的一份結果 → users。書卷空白的報名伺服器回逐筆打卡，跑跟舊路徑相同的 mapProfile。
+  _buildUsersFromRosterSummary(summary, mapProfile) {
+    return summary.people.map(person => {
+      if (!Array.isArray(person.l)) {
+        return buildMergedUserFromRosterSummary(person, summary, { bibleBooks: BIBLE_BOOKS });
+      }
+      const uPlan = rosterSummaryPlan(person, summary);
+      const uLogs = expandReadingLogDigest([{ u: person.i, p: person.p, l: person.l }]);
+      return { ...mapProfile(rosterSummaryProfile(person, summary), uPlan, uLogs, null), roster_stats: rosterSummaryStats(person) };
+    });
+  },
+
+  async _executeFetchMergedUsersList(filterPresetKey, sink = { logsByUserId: new Map() }, { pastoralZone = "", rosterSchedule } = {}) {
     const planFilterAliases = getPlanFilterAliases(filterPresetKey);
     const planFilterAliasSet = new Set(planFilterAliases);
     const currentPlanId = state.activePlan ? state.activePlan.id : null;
@@ -3344,72 +3397,8 @@ const db = {
 
     if (state.isSupabaseMode && state.supabase) {
       try {
-        // 今天的靈修筆記日期由前端用台北時區算好（伺服器不換算）。
-        const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-        // 一次 RPC 拿名單＋報名＋打卡＋今天的靈修（#397）；失敗就退回分頁路徑。
-        // 兩條路徑還原出來的四份資料相同，後面的計算不分路徑。
-        const roster = await fetchPlanStatsRoster(state.supabase, {
-          planAliases: filterPresetKey ? planFilterAliases : null,
-          pastoralZone,
-          noteDate: todayStr
-        }) || await this._fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone, todayStr });
-        const { usersProfiles, allPlans, allLogs, todayNotes } = roster;
-
-        const notesByUser = {};
-        if (todayNotes) {
-          todayNotes.forEach(n => {
-            notesByUser[n.user_id] = n.content;
-          });
-        }
-
-        window.userPlanIdCache = {};
-        if (allPlans) {
-          allPlans.forEach(p => {
-            if (p.user_id && p.preset_key) {
-              window.userPlanIdCache[p.user_id + '_' + p.preset_key] = p.id;
-            }
-            if (p.user_id && p.name) {
-              window.userPlanIdCache[p.user_id + '_' + p.name] = p.id;
-            }
-            if (p.user_id && p.global_plan_id) {
-              window.userPlanIdCache[p.user_id + '_' + p.global_plan_id] = p.id;
-            }
-          });
-        }
-
-        if (usersProfiles) {
-          // Pre-group plans by user_id
-          const plansByUser = {};
-          if (allPlans) {
-            allPlans.forEach(p => {
-              if (p.user_id) {
-                if (!plansByUser[p.user_id]) plansByUser[p.user_id] = [];
-                plansByUser[p.user_id].push(p);
-              }
-            });
-          }
-
-          // Pre-group logs by user_id
-          const logsByUser = {};
-          if (allLogs) {
-            allLogs.forEach(l => {
-              if (l.user_id) {
-                if (!logsByUser[l.user_id]) logsByUser[l.user_id] = [];
-                logsByUser[l.user_id].push(l);
-              }
-            });
-          }
-          sink.logsByUserId = new Map(Object.entries(logsByUser));
-
-          return usersProfiles.map(profile => {
-            const userPlans = plansByUser[profile.id] || [];
-            const uPlan = filterPresetKey
-              ? userPlans.find(p => [p.preset_key, p.global_plan_id, p.name, p.id].some(value => value && planFilterAliasSet.has(String(value))))
-              : userPlans[0] || null;
-
-            if (filterPresetKey && !uPlan) return null;
-
-            const uLogs = logsByUser[profile.id] || [];
+        // 一個人的報名＋打卡紀錄 → 名單上的一列（逐筆路徑）。
+        const mapProfile = (profile, uPlan, uLogs, todayDevotional) => {
             // 書卷範圍：enrollment 自己的 target_books，沒有就退回對應 global_plan 的 books
             // （同 loadPlans 的 effectiveBooks）；兩者都沒有就不過濾。
             const linkedGlobalPlan = uPlan
@@ -3484,8 +3473,93 @@ const db = {
               presetKey: uPlan ? uPlan.preset_key : null,
               globalPlanId: uPlan ? uPlan.global_plan_id : null,
               current_round: confirmedRound,
-              today_devotional: notesByUser[profile.id] || null
+              today_devotional: todayDevotional
             };
+        };
+
+        // 名冊彙總（#673）：只回每人的數字，不回逐筆打卡。還沒部署或失敗就回 null，走下面的舊路徑。
+        if (rosterSchedule !== false) {
+          const summary = await fetchPlanStatsRosterSummary(state.supabase, {
+            planAliases: filterPresetKey ? planFilterAliases : null,
+            pastoralZone,
+            schedule: rosterSchedule || null
+          });
+          if (summary) {
+            try {
+              return this._buildUsersFromRosterSummary(summary, mapProfile);
+            } catch (summaryError) {
+              console.warn("Plan stats roster summary could not be read; falling back to the full roster.", summaryError);
+            }
+          }
+        }
+
+        // 今天的靈修筆記日期由前端用台北時區算好（伺服器不換算）。
+        const todayStr = new Date().toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+        // 一次 RPC 拿名單＋報名＋打卡＋今天的靈修（#397）；失敗就退回分頁路徑。
+        // 兩條路徑還原出來的四份資料相同，後面的計算不分路徑。
+        const roster = await fetchPlanStatsRoster(state.supabase, {
+          planAliases: filterPresetKey ? planFilterAliases : null,
+          pastoralZone,
+          noteDate: todayStr
+        }) || await this._fetchPlanStatsRosterPaged(filterPresetKey, planFilterAliases, { pastoralZone, todayStr });
+        const { usersProfiles, allPlans, allLogs, todayNotes } = roster;
+
+        const notesByUser = {};
+        if (todayNotes) {
+          todayNotes.forEach(n => {
+            notesByUser[n.user_id] = n.content;
+          });
+        }
+
+        window.userPlanIdCache = {};
+        if (allPlans) {
+          allPlans.forEach(p => {
+            if (p.user_id && p.preset_key) {
+              window.userPlanIdCache[p.user_id + '_' + p.preset_key] = p.id;
+            }
+            if (p.user_id && p.name) {
+              window.userPlanIdCache[p.user_id + '_' + p.name] = p.id;
+            }
+            if (p.user_id && p.global_plan_id) {
+              window.userPlanIdCache[p.user_id + '_' + p.global_plan_id] = p.id;
+            }
+          });
+        }
+
+        if (usersProfiles) {
+          // Pre-group plans by user_id
+          const plansByUser = {};
+          if (allPlans) {
+            allPlans.forEach(p => {
+              if (p.user_id) {
+                if (!plansByUser[p.user_id]) plansByUser[p.user_id] = [];
+                plansByUser[p.user_id].push(p);
+              }
+            });
+          }
+
+          // Pre-group logs by user_id
+          const logsByUser = {};
+          if (allLogs) {
+            allLogs.forEach(l => {
+              if (l.user_id) {
+                if (!logsByUser[l.user_id]) logsByUser[l.user_id] = [];
+                logsByUser[l.user_id].push(l);
+              }
+            });
+          }
+          sink.logsByUserId = new Map(Object.entries(logsByUser));
+
+          return usersProfiles.map(profile => {
+            const userPlans = plansByUser[profile.id] || [];
+            const uPlan = filterPresetKey
+              ? userPlans.find(p => [p.preset_key, p.global_plan_id, p.name, p.id].some(value => value && planFilterAliasSet.has(String(value))))
+              : userPlans[0] || null;
+
+            if (filterPresetKey && !uPlan) return null;
+
+            const uLogs = logsByUser[profile.id] || [];
+            return mapProfile(profile, uPlan, uLogs, notesByUser[profile.id] || null);
           }).filter(Boolean);
         }
         return [mockUser];
@@ -3560,79 +3634,6 @@ const db = {
       });
     }
     return localUsers;
-  },
-
-  async getUserRankings() {
-    if (state.isSupabaseMode && state.supabase && state.currentUser && state.currentUser.id) {
-      try {
-        const { data, error } = await state.supabase.rpc('get_user_rankings', { user_uuid: state.currentUser.id });
-        if (error) throw error;
-        if (data && data.length > 0) {
-          return {
-            groupRank: parseInt(data[0].group_rank, 10),
-            groupTotal: parseInt(data[0].group_total, 10),
-            zoneRank: parseInt(data[0].zone_rank, 10),
-            zoneTotal: parseInt(data[0].zone_total, 10),
-            regionRank: parseInt(data[0].region_rank, 10),
-            regionTotal: parseInt(data[0].region_total, 10),
-            churchRank: parseInt(data[0].church_rank, 10),
-            churchTotal: parseInt(data[0].church_total, 10)
-          };
-        }
-      } catch (err) {
-        console.error("Failed to call get_user_rankings RPC:", err);
-      }
-    }
-
-    // Offline / Demo fallback calculation
-    const allMockUsers = [...MOCK_USERS_DATA];
-    const currentMockIdx = allMockUsers.findIndex(u => u.name === state.currentUser.name);
-    const updatedCurrentUser = {
-      name: state.currentUser.name,
-      great_region: state.currentUser.great_region || "東區",
-      pastoral_zone: state.currentUser.pastoral_zone || "大安1",
-      small_group: state.currentUser.small_group || "馬鈴",
-      role_code: getUserRoleCode(state.currentUser) || "member",
-      chapters_read: state.currentUser.chapters_read || 0,
-      plan_progress: state.currentUser.plan_progress || 0,
-      streak: state.currentUser.streak || 0,
-      last_read: state.currentUser.last_read
-    };
-    if (currentMockIdx !== -1) {
-      allMockUsers[currentMockIdx] = updatedCurrentUser;
-    } else {
-      allMockUsers.push(updatedCurrentUser);
-    }
-
-    const getRankAndTotal = (filteredList) => {
-      const sorted = [...filteredList].sort((a, b) => {
-        if (b.chapters_read !== a.chapters_read) {
-          return b.chapters_read - a.chapters_read;
-        }
-        return a.name.localeCompare(b.name);
-      });
-      const myIdx = sorted.findIndex(u => u.name === state.currentUser.name);
-      return {
-        rank: myIdx !== -1 ? myIdx + 1 : 0,
-        total: sorted.length
-      };
-    };
-
-    const churchStats = getRankAndTotal(allMockUsers);
-    const regionStats = getRankAndTotal(allMockUsers.filter(u => u.great_region === updatedCurrentUser.great_region));
-    const zoneStats = getRankAndTotal(allMockUsers.filter(u => u.pastoral_zone === updatedCurrentUser.pastoral_zone));
-    const groupStats = getRankAndTotal(allMockUsers.filter(u => u.pastoral_zone === updatedCurrentUser.pastoral_zone && u.small_group === updatedCurrentUser.small_group));
-
-    return {
-      groupRank: groupStats.rank,
-      groupTotal: groupStats.total,
-      zoneRank: zoneStats.rank,
-      zoneTotal: zoneStats.total,
-      regionRank: regionStats.rank,
-      regionTotal: regionStats.total,
-      churchRank: churchStats.rank,
-      churchTotal: churchStats.total
-    };
   },
 
   async getDevotionalNote(date) {
@@ -4070,6 +4071,7 @@ const db = {
       const { data, error } = await state.supabase.rpc(functionName, args);
       if (error) return { success: false, error, authExpired: this._isReadingTeamAuthError(error), message: this._readingTeamErrorMessage(error) };
       if (this.READING_TEAM_MUTATING_RPCS.has(functionName)) {
+        this.invalidateLeaderboards();
         window.dispatchEvent(new CustomEvent("reading-team:changed", { detail: { rpc: functionName } }));
       }
       return { success: true, data };
@@ -5274,6 +5276,21 @@ const db = {
       ? { success: true, context: { sent: true, fallback: true } }
       : { success: false, error: fallback && fallback.error, message: this._readingTeamErrorMessage(fallback && fallback.error) };
   },
+  // 一次提醒一批（#676）。回 unavailable 或 RPC 不能用的錯誤時，呼叫端退回逐筆 sendPlanJoinInvitation；
+  // 訊息內容、範圍、今天已提醒都由伺服器決定，這裡只傳人。
+  async sendPlanJoinInvitationsBatch(plan, recipientIds) {
+    const planId = this._resolveManagementGlobalPlanId(plan);
+    if (!state.isSupabaseMode || !state.supabase || !planId || !this._managementPlanUsesTeamRpc(plan)) {
+      return { success: false, unavailable: true };
+    }
+    const result = await this._callReadingTeamRpc("send_plan_join_invitations_batch", {
+      p_global_plan_id: planId,
+      p_recipient_ids: recipientIds,
+      p_plan_key: String(plan && (plan.presetKey || plan.preset_key) || "")
+    });
+    if (!result.success) return result;
+    return { success: true, results: result.data && result.data.results };
+  },
   async getReadingTeamStatistics(plan) {
     const planId = this._readingTeamPlanId(plan);
     if (!planId) return { success: false, message: "這個計畫目前未開放團隊統計。" };
@@ -5352,30 +5369,32 @@ const db = {
         }
       };
     }
-    const result = await this._callReadingTeamRpc("get_reading_team_leaderboards", {
-      p_global_plan_id: planId
-    });
-    if (!result.success) return result;
-
-    const context = result.data || { division3: [], division6: [] };
-    const leaderboardTeams = [
-      ...(Array.isArray(context.division3) ? context.division3 : []),
-      ...(Array.isArray(context.division6) ? context.division6 : [])
-    ];
-    if (!leaderboardTeams.some(team => typeof team.isMine === "boolean")) {
-      const ownResult = await this.getMyReadingTeam(plan);
-      const ownContexts = ownResult.success && ownResult.context
-        ? (Array.isArray(ownResult.context.teams) ? ownResult.context.teams : [ownResult.context])
-        : [];
-      const ownTeamIds = new Set(ownContexts.map(item => item && item.team && String(item.team.id)).filter(Boolean));
-      ["division3", "division6"].forEach(key => {
-        context[key] = (Array.isArray(context[key]) ? context[key] : []).map(team => ({
-          ...team,
-          isMine: ownTeamIds.has(String(team.id))
-        }));
+    return this._readLeaderboard("teams", plan, planId, async () => {
+      const result = await this._callReadingTeamRpc("get_reading_team_leaderboards", {
+        p_global_plan_id: planId
       });
-    }
-    return { success: true, context };
+      if (!result.success) return result;
+
+      const context = result.data || { division3: [], division6: [] };
+      const leaderboardTeams = [
+        ...(Array.isArray(context.division3) ? context.division3 : []),
+        ...(Array.isArray(context.division6) ? context.division6 : [])
+      ];
+      if (!leaderboardTeams.some(team => typeof team.isMine === "boolean")) {
+        const ownResult = await this.getMyReadingTeam(plan);
+        const ownContexts = ownResult.success && ownResult.context
+          ? (Array.isArray(ownResult.context.teams) ? ownResult.context.teams : [ownResult.context])
+          : [];
+        const ownTeamIds = new Set(ownContexts.map(item => item && item.team && String(item.team.id)).filter(Boolean));
+        ["division3", "division6"].forEach(key => {
+          context[key] = (Array.isArray(context[key]) ? context[key] : []).map(team => ({
+            ...team,
+            isMine: ownTeamIds.has(String(team.id))
+          }));
+        });
+      }
+      return { success: true, context };
+    });
   },
 
   async getPastoralZoneLeaderboard(plan) {
@@ -5394,12 +5413,14 @@ const db = {
         }
       };
     }
-    const result = await this._callReadingTeamRpc("get_pastoral_zone_leaderboard", {
-      p_global_plan_id: planId
+    return this._readLeaderboard("zones", plan, planId, async () => {
+      const result = await this._callReadingTeamRpc("get_pastoral_zone_leaderboard", {
+        p_global_plan_id: planId
+      });
+      return result.success
+        ? { success: true, context: result.data || { zones: [], unassignedCount: 0 } }
+        : result;
     });
-    return result.success
-      ? { success: true, context: result.data || { zones: [], unassignedCount: 0 } }
-      : result;
   },
 
   async getPersonalPlanRankingSummary(plan) {
@@ -5417,21 +5438,60 @@ const db = {
         }
       };
     }
-    const result = await this._callReadingTeamRpc("get_personal_plan_ranking_summary", {
-      p_global_plan_id: planId
-    });
-    return result.success
-      ? {
-          success: true,
-          context: result.data || {
-            churchRank: null,
-            churchTotal: 0,
-            zoneName: null,
-            zoneRank: null,
-            zoneTotal: 0
+    return this._readLeaderboard("personal", plan, planId, async () => {
+      const result = await this._callReadingTeamRpc("get_personal_plan_ranking_summary", {
+        p_global_plan_id: planId
+      });
+      return result.success
+        ? {
+            success: true,
+            context: result.data || {
+              churchRank: null,
+              churchTotal: 0,
+              zoneName: null,
+              zoneRank: null,
+              zoneTotal: 0
+            }
           }
-        }
-      : result;
+        : result;
+    });
+  },
+
+  // 排行榜記憶體快取（#667）：規則見 js/data/leaderboard-cache.mjs。
+  // 舊資料背景更新後、或自己寫入清掉快取後，發 leaderboards:changed，排行畫面（plan-stats.js）原地重畫。
+  _leaderboardCache: createLeaderboardCache({
+    onChange: detail => window.dispatchEvent(new CustomEvent("leaderboards:changed", { detail }))
+  }),
+
+  _readLeaderboard(kind, plan, planId, fetcher) {
+    return this._leaderboardCache.read({
+      kind,
+      planId,
+      userId: state.currentProfileId,
+      // 過了截止＋寬限期就不會再有人打卡，排名不會再變
+      ended: isPlanCheckInClosed(plan),
+      fetcher
+    });
+  },
+
+  // 給計畫：清那個計畫的排行（個人計畫沒有排行，不做事）。不給：清所有還在進行的計畫（團隊異動、離線佇列送出）。
+  invalidateLeaderboards(plan) {
+    if (plan === undefined) {
+      this._leaderboardCache.invalidate();
+      return;
+    }
+    const planId = this._readingTeamPlanId(plan);
+    if (planId) this._leaderboardCache.invalidate(planId);
+  },
+
+  // 回前景時呼叫：看著排行才需要，超過新鮮期就背景重抓，有變才重畫
+  revalidateLeaderboards(plan) {
+    const planId = this._readingTeamPlanId(plan);
+    if (planId) this._leaderboardCache.revalidateStale({ planId, userId: state.currentProfileId });
+  },
+
+  clearLeaderboardCache() {
+    this._leaderboardCache.clear();
   },
 
   async createReadingTeam(plan, division, name) {
@@ -5806,6 +5866,7 @@ const db = {
       }
     }
 
+    this.invalidateLeaderboards();
     state.activePlans = state.activePlans.filter(p => p.id !== planId && p.presetKey !== presetKey);
     state.readingLogs = state.readingLogs.filter(l => l.plan_id !== planId && l.presetKey !== presetKey);
     state.readingLogDigest = removePlanFromDigest(state.readingLogDigest, planId);
@@ -7215,6 +7276,11 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_ranking_no_questions: "這週沒有已排程的雲柱測驗，無法公布。",
     lightning_quiz_ranking_week_not_ended: "這週還有題目沒結束，等全部結束後才能公布。",
     lightning_quiz_ranking_not_published: "這週的名次目前沒有公布。",
+    voucher_merchant_required: "你的帳號目前沒有查看權限。",
+    voucher_merchant_invalid_month: "月份不正確，請重新選擇。",
+    voucher_merchant_query_too_short: "請輸入中文，或至少兩個英文或數字。",
+    voucher_merchant_not_eligible: "這個帳號還不能指定：要先登入過速讀 App 一次，且帳號是啟用中。",
+    voucher_merchant_invalid: "沒有選到帳號，請重新整理後再試。",
     lightning_quiz_voucher_not_found: "找不到這張兌換券，請重新整理後再試。",
     lightning_quiz_voucher_already_redeemed: "這張兌換券已經兌換過了。",
     lightning_quiz_voucher_expired: "這張兌換券已經過期了。",
@@ -7437,6 +7503,43 @@ db.adminSetLightningQuizVouchersExpiry = async function(voucherIds, expiresOn) {
   return this._callLightningQuizRpc("admin_set_lightning_quiz_vouchers_expiry", {
     p_voucher_ids: ids,
     p_expires_on: expiresOn
+  });
+};
+
+// 克勞斯店家（#679）。入口判斷要安靜：migration 或 nlc-data 還沒部署時，就是沒有入口。
+db.getVoucherMerchantAccess = async function() {
+  if (!state.isSupabaseMode || !state.supabase) return { success: false, isMerchant: false };
+  try {
+    const { data, error } = await state.supabase.rpc("get_my_voucher_merchant_access", {});
+    if (error) return { success: false, isMerchant: false };
+    return { success: true, isMerchant: data?.isMerchant === true };
+  } catch (_error) {
+    return { success: false, isMerchant: false };
+  }
+};
+
+db.getVoucherMerchantVouchers = async function(month) {
+  return this._callLightningQuizRpc("get_voucher_merchant_vouchers", { p_month: month || null });
+};
+
+db.lookupVoucherMerchantCode = async function(code) {
+  return this._callLightningQuizRpc("lookup_voucher_merchant_code", { p_code: code });
+};
+
+// 後台「得獎與兌換」的店家帳號（#679）。
+db.adminListVoucherMerchants = async function() {
+  return this._callLightningQuizRpc("admin_list_voucher_merchants", {});
+};
+
+db.adminSearchVoucherMerchantCandidates = async function(query) {
+  return this._callLightningQuizRpc("admin_search_voucher_merchant_candidates", { p_query: query });
+};
+
+db.adminSetVoucherMerchant = async function(profileId, enabled) {
+  if (!profileId) return { success: false, message: "沒有選到帳號，請重新整理後再試。" };
+  return this._callLightningQuizRpc("admin_set_voucher_merchant", {
+    p_profile_id: profileId,
+    p_enabled: enabled === true
   });
 };
 

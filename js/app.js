@@ -555,75 +555,6 @@ async function ensurePlanFeatureModulesLoaded() {
   await loadModule('team-registration');
 }
 
-// Focus-triggered refreshes fire on every app re-foreground (switching apps,
-// unlocking the screen, dismissing the keyboard) — throttle so a quick
-// switch-away-and-back doesn't refetch everything and re-render the tab again.
-const REFRESH_CURRENT_APP_VIEW_MIN_INTERVAL_MS = 60000;
-let lastRefreshCurrentAppViewAt = 0;
-
-async function refreshCurrentAppView() {
-  const now = Date.now();
-  if (now - lastRefreshCurrentAppViewAt < REFRESH_CURRENT_APP_VIEW_MIN_INTERVAL_MS) return;
-  lastRefreshCurrentAppViewAt = now;
-
-  if ("serviceWorker" in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.getRegistration("/");
-      await registration?.update();
-    } catch (error) {
-      console.warn("Unable to check for an app shell update", error);
-    }
-  }
-  db.invalidateMergedUsersCache();
-
-  const currentTab = appRouter.currentTab || "dashboard-view";
-
-  if (typeof db !== "undefined") {
-    if (typeof db.loadOrgStructure === "function") {
-      await db.loadOrgStructure();
-    }
-    // Plan tab only: force a fresh member-context resync before re-reading
-    // the profile row. Without this, a stale member_context_synced_at from a
-    // background sync job can outlast the 15-minute gate window and silently
-    // bounce the user out of the plan tab into the Member Hub gate on every
-    // refocus. Retrying quietly here first gives the backend a chance to
-    // catch up; if it's still genuinely unavailable, the gate still shows.
-    if (currentTab === "plan-view" && typeof db.syncNlcSessionWithSupabase === "function") {
-      const forceMemberContextResync = true;
-      try {
-        await db.syncNlcSessionWithSupabase(forceMemberContextResync);
-      } catch (error) {
-        console.warn("[refreshCurrentAppView] Background member context resync failed", error);
-      }
-    }
-    if (typeof db.loadUserData === "function") {
-      await db.loadUserData(true);
-    }
-  }
-
-  if (typeof window.syncActivePlanContext === "function") {
-    window.syncActivePlanContext();
-  }
-  if (typeof updateAdminNavVisibility === "function") {
-    updateAdminNavVisibility();
-  }
-
-  // Scripture text never changes once loaded — re-running switchTab here would
-  // tear down and rebuild the verse list (renderReaderText resets scrollTop to 0)
-  // for no reason. Skip it so refocusing the app doesn't yank the reader back
-  // to the top or interrupt an in-progress long-press selection.
-  // Read the tab now, not the one captured before the awaits above: the user
-  // may have switched tabs while data was loading (#388).
-  const tabAfterLoad = appRouter.currentTab || "dashboard-view";
-  if (tabAfterLoad !== "reader-view") {
-    await appRouter.switchTab(tabAfterLoad, {
-      keepPlanDetail: true,
-      restoreTabScroll: false
-    });
-  }
-  await refreshCareReminderBadge({ force: true });
-}
-
 // ─── 計畫資格：只在登入時判斷 ───
 // 登入流程（db.init → getUserOnboardingBlock → getLoginGateCopy）只看「已註冊、
 // 未停用」（#650），通過了就進 App；計畫的區域、梯次限制由後端加入計畫時擋。計畫分頁 / 首頁的讀經
@@ -1023,9 +954,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     return requestNotificationPermission();
   };
 
-  // Expose global manual refresh function (Pull-to-Refresh JS is completely removed)
-  window.refreshCurrentAppView = refreshCurrentAppView;
-
   // ── 單一「App 回前景」協調器（效能重構 A1）────────────────────────────
   // 以前散在 app.js / auth.js / db.js / profile.js 的 6 個 visibilitychange /
   // focus 監聽器，各自 syncNlcSessionWithSupabase(true) + 重繪，手機每次回前景
@@ -1103,6 +1031,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const loginGate = document.getElementById("login-gate");
     if (loginGate && !loginGate.classList.contains("hidden") && typeof db.syncNlcSessionWithSupabase === "function") {
       db.syncNlcSessionWithSupabase(true).then(() => db.applyLoginOnboardingGate && db.applyLoginOnboardingGate()).catch(() => {});
+    }
+    // 看著排行回前景（#667）：超過新鮮期就背景重抓，有變才原地重畫
+    if (currentTab === "plan-view" && state.planActiveSubTab === "ranking" && state.activePlan) {
+      db.revalidateLeaderboards?.(state.activePlan);
     }
     // 管理分頁（#584）：沒有「更新」鈕，回前景時自動更新（超過 5 分鐘的資料才重拿）
     if (currentTab === "admin-view") {

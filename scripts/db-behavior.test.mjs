@@ -1,5 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMigratedDb } from "./lib/pglite-supabase.mjs";
+import { PLAN_INVITE_BATCH_MAX_RECIPIENTS } from "../js/modules/admin-bulk-plan-invite.mjs";
+import { createRosterApp } from "./lib/plan-stats-roster-app.mjs";
+import { BIBLE_BOOK_CHAPTERS } from "../supabase/functions/_shared/progress/bible-chapters.mjs";
+import { buildChurchCampaignDays, getChurchCampaignStageDefinition } from "../supabase/functions/_shared/progress/church-campaign.mjs";
+import { buildRound1ReadDateMap, countLateCompletedDays } from "../supabase/functions/_shared/progress/schedule-progress.mjs";
+import { computePlanScopedStreak } from "../supabase/functions/_shared/progress/team-progress.mjs";
+import {
+  PLAN_STATS_ROSTER_SUMMARY_RPC,
+  buildPlanStatsRosterArgs,
+  buildPlanStatsRosterSummaryArgs
+} from "../supabase/functions/nlc-data/plan-stats-scope.ts";
+import { shouldKeepAccountMember } from "../supabase/functions/_shared/account-member-guard.mjs";
 
 // #594：在 PGlite 從空資料庫套用 supabase/migrations/ 的全部 migration，實際執行重要 RPC，把行為鎖住
 //（test:changed 靠這個路徑字串，改了 migration 就會跑這支）。
@@ -1229,6 +1241,443 @@ describe("合併重複帳號（admin_merge_profiles，#655）", () => {
   });
 });
 
+describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）", () => {
+  // 來源＝換登入方式開出來的空帳號；目標＝原本有計畫的舊帳號。和手動合併的 4 位（舊併新）方向相反，
+  // 見 migration 檔頭：來源是空的，保留舊帳號，舊帳號的會員 ID、組織、角色都不動。
+  const R = {
+    source: "24000000-0000-4000-8000-000000000001",
+    target: "24000000-0000-4000-8000-000000000002",
+    sourceMember: "25000000-0000-4000-8000-000000000001",
+    targetMember: "25000000-0000-4000-8000-000000000002",
+    sourceSub: "recovery-sub-email",
+    targetSub: "recovery-sub-phone"
+  };
+  const NONCE = "a".repeat(64);
+  // challenge 的時間是交易開始的 now()，這裡一定比它晚
+  const FRESH_LOGIN = () => new Date(Date.now() + 60_000).toISOString();
+  const one = async (tx, sql, params = []) => (await tx.query(sql, params)).rows[0];
+  const roleId = async (tx, code) => (await one(tx, `SELECT id FROM public.role_definitions WHERE code = $1`, [code])).id;
+  const disabledProfileTriggers = async tx => (await one(tx,
+    `SELECT count(*)::int AS n FROM pg_trigger WHERE NOT tgisinternal AND tgenabled = 'D' AND tgrelid = 'public.profiles'::regclass`
+  )).n;
+
+  const setProfile = (id, sql) => tx => tx.query(`UPDATE public.profiles SET ${sql} WHERE id = $1`, [id]);
+
+  /** 建好一空一舊兩個帳號，prepare 先動手腳（用資料庫擁有者身分），fn 以 service_role 呼叫 RPC，最後一律 rollback。 */
+  async function withRecovery({ prepare, fn }) {
+    let result;
+    let failure;
+    try {
+      await db.transaction(async tx => {
+        try {
+          const member = await roleId(tx, "member");
+          await tx.query(
+            `INSERT INTO public.profiles (id, name, role_id, email, phone, nlc_member_id, great_region, pastoral_zone, small_group, is_active, created_at) VALUES
+               ($1, '會友', $3, 'new@example.invalid', NULL, $4, '', '', '', TRUE, now() - INTERVAL '1 day'),
+               ($2, '會友', $3, NULL, '0912000000', $5, '大區 A', '牧區 A-1', '小組 A-1-1', TRUE, now() - INTERVAL '200 days')`,
+            [R.source, R.target, member, R.sourceMember, R.targetMember]
+          );
+          await tx.query(
+            `INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES
+               ($1, 'logto', $3, TRUE), ($2, 'logto', $4, TRUE)`,
+            [R.source, R.target, R.sourceSub, R.targetSub]
+          );
+          await tx.query(
+            `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+             SELECT $1, id, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`,
+            [R.target, ids.plan]
+          );
+          if (prepare) await prepare(tx);
+          const service = async (sql, params) => {
+            await tx.exec(`SET LOCAL ROLE service_role`);
+            try {
+              return (await tx.query(sql, params)).rows[0]?.r;
+            } finally {
+              await tx.exec(`RESET ROLE`);
+            }
+          };
+          result = await fn({
+            tx,
+            start: (nonce = NONCE, sub = R.sourceSub) =>
+              service(`SELECT public.account_recovery_start($1, $2) AS r`, [sub, nonce]),
+            merge: ({ source = R.sourceSub, target = R.targetSub, nonce = NONCE, authTime = FRESH_LOGIN() } = {}) =>
+              service(`SELECT public.account_recovery_merge($1, $2, $3, $4, 'req-1') AS r`, [source, target, nonce, authTime]),
+            challenge: (nonce = NONCE) => one(tx, `SELECT * FROM public.account_recovery_challenges WHERE nonce_hash = $1`, [nonce]),
+            unmerged: async () => {
+              const merges = (await one(tx, `SELECT count(*)::int AS n FROM public.profile_merges WHERE source_profile_id = $1`, [R.source])).n;
+              const identity = await one(tx, `SELECT profile_id FROM public.user_identities WHERE provider_user_id = $1`, [R.sourceSub]);
+              return merges === 0 && identity.profile_id === R.source;
+            }
+          });
+        } catch (error) {
+          failure = error;
+        }
+        await tx.rollback();
+      });
+    } catch (error) {
+      if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+    }
+    if (failure) throw failure;
+    return result;
+  }
+
+  it("通過：兩個登入方式都進舊帳號，舊帳號的資料不動，來源停用，稽核記下觸發來源，觸發器恢復", async () => {
+    const outcome = await withRecovery({
+      fn: async ({ tx, start, merge, challenge }) => {
+        expect(await start()).toEqual({ ok: true });
+        const result = await merge();
+        return {
+          result,
+          identities: (await tx.query(`SELECT provider_user_id FROM public.user_identities WHERE profile_id = $1 ORDER BY 1`, [R.target])).rows.map(row => row.provider_user_id),
+          source: await one(tx, `SELECT is_active, nlc_member_id, email FROM public.profiles WHERE id = $1`, [R.source]),
+          target: await one(tx, `SELECT id, nlc_member_id, pastoral_zone, is_active, email, phone FROM public.profiles WHERE id = $1`, [R.target]),
+          log: await one(tx, `SELECT source_profile_id, target_profile_id, report FROM public.profile_merges`),
+          challenge: await challenge(),
+          disabled: await disabledProfileTriggers(tx)
+        };
+      }
+    });
+    expect(outcome.result).toEqual({ ok: true });
+    expect(outcome.identities).toEqual([R.sourceSub, R.targetSub].sort());
+    expect(outcome.source).toEqual({ is_active: false, nlc_member_id: null, email: null });
+    expect(outcome.target).toMatchObject({
+      nlc_member_id: R.targetMember, pastoral_zone: "牧區 A-1", is_active: true,
+      email: "new@example.invalid", phone: "0912000000"
+    });
+    expect(outcome.log).toMatchObject({ source_profile_id: R.source, target_profile_id: R.target });
+    expect(outcome.log.report.trigger).toMatchObject({ source: "self_service_recovery", function: "recover-plan", requestId: "req-1" });
+    expect(JSON.stringify(outcome.log.report)).not.toMatch(/token|eyJ/i);
+    expect(outcome.challenge).toMatchObject({ outcome: "merged", target_profile_id: R.target });
+    expect(outcome.disabled).toBe(0);
+  });
+
+  it("這個方向下 #665 的保留邏輯成立：合併後用新方式登入，沒有牧區的會員不會覆寫舊帳號", async () => {
+    const target = await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        await start();
+        await merge();
+        return one(tx, `SELECT nlc_member_id, pastoral_zone FROM public.profiles WHERE id = $1`, [R.target]);
+      }
+    });
+    expect(shouldKeepAccountMember({
+      linkSource: "identity", existingProfile: target, sessionMemberId: R.sourceMember, sessionPastoralZone: ""
+    })).toBe(true);
+    // 反過來（舊併新）留下的是空帳號的會員、沒有牧區，#665 沒有東西可保留，所以這裡一定要新併舊
+    expect(shouldKeepAccountMember({
+      linkSource: "identity",
+      existingProfile: { nlc_member_id: R.sourceMember, pastoral_zone: "" },
+      sessionMemberId: R.targetMember,
+      sessionPastoralZone: ""
+    })).toBe(false);
+  });
+
+  it("重試：合併成功但回應沒送到，同一個 nonce 再呼叫回成功、不重做；其他組合用不了", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        await start();
+        await merge();
+        expect(await merge()).toEqual({ ok: true, alreadyDone: true });
+        expect(await merge({ source: "someone-else" })).toEqual({ ok: false, code: "challenge_invalid" });
+        expect((await one(tx, `SELECT count(*)::int AS n FROM public.profile_merges`)).n).toBe(1);
+      }
+    });
+  });
+
+  it("空帳號收到的關心提醒和回報不算實質資料，會跟著搬過去", async () => {
+    const moved = await withRecovery({
+      prepare: async tx => {
+        await tx.query(
+          `INSERT INTO public.care_reminders (sender_id, recipient_id, reason, status, read_at, created_at)
+           VALUES ($1, $2, 'care', 'read', '2026-10-02T01:00:00Z', '2026-10-01T01:00:00Z')`,
+          [ids.admin, R.source]
+        );
+        await tx.query(`INSERT INTO public.issue_reports (user_id, category, description) VALUES ($1, 'bug', '我的計畫不見了')`, [R.source]);
+      },
+      fn: async ({ tx, start, merge }) => {
+        expect(await start()).toEqual({ ok: true });
+        expect(await merge()).toEqual({ ok: true });
+        return {
+          reminders: (await one(tx, `SELECT count(*)::int AS n FROM public.care_reminders WHERE recipient_id = $1`, [R.target])).n,
+          reports: (await one(tx, `SELECT count(*)::int AS n FROM public.issue_reports WHERE user_id = $1`, [R.target])).n
+        };
+      }
+    });
+    expect(moved).toEqual({ reminders: 1, reports: 1 });
+  });
+
+  const setRole = (id, code) => async tx => tx.query(`UPDATE public.profiles SET role_id = $2 WHERE id = $1`, [id, await roleId(tx, code)]);
+  const addOrphanLog = tx => tx.query(`INSERT INTO public.reading_logs (user_id, plan_id, book, chapter) VALUES ($1, NULL, '創世記', 1)`, [R.source]);
+
+  it.each([
+    ["來源有計畫", tx => tx.query(
+      `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+       SELECT $1, id, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`, [R.source, ids.plan])],
+    ["來源有不屬於計畫的打卡", addOrphanLog],
+    ["來源建立超過 30 天", setProfile(R.source, `created_at = now() - INTERVAL '31 days'`)],
+    ["來源已停用", setProfile(R.source, `is_active = FALSE`)],
+    ["來源是管理者", setRole(R.source, "admin")],
+    ["來源是小組長", setRole(R.source, "group_leader")],
+    ["來源有委任範圍", setProfile(R.source, `managed_zones = '牧區 A-1'`)],
+    ["來源有兩個登入身分", tx => tx.query(`INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES ($1, 'logto', 'recovery-sub-third', FALSE)`, [R.source])],
+    ["之後新增的表也算實質資料（fail closed）", async tx => {
+      await tx.exec(`CREATE TABLE public.recovery_future_table (user_id UUID REFERENCES public.profiles(id))`);
+      await tx.query(`INSERT INTO public.recovery_future_table VALUES ($1)`, [R.source]);
+    }]
+  ])("開始就擋：%s", async (_label, prepare) => {
+    await withRecovery({
+      prepare,
+      fn: async ({ start, merge, unmerged }) => {
+        expect(await start()).toEqual({ ok: false, code: "not_eligible" });
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it.each([
+    ["目標已停用", setProfile(R.target, `is_active = FALSE`)],
+    ["目標是系統管理員", setRole(R.target, "admin")],
+    ["目標是牧者", setRole(R.target, "pastor")],
+    ["目標是牧區長", setRole(R.target, "zone_leader")],
+    ["目標有委任範圍", setProfile(R.target, `managed_regions = '大區 A'`)],
+    ["目標比來源新", setProfile(R.target, `created_at = now()`)],
+    ["目標沒有任何計畫", tx => tx.query(`DELETE FROM public.reading_plans WHERE user_id = $1`, [R.target])],
+    ["目標已經被併掉", tx => tx.query(`INSERT INTO public.profile_merges (source_profile_id, target_profile_id, report) VALUES ($1, $2, '{}')`, [R.target, ids.other])]
+  ])("合併時才擋，而且用掉 challenge：%s", async (_label, prepare) => {
+    await withRecovery({
+      fn: async ({ tx, start, merge, challenge, unmerged }) => {
+        expect(await start()).toEqual({ ok: true });
+        await prepare(tx);
+        expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+        expect((await challenge()).consumed_at).not.toBeNull();
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("開始之後來源才有了資料：合併時重查，一樣擋", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge, unmerged }) => {
+        await start();
+        await addOrphanLog(tx);
+        expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("兩個 token 是同一個帳號：回 same_account，什麼都不動", async () => {
+    await withRecovery({
+      fn: async ({ start, merge, unmerged }) => {
+        await start();
+        expect(await merge({ target: R.sourceSub })).toEqual({ ok: false, code: "same_account" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("challenge 綁定來源帳號：沒開始過、別人的、用過的、過期的都不行", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge, unmerged }) => {
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+
+        await start();
+        expect(await merge({ source: "not-the-one-who-started" })).toEqual({ ok: false, code: "challenge_invalid" });
+        expect(await merge()).toEqual({ ok: false, code: "challenge_invalid" });
+
+        const expiring = "b".repeat(64);
+        await start(expiring);
+        await tx.query(`UPDATE public.account_recovery_challenges SET expires_at = now() - INTERVAL '1 second' WHERE nonce_hash = $1`, [expiring]);
+        expect(await merge({ nonce: expiring })).toEqual({ ok: false, code: "challenge_invalid" });
+
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("auth_time 必填，而且要晚於 challenge：沒給、比它舊、和它同時都不行，用過就失效", async () => {
+    await withRecovery({
+      fn: async ({ start, merge, challenge, unmerged }) => {
+        for (const [nonce, authTime, outcome] of [
+          ["d".repeat(64), () => null, "target_auth_time_missing"],
+          ["e".repeat(64), () => new Date(Date.now() - 3600 * 1000).toISOString(), "target_login_stale"],
+          ["f".repeat(64), created => created, "target_login_stale"]
+        ]) {
+          await start(nonce);
+          const issued = (await challenge(nonce)).created_at;
+          expect(await merge({ nonce, authTime: authTime(issued) })).toEqual({ ok: false, code: "not_eligible" });
+          expect((await challenge(nonce)).outcome).toBe(outcome);
+          expect(await merge({ nonce })).toEqual({ ok: false, code: "challenge_invalid" });
+        }
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  describe("牧區", () => {
+    const zones = (source, target) => async tx => {
+      await setProfile(R.source, `pastoral_zone = '${source}'`)(tx);
+      await setProfile(R.target, `pastoral_zone = '${target}'`)(tx);
+    };
+
+    it("兩邊都有而且不同：最可能是不同的人，拒絕，用固定代碼", async () => {
+      await withRecovery({
+        prepare: zones("牧區 B-2", "牧區 A-1"),
+        fn: async ({ start, merge, challenge, unmerged }) => {
+          expect(await start()).toEqual({ ok: true });
+          expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+          expect((await challenge()).outcome).toBe("pastoral_zone_mismatch");
+          expect(await unmerged()).toBe(true);
+        }
+      });
+    });
+
+    it("開始之後才變成不同：用合併當下重查的值", async () => {
+      await withRecovery({
+        fn: async ({ tx, start, merge, unmerged }) => {
+          await start();
+          await zones("牧區 B-2", "牧區 A-1")(tx);
+          expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+          expect(await unmerged()).toBe(true);
+        }
+      });
+    });
+
+    it.each([
+      ["牧區相同（前後空白不算不同）", " 牧區 A-1 ", "牧區 A-1"],
+      ["只有來源有（會員中心已核准的本人）", "牧區 B-2", ""],
+      ["只有目標有", "", "牧區 A-1"],
+      ["只有空白不算有", "   ", "牧區 A-1"]
+    ])("%s：允許", async (_label, source, target) => {
+      await withRecovery({
+        prepare: zones(source, target),
+        fn: async ({ start, merge }) => {
+          await start();
+          expect(await merge()).toEqual({ ok: true });
+        }
+      });
+    });
+  });
+
+  it("合併當下還在跑的 nlc-session 晚到：身分導回目標，來源維持停用，不影響其他帳號", async () => {
+    await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        await start();
+        await merge();
+        // nlc-session 合併前查到來源，合併後才寫入：upsert 帶著來源的 ID 和啟用狀態
+        await tx.query(
+          `UPDATE public.profiles SET is_active = TRUE, email = 'new@example.invalid', nlc_member_id = $2 WHERE id = $1`,
+          [R.source, R.sourceMember]
+        );
+        await tx.query(
+          `INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary)
+           VALUES ($1, 'logto', $2, TRUE)
+           ON CONFLICT (provider, provider_user_id) DO UPDATE SET profile_id = EXCLUDED.profile_id, is_primary = EXCLUDED.is_primary`,
+          [R.source, R.sourceSub]
+        );
+        expect(await one(tx, `SELECT profile_id, is_primary FROM public.user_identities WHERE provider_user_id = $1`, [R.sourceSub]))
+          .toEqual({ profile_id: R.target, is_primary: false });
+        expect(await one(tx, `SELECT is_active, email, nlc_member_id FROM public.profiles WHERE id = $1`, [R.source]))
+          .toEqual({ is_active: false, email: null, nlc_member_id: null });
+        // 被併掉的帳號才會被導回：一般帳號停用再啟用、搬身分都照舊
+        await tx.query(`UPDATE public.profiles SET is_active = FALSE WHERE id = $1`, [ids.other]);
+        await tx.query(`UPDATE public.profiles SET is_active = TRUE WHERE id = $1`, [ids.other]);
+        expect((await one(tx, `SELECT is_active FROM public.profiles WHERE id = $1`, [ids.other])).is_active).toBe(true);
+        await tx.query(`UPDATE public.user_identities SET profile_id = $1 WHERE provider_user_id = $2`, [ids.other, R.targetSub]);
+        expect((await one(tx, `SELECT profile_id FROM public.user_identities WHERE provider_user_id = $1`, [R.targetSub])).profile_id).toBe(ids.other);
+      }
+    });
+  });
+
+  it("目標的 sub 查無帳號：not_eligible，回應不說是哪一個條件", async () => {
+    await withRecovery({
+      fn: async ({ start, merge, unmerged }) => {
+        await start();
+        expect(await merge({ target: "never-seen-sub" })).toEqual({ ok: false, code: "not_eligible" });
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("頻率限制：一小時 5 次（被拒絕的也算），開新的舊的就失效", async () => {
+    const nonce = i => String(i).repeat(64);
+    await withRecovery({
+      fn: async ({ tx, start, merge }) => {
+        for (let i = 1; i <= 5; i++) expect(await start(nonce(i))).toEqual({ ok: true });
+        expect(await start(nonce(6))).toEqual({ ok: false, code: "rate_limited" });
+        expect(await merge({ nonce: nonce(1) })).toEqual({ ok: false, code: "challenge_invalid" });
+        const rows = (await tx.query(`SELECT outcome FROM public.account_recovery_challenges WHERE source_profile_id = $1`, [R.source])).rows;
+        expect(rows).toHaveLength(5);
+        expect(rows.filter(row => row.outcome === "superseded")).toHaveLength(4);
+      }
+    });
+    await withRecovery({
+      prepare: addOrphanLog,
+      fn: async ({ start }) => {
+        for (let i = 1; i <= 5; i++) expect(await start(nonce(i))).toEqual({ ok: false, code: "not_eligible" });
+        expect(await start(nonce(6))).toEqual({ ok: false, code: "rate_limited" });
+      }
+    });
+  });
+
+  const failMergeWith = sqlstate => tx => tx.exec(`
+    CREATE FUNCTION public.recovery_test_fail() RETURNS trigger LANGUAGE plpgsql AS $f$
+    BEGIN RAISE EXCEPTION 'injected' USING ERRCODE = '${sqlstate}'; END; $f$;
+    CREATE TRIGGER recovery_test_fail BEFORE INSERT ON public.profile_merges
+    FOR EACH ROW EXECUTE FUNCTION public.recovery_test_fail();
+  `);
+
+  it("等不到鎖：回 busy、整筆回滾、觸發器恢復、challenge 留著可以重試", async () => {
+    await withRecovery({
+      prepare: failMergeWith("55P03"),
+      fn: async ({ tx, start, merge, challenge, unmerged }) => {
+        await start();
+        expect(await merge()).toEqual({ ok: false, code: "busy" });
+        expect((await challenge()).consumed_at).toBeNull();
+        expect(await unmerged()).toBe(true);
+        expect(await disabledProfileTriggers(tx)).toBe(0);
+
+        await tx.exec(`DROP TRIGGER recovery_test_fail ON public.profile_merges`);
+        expect(await merge()).toEqual({ ok: true });
+      }
+    });
+  });
+
+  it("合併中途出錯：回 merge_failed、整筆回滾，錯誤原因只記 SQLSTATE", async () => {
+    await withRecovery({
+      prepare: failMergeWith("XX999"),
+      fn: async ({ start, merge, challenge, unmerged }) => {
+        await start();
+        expect(await merge()).toEqual({ ok: false, code: "merge_failed" });
+        expect((await challenge()).outcome).toBe("merge_failed:XX999");
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("函式只給 service_role，challenge 表連 service_role 都不能直接讀", async () => {
+    const rows = (await db.query(
+      `SELECT p.proname,
+              has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+              has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+       FROM pg_proc p WHERE p.proname LIKE 'account_recovery_%' OR p.proname IN ('keep_identity_on_merge_target', 'keep_merged_profile_inactive')`
+    )).rows;
+    expect(rows.map(row => row.proname).sort()).toEqual([
+      "account_recovery_merge", "account_recovery_source_refusal", "account_recovery_start", "account_recovery_target_refusal",
+      "keep_identity_on_merge_target", "keep_merged_profile_inactive"
+    ]);
+    rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
+    const table = (await db.query(
+      `SELECT has_table_privilege('anon', 'public.account_recovery_challenges', 'SELECT') AS anon,
+              has_table_privilege('authenticated', 'public.account_recovery_challenges', 'SELECT') AS authenticated,
+              has_table_privilege('service_role', 'public.account_recovery_challenges', 'SELECT') AS service`
+    )).rows[0];
+    expect(table).toEqual({ anon: false, authenticated: false, service: false });
+  });
+});
+
 describe("帶隊進下一個月（get_reading_team_carryover_offer／carry_reading_teams_to_stage，#659）", () => {
   // #639 在 global_plans 加了 source_plan_id 欄位，跟兩支函式裡同名的變數撞名，
   // offer 從此對每個人都報 42702 ambiguous，隊長永遠看不到帶隊按鈕。
@@ -1783,5 +2232,2493 @@ describe("月初隊伍接不上：帶隊狀態、隊員接手、補帶、重名�
     );
     expect(rows).toHaveLength(4);
     rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
+  });
+});
+
+// #675：測驗作答／計分／關卷／統計的特徵測試。先對改寫前的函式跑過，鎖住行為後才把逐題迴圈換成集合式寫法。
+const examId = n => `e${String(n).padStart(7, "0")}-0000-4000-8000-000000000000`;
+const EX = {
+  paper: examId(1),
+  plainPaper: examId(2),
+  emptyPaper: examId(3),
+  q: { tf: examId(11), single: examId(12), multi: examId(13), match: examId(14), order: examId(15), nokey: examId(16), missing: examId(17), short: examId(18) },
+  plainQ: { a: examId(21), b: examId(22) },
+  attempt: examId(31),
+  practice: examId(32),
+  rehearsal: examId(33),
+  otherAttempt: examId(34)
+};
+
+async function seedExamPaper(tx, id, { status = "published", openAt = "now() - interval '1 hour'", closeAt = "now() + interval '1 hour'", linkedPlan = null, results = "NULL", practice = true } = {}) {
+  await tx.query(
+    `INSERT INTO public.exam_papers (id, title, status, open_at, close_at, duration_minutes, total_points, published_at, practice_retake_enabled, linked_plan_id, results_published_at)
+     VALUES ($1, '測試試卷', $2, ${openAt}, ${closeAt}, 60, 100, now() - interval '2 hours', $3, $4, ${results})`,
+    [id, status, practice, linkedPlan]
+  );
+}
+
+async function seedExamQuestion(tx, id, paperId, section, position, points, answerKey) {
+  await tx.query(
+    `INSERT INTO public.exam_questions (id, paper_id, section, position, points, answer_key) VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+    [id, paperId, section, position, points, answerKey === null ? null : JSON.stringify(answerKey)]
+  );
+}
+
+async function seedExamAttempt(tx, id, paperId, userId, { status = "submitted", kind = "official", isTest = false, deadline = "now() + interval '30 minutes'", officialId = null, total = null } = {}) {
+  await tx.query(
+    `INSERT INTO public.exam_attempts (id, paper_id, user_id, status, attempt_kind, is_test, deadline_at, pledge_name, official_attempt_id, practice_acknowledged_at, started_at, submitted_at, auto_score, total_score)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, $4::text, $5::text, $6::boolean, ${deadline}, '測試宣示', $7::uuid, CASE WHEN $5::text = 'practice' THEN now() END,
+       TIMESTAMPTZ '2026-10-01 10:00:00+08', CASE WHEN $4::text <> 'in_progress' THEN TIMESTAMPTZ '2026-10-01 10:30:00+08' END, $8::numeric, $8::numeric)`,
+    [id, paperId, userId, status, kind, isTest, officialId, total]
+  );
+}
+
+const seedExamAnswer = (tx, attemptId, questionId, section, response, awarded = null) => tx.query(
+  `INSERT INTO public.exam_answers (attempt_id, question_id, section, response, auto_correct, awarded_points) VALUES ($1, $2, $3, $4::jsonb, NULL, $5)`,
+  [attemptId, questionId, section, response === undefined ? null : JSON.stringify(response), awarded]
+);
+
+/** 主試卷：涵蓋所有題型、沒填正解的題目、完全沒作答的題目、簡答。 */
+async function seedExamFixture(tx) {
+  await tx.query(
+    `INSERT INTO public.app_feature_settings (key, enabled) VALUES ('speed_reading_exam', TRUE)
+     ON CONFLICT (key) DO UPDATE SET enabled = TRUE`
+  );
+  await seedExamPaper(tx, EX.paper);
+  await seedExamQuestion(tx, EX.q.tf, EX.paper, "truefalse", 1, 2, true);
+  await seedExamQuestion(tx, EX.q.single, EX.paper, "single", 1, 3, 1);
+  await seedExamQuestion(tx, EX.q.multi, EX.paper, "multiple", 1, 4, [0, 2]);
+  await seedExamQuestion(tx, EX.q.match, EX.paper, "matching", 1, 5, { a: 1, b: 2 });
+  await seedExamQuestion(tx, EX.q.order, EX.paper, "ordering", 1, 6, [2, 0, 1]);
+  await seedExamQuestion(tx, EX.q.nokey, EX.paper, "single", 2, 7, null);
+  await seedExamQuestion(tx, EX.q.missing, EX.paper, "single", 3, 8, 0);
+  await seedExamQuestion(tx, EX.q.short, EX.paper, "shortanswer", 1, 10, null);
+  // 沒有簡答的試卷
+  await seedExamPaper(tx, EX.plainPaper);
+  await seedExamQuestion(tx, EX.plainQ.a, EX.plainPaper, "truefalse", 1, 2, true);
+  await seedExamQuestion(tx, EX.plainQ.b, EX.plainPaper, "single", 1, 3, 1);
+  // 沒有題目的試卷
+  await seedExamPaper(tx, EX.emptyPaper);
+}
+
+/** 主試卷上的一份作答：對 tf／multi／match，錯 single／order，nokey 沒正解，missing 沒作答；自動分 2+4+5=11。 */
+async function seedExamAnswers(tx, attemptId, { shortAwarded = null } = {}) {
+  await seedExamAnswer(tx, attemptId, EX.q.tf, "truefalse", true);
+  await seedExamAnswer(tx, attemptId, EX.q.single, "single", 0);
+  await seedExamAnswer(tx, attemptId, EX.q.multi, "multiple", [2, 0]);
+  await seedExamAnswer(tx, attemptId, EX.q.match, "matching", { b: 2, a: 1 });
+  await seedExamAnswer(tx, attemptId, EX.q.order, "ordering", [2, 1, 0]);
+  await seedExamAnswer(tx, attemptId, EX.q.nokey, "single", 1);
+  await seedExamAnswer(tx, attemptId, EX.q.short, "shortanswer", "我的簡答", shortAwarded);
+}
+
+/** 以超級使用者建好資料後切成 service_role（跟 nlc-data 一樣）執行，結束一律 rollback。 */
+async function withExam(fn) {
+  let result;
+  let failure;
+  try {
+    await db.transaction(async tx => {
+      await tx.query(`SELECT set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ role: "service_role" })]);
+      await tx.exec(`SET LOCAL session_replication_role = replica`);
+      await seedExamFixture(tx);
+      await tx.exec(`SET LOCAL session_replication_role = DEFAULT`);
+      // 測試中途要再放資料：暫時切回超級使用者、關掉觸發器
+      const seed = async work => {
+        await tx.exec(`RESET ROLE`);
+        await tx.exec(`SET LOCAL session_replication_role = replica`);
+        await work();
+        await tx.exec(`SET LOCAL session_replication_role = DEFAULT`);
+        await tx.exec(`SET LOCAL ROLE service_role`);
+      };
+      await tx.exec(`SET LOCAL ROLE service_role`);
+      try {
+        result = await fn(tx, seed);
+      } catch (error) {
+        failure = error;
+      }
+      await tx.rollback();
+    });
+  } catch (error) {
+    if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+  }
+  if (failure) throw failure;
+  return result;
+}
+
+const attemptRow = async (tx, id) => (await tx.query(
+  `SELECT status, submit_reason, auto_score::float8 AS auto, manual_score::float8 AS manual, total_score::float8 AS total
+   FROM public.exam_attempts WHERE id = $1`, [id]
+)).rows[0];
+
+const answerRows = async (tx, id) => Object.fromEntries((await tx.query(
+  `SELECT question_id, response, auto_correct, awarded_points::float8 AS points FROM public.exam_answers WHERE attempt_id = $1`, [id]
+)).rows.map(row => [row.question_id, { response: row.response, correct: row.auto_correct, points: row.points }]));
+
+describe("測驗計分 _exam_score_attempt（#675 特徵）", () => {
+  const score = (tx, id) => tx.query(`SELECT public._exam_score_attempt($1)`, [id]);
+
+  it("各題型計分；沒正解、沒作答都算 0 分；簡答沒批改前狀態留在 submitted、總分 NULL", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswers(tx, EX.attempt);
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "submitted", auto: 11, manual: null, total: null });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.q.tf]).toMatchObject({ correct: true, points: 2 });
+      expect(rows[EX.q.single]).toMatchObject({ correct: false, points: 0 });
+      expect(rows[EX.q.multi]).toMatchObject({ correct: true, points: 4 });
+      expect(rows[EX.q.match]).toMatchObject({ correct: true, points: 5 });
+      expect(rows[EX.q.order]).toMatchObject({ correct: false, points: 0 });
+      expect(rows[EX.q.nokey]).toMatchObject({ correct: false, points: 0 });
+      // 沒作答的題目不會補列，簡答不被自動計分碰到
+      expect(rows[EX.q.missing]).toBeUndefined();
+      expect(rows[EX.q.short]).toMatchObject({ response: "我的簡答", correct: null, points: null });
+    });
+  });
+
+  it("簡答都批改完 → graded，總分＝自動分＋簡答分", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswers(tx, EX.attempt, { shortAwarded: 7 });
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 11, manual: 7, total: 18 });
+      expect((await answerRows(tx, EX.attempt))[EX.q.short]).toMatchObject({ correct: null, points: 7 });
+    });
+  });
+
+  it("試卷有簡答題但這份作答沒有簡答列 → 視同批改完，簡答分 0", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", true);
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 2, manual: 0, total: 2 });
+    });
+  });
+
+  it("沒有簡答的試卷 → graded、簡答分 0", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.plainPaper, ids.member);
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.b, "single", 0);
+      });
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 2, manual: 0, total: 2 });
+    });
+  });
+
+  it("沒有題目的試卷：自動分 0（不是 NULL）", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.emptyPaper, ids.member));
+      await score(tx, EX.attempt);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 0, manual: 0, total: 0 });
+    });
+  });
+
+  it("重作練習：簡答不等批改，直接 graded，manual NULL、總分＝自動分", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { kind: "practice", officialId: EX.attempt });
+        await seedExamAnswers(tx, EX.practice);
+      });
+      await score(tx, EX.practice);
+      expect(await attemptRow(tx, EX.practice)).toMatchObject({ status: "graded", auto: 11, manual: null, total: 11 });
+    });
+  });
+
+  it("作答中或不存在的作答：什麼都不做、不報錯", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswers(tx, EX.attempt);
+      });
+      await score(tx, EX.attempt);
+      await score(tx, examId(999));
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "in_progress", auto: null, total: null });
+      expect((await answerRows(tx, EX.attempt))[EX.q.tf]).toMatchObject({ correct: null, points: null });
+    });
+  });
+
+  it("改正解後重算會覆蓋舊分數；不屬於這份試卷的作答列不受影響", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member);
+        await seedExamAnswers(tx, EX.attempt);
+        // 掛在別份試卷題目上的髒資料
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+      });
+      await score(tx, EX.attempt);
+      await seed(() => tx.query(`UPDATE public.exam_questions SET answer_key = '0'::jsonb WHERE id = $1`, [EX.q.single]));
+      await score(tx, EX.attempt);
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.q.single]).toMatchObject({ correct: true, points: 3 });
+      expect(rows[EX.plainQ.a]).toMatchObject({ correct: null, points: null });
+      expect((await attemptRow(tx, EX.attempt)).auto).toBe(14);
+    });
+  });
+});
+
+describe("測驗交卷 exam_submit_attempt（#675 特徵）", () => {
+  const submit = async (tx, attemptId, answers, reason = "manual", actor = ids.member) => (await tx.query(
+    `SELECT public.exam_submit_attempt($1, $2::jsonb, $3, $4) AS result`,
+    [attemptId, answers === null ? null : JSON.stringify(answers), reason, actor]
+  )).rows[0].result;
+
+  it("送出的答案覆蓋暫存；沒送的保留暫存；JSON null 算有送；每題都補一列；多餘的 key 不理", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false, 9);
+        await seedExamAnswer(tx, EX.attempt, EX.q.single, "single", 2, 9);
+        await seedExamAnswer(tx, EX.attempt, EX.q.multi, "multiple", [1], 9);
+      });
+      const result = await submit(tx, EX.attempt, {
+        [EX.q.tf]: true, [EX.q.multi]: null, [EX.q.short]: "新的簡答", [EX.plainQ.a]: true
+      });
+      expect(result).toEqual({ attemptId: EX.attempt, status: "submitted", attemptKind: "official", autoScore: null, totalScore: null, alreadySubmitted: false });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(Object.keys(rows)).toHaveLength(8);
+      expect(rows[EX.q.tf]).toEqual({ response: true, correct: null, points: null });
+      expect(rows[EX.q.single]).toEqual({ response: 2, correct: null, points: null });
+      expect(rows[EX.q.multi]).toEqual({ response: null, correct: null, points: null });
+      expect(rows[EX.q.short]).toEqual({ response: "新的簡答", correct: null, points: null });
+      expect(rows[EX.q.order]).toEqual({ response: null, correct: null, points: null });
+      expect(rows[EX.plainQ.a]).toBeUndefined();
+      const { rows: [jsonNull] } = await tx.query(
+        `SELECT response IS NULL AS sql_null, jsonb_typeof(response) AS kind FROM public.exam_answers WHERE attempt_id = $1 AND question_id = $2`,
+        [EX.attempt, EX.q.multi]
+      );
+      expect(jsonNull).toEqual({ sql_null: false, kind: "null" });
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "submitted", submit_reason: "manual", auto: null, manual: null, total: null });
+    });
+  });
+
+  it("p_answers 是 NULL 或不是物件：只用暫存，不報錯", async () => {
+    for (const payload of [null, [1, 2], 5]) {
+      await withExam(async (tx, seed) => {
+        await seed(async () => {
+          await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+          await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false);
+        });
+        await submit(tx, EX.attempt, payload);
+        const rows = await answerRows(tx, EX.attempt);
+        expect(rows[EX.q.tf].response).toBe(false);
+        expect(Object.keys(rows)).toHaveLength(8);
+      });
+    }
+  });
+
+  it("送出原因只接受 manual／timeout／auto_close，其他一律 manual", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await submit(tx, EX.attempt, {}, "timeout");
+      expect((await attemptRow(tx, EX.attempt)).submit_reason).toBe("timeout");
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await submit(tx, EX.attempt, {}, "亂填");
+      expect((await attemptRow(tx, EX.attempt)).submit_reason).toBe("manual");
+    });
+  });
+
+  it("重複送出不覆蓋答案；重作練習不能送出；別人的作答查不到", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "submitted" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false);
+      });
+      expect(await submit(tx, EX.attempt, { [EX.q.tf]: true })).toEqual({ attemptId: EX.attempt, status: "submitted", attemptKind: "official", alreadySubmitted: true });
+      expect((await answerRows(tx, EX.attempt))[EX.q.tf].response).toBe(false);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      await expect(submit(tx, EX.practice, {})).rejects.toThrow(/exam_practice_no_submit/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(submit(tx, EX.attempt, {}, "manual", ids.other)).rejects.toThrow(/exam_attempt_not_found/);
+    });
+  });
+
+  it("試作送出就計分；正式作答要等收卷", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'draft' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.rehearsal, EX.plainPaper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      await submit(tx, EX.rehearsal, { [EX.plainQ.a]: true, [EX.plainQ.b]: 1 }, "manual", ids.admin);
+      expect(await attemptRow(tx, EX.rehearsal)).toMatchObject({ status: "graded", auto: 5, manual: 0, total: 5 });
+    });
+  });
+
+  it("已過截止時間才送：先被關卷收走，送出的答案不算", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 minute' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.attempt, EX.plainPaper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+      });
+      const result = await submit(tx, EX.attempt, { [EX.plainQ.b]: 1 });
+      expect(result).toMatchObject({ status: "graded", alreadySubmitted: true });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.plainQ.a]).toEqual({ response: true, correct: true, points: 2 });
+      expect(rows[EX.plainQ.b]).toEqual({ response: null, correct: false, points: 0 });
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", submit_reason: "auto_close", auto: 2, total: 2 });
+    });
+  });
+});
+
+describe("測驗暫存 exam_save_progress（#675 特徵）", () => {
+  const save = async (tx, attemptId, answers, actor = ids.member) => (await tx.query(
+    `SELECT public.exam_save_progress($1, $2::jsonb, $3) AS result`,
+    [attemptId, answers === null ? null : JSON.stringify(answers), actor]
+  )).rows[0].result;
+
+  it("只寫有送的題目；已存的被覆蓋並清掉計分；不屬於本卷的題目不理；JSON null 照存", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", false, 9);
+        await seedExamAnswer(tx, EX.attempt, EX.q.single, "single", 2, 9);
+      });
+      const result = await save(tx, EX.attempt, { [EX.q.tf]: true, [EX.q.multi]: null, [EX.q.short]: "暫存", [EX.plainQ.a]: true, [examId(999)]: 1 });
+      expect(result).toMatchObject({ attemptId: EX.attempt, saved: true, attemptKind: "official", practiceCloseAt: null });
+      expect(result.secondsRemaining).toBeGreaterThan(0);
+      const rows = await answerRows(tx, EX.attempt);
+      expect(Object.keys(rows).sort()).toEqual([EX.q.tf, EX.q.single, EX.q.multi, EX.q.short].sort());
+      expect(rows[EX.q.tf]).toEqual({ response: true, correct: null, points: null });
+      expect(rows[EX.q.single]).toEqual({ response: 2, correct: null, points: 9 });
+      expect(rows[EX.q.multi].response).toBeNull();
+      const { rows: [row] } = await tx.query(
+        `SELECT section, jsonb_typeof(response) AS kind FROM public.exam_answers WHERE attempt_id = $1 AND question_id = $2`,
+        [EX.attempt, EX.q.multi]
+      );
+      expect(row).toEqual({ section: "multiple", kind: "null" });
+    });
+  });
+
+  it("大寫 UUID 當 key 也對得到題目；同一題大小寫都送時，以小寫那筆為準（jsonb 排序較後）", async () => {
+    const upper = id => id.replace(/e/g, "E");
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await save(tx, EX.attempt, { [upper(EX.q.tf)]: "大寫", [upper(EX.q.single)]: "大寫", [EX.q.single]: "小寫" });
+      const rows = await answerRows(tx, EX.attempt);
+      expect(rows[EX.q.tf].response).toBe("大寫");
+      expect(rows[EX.q.single].response).toBe("小寫");
+    });
+  });
+
+  it("key 不是 UUID 就整筆失敗，即使試卷沒有題目；不是物件也失敗；NULL 視同空物件", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, { "not-a-uuid": 1 })).rejects.toThrow(/invalid input syntax for type uuid/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.emptyPaper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, { "not-a-uuid": 1 })).rejects.toThrow(/invalid input syntax for type uuid/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, [1, 2])).rejects.toThrow(/non-object/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      expect(await save(tx, EX.attempt, null)).toMatchObject({ saved: true });
+      expect(await answerRows(tx, EX.attempt)).toEqual({});
+    });
+  });
+
+  it("鎖定情況：已交卷、超過期限 120 秒、別人的作答、複習期限已過", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "submitted" }));
+      await expect(save(tx, EX.attempt, {})).rejects.toThrow(/exam_attempt_locked/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress", deadline: "now() - interval '121 seconds'" }));
+      await expect(save(tx, EX.attempt, {})).rejects.toThrow(/exam_time_up/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress", deadline: "now() - interval '119 seconds'" }));
+      expect(await save(tx, EX.attempt, {})).toMatchObject({ saved: true, secondsRemaining: 0 });
+    });
+    await withExam(async (tx, seed) => {
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      await expect(save(tx, EX.attempt, {}, ids.other)).rejects.toThrow(/exam_attempt_not_found/);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 hour' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      const result = await save(tx, EX.practice, { [EX.q.tf]: true });
+      expect(result).toMatchObject({ saved: true, attemptKind: "practice", secondsRemaining: null });
+      expect(result.practiceCloseAt).toBeTruthy();
+      expect((await answerRows(tx, EX.practice))[EX.q.tf].response).toBe(true);
+    });
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '2 days' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      // 過期的複習先被 sweep 收走 → 鎖定
+      await expect(save(tx, EX.practice, {})).rejects.toThrow(/exam_attempt_locked/);
+    });
+  });
+});
+
+describe("測驗關卷（#675 特徵）", () => {
+  const sweep = async tx => (await tx.query(`SELECT public._exam_close_expired_papers() AS n`)).rows[0].n;
+  const paperRow = async (tx, id) => (await tx.query(`SELECT status, close_reason, closed_at IS NOT NULL AS has_closed_at FROM public.exam_papers WHERE id = $1`, [id])).rows[0];
+
+  it("過截止時間：卷變 closed、正式作答補滿答案並計分、重作練習不動、試作刪除", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAnswer(tx, EX.attempt, EX.q.tf, "truefalse", true);
+        await seedExamAttempt(tx, EX.otherAttempt, EX.paper, ids.other, { status: "submitted" });
+        await seedExamAnswer(tx, EX.otherAttempt, EX.q.tf, "truefalse", true);
+        await seedExamAnswer(tx, EX.otherAttempt, EX.q.short, "shortanswer", "簡答", 4);
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.other, { status: "in_progress", kind: "practice", officialId: EX.otherAttempt });
+        await seedExamAttempt(tx, EX.rehearsal, EX.paper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      expect(await sweep(tx)).toBe(1);
+      expect(await paperRow(tx, EX.paper)).toEqual({ status: "closed", close_reason: "scheduled", has_closed_at: true });
+      // 作答中被收卷：補滿 8 題，簡答沒批改所以停在 submitted
+      expect(Object.keys(await answerRows(tx, EX.attempt))).toHaveLength(8);
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "submitted", submit_reason: "auto_close", auto: 2, manual: null, total: null });
+      // 收卷前已交：簡答批改過，自動 graded；沒有被補列
+      expect(Object.keys(await answerRows(tx, EX.otherAttempt))).toHaveLength(2);
+      expect(await attemptRow(tx, EX.otherAttempt)).toMatchObject({ status: "graded", auto: 2, manual: 4, total: 6 });
+      expect((await attemptRow(tx, EX.practice)).status).toBe("in_progress");
+      expect(await attemptRow(tx, EX.rehearsal)).toBeUndefined();
+      // 再跑一次沒有事情做
+      expect(await sweep(tx)).toBe(0);
+    });
+  });
+
+  it("重作練習過了截止後一天自動交卷", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 day' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      await sweep(tx);
+      expect(await attemptRow(tx, EX.practice)).toMatchObject({ status: "submitted", submit_reason: "auto_close" });
+    });
+  });
+
+  it("還沒到截止時間：卷不動；開放前的試作留著，開放後才刪", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET open_at = now() + interval '1 hour', close_at = now() + interval '2 hours' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.rehearsal, EX.plainPaper, ids.admin, { status: "in_progress", isTest: true });
+        await seedExamAttempt(tx, EX.otherAttempt, EX.paper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      expect(await sweep(tx)).toBe(0);
+      expect((await paperRow(tx, EX.plainPaper)).status).toBe("published");
+      expect((await attemptRow(tx, EX.rehearsal)).status).toBe("in_progress");
+      expect(await attemptRow(tx, EX.otherAttempt)).toBeUndefined();
+    });
+  });
+
+  it("exam_recompute_scores 重算正式與重作練習；改正解後分數跟著變", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 hour' WHERE id = $1`, [EX.plainPaper]);
+        await seedExamAttempt(tx, EX.attempt, EX.plainPaper, ids.member, { status: "graded" });
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.a, "truefalse", true);
+        await seedExamAnswer(tx, EX.attempt, EX.plainQ.b, "single", 0);
+        await seedExamAttempt(tx, EX.practice, EX.plainPaper, ids.member, { status: "submitted", kind: "practice", officialId: EX.attempt });
+        await seedExamAnswer(tx, EX.practice, EX.plainQ.b, "single", 0);
+        await tx.query(`UPDATE public.exam_questions SET answer_key = '0'::jsonb WHERE id = $1`, [EX.plainQ.b]);
+      });
+      const { rows: [{ result }] } = await tx.query(`SELECT public.exam_recompute_scores($1, $2) AS result`, [EX.plainPaper, ids.admin]);
+      expect(result).toEqual({ paperId: EX.plainPaper, recomputed: 1, practiceRecomputed: 1 });
+      expect(await attemptRow(tx, EX.attempt)).toMatchObject({ status: "graded", auto: 5, total: 5 });
+      expect(await attemptRow(tx, EX.practice)).toMatchObject({ status: "graded", auto: 3, total: 3 });
+    });
+  });
+});
+
+describe("首頁測驗卡片（#675：不再執行關卷寫入，到時間仍立刻看到已截止）", () => {
+  const homeExams = async (tx, actor = ids.member) =>
+    (await tx.query(`SELECT public.exam_home_exams($1) AS result`, [actor])).rows[0].result;
+  const homeBanner = async (tx, actor = ids.member) =>
+    (await tx.query(`SELECT public.exam_home_banner($1) AS result`, [actor])).rows[0].result;
+  const paperStatus = async (tx, id) =>
+    (await tx.query(`SELECT status FROM public.exam_papers WHERE id = $1`, [id])).rows[0].status;
+  const onlyPaper = (tx, id) => tx.query(`DELETE FROM public.exam_papers WHERE id <> $1`, [id]);
+  const withoutClock = ({ serverNow: _serverNow, ...card }) => card;
+
+  it("作答期間：可進入、作答中都照實回報", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => onlyPaper(tx, EX.paper));
+      expect((await homeExams(tx))[0]).toMatchObject({
+        paperId: EX.paper, status: "published", stage: "open", inWindow: true, canEnter: true,
+        myAttemptStatus: null, canReviewOfficial: false, canPractice: false, resultReady: false
+      });
+      await seed(() => seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" }));
+      expect((await homeBanner(tx))).toMatchObject({
+        paperId: EX.paper, status: "published", stage: "open", canEnter: false,
+        myAttemptStatus: "in_progress", canReviewOfficial: false, canPractice: false
+      });
+    });
+  });
+
+  it("已排程未開放：顯示 scheduled，不能進入", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET open_at = now() + interval '1 hour', close_at = now() + interval '2 hours' WHERE id = $1`, [EX.paper]);
+      });
+      expect((await homeExams(tx))[0]).toMatchObject({ status: "published", stage: "scheduled", inWindow: false, canEnter: false });
+    });
+  });
+
+  it("過了截止時間、排程還沒跑：卡片跟關卷後一模一樣", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+      });
+      const before = await homeExams(tx);
+      expect(before).toHaveLength(1);
+      expect(before[0]).toMatchObject({
+        status: "closed", stage: "grading", inWindow: false, canEnter: false,
+        myAttemptStatus: "submitted", canReviewOfficial: true, canPractice: true, resultReady: false, myTotalScore: null
+      });
+      const banner = await homeBanner(tx);
+      await tx.query(`SELECT public._exam_close_expired_papers()`);
+      expect(await paperStatus(tx, EX.paper)).toBe("closed");
+      const after = await homeExams(tx);
+      expect(after.map(withoutClock)).toEqual(before.map(withoutClock));
+      expect(withoutClock(await homeBanner(tx))).toEqual(withoutClock(banner));
+    });
+  });
+
+  it("過了截止時間又沒作答：首頁不顯示這份卷", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+      });
+      expect(await homeExams(tx)).toEqual([]);
+      expect(await homeBanner(tx)).toBeNull();
+    });
+  });
+
+  it("首頁兩支 RPC 不寫入：卷、作答、試作都原封不動", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "in_progress" });
+        await seedExamAttempt(tx, EX.rehearsal, EX.paper, ids.admin, { status: "in_progress", isTest: true });
+      });
+      await homeExams(tx);
+      await homeBanner(tx);
+      expect(await paperStatus(tx, EX.paper)).toBe("published");
+      expect((await attemptRow(tx, EX.attempt)).status).toBe("in_progress");
+      expect((await attemptRow(tx, EX.rehearsal)).status).toBe("in_progress");
+      expect(await answerRows(tx, EX.attempt)).toEqual({});
+    });
+  });
+
+  it("重作練習到期還沒被收：卡片不再顯示作答中", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(async () => {
+        await onlyPaper(tx, EX.paper);
+        await tx.query(`UPDATE public.exam_papers SET status = 'closed', close_at = now() - interval '1 day' WHERE id = $1`, [EX.paper]);
+        await seedExamAttempt(tx, EX.attempt, EX.paper, ids.member, { status: "graded" });
+        await seedExamAttempt(tx, EX.practice, EX.paper, ids.member, { status: "in_progress", kind: "practice", officialId: EX.attempt });
+      });
+      const { rows: [{ result }] } = await tx.query(`SELECT public._exam_member_paper_summary($1, $2, FALSE) AS result`, [EX.paper, ids.member]);
+      expect(result).toMatchObject({ practiceAttemptStatus: "submitted", canPractice: false, practiceReviewReady: true });
+    });
+  });
+
+  it("功能關閉時回空", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => tx.query(`UPDATE public.app_feature_settings SET enabled = FALSE WHERE key = 'speed_reading_exam'`));
+      expect(await homeExams(tx)).toEqual([]);
+      expect(await homeBanner(tx)).toBeNull();
+    });
+  });
+
+  it("其他觸發點都還在：排程，以及進入作答／查成績／我的測驗／後台試卷／統計／交卷", async () => {
+    const { rows } = await db.query(`SELECT schedule, command FROM cron.job WHERE jobname = 'exam-auto-close'`);
+    expect(rows).toEqual([{ schedule: "* * * * *", command: "SELECT public._exam_close_expired_papers();" }]);
+    const triggers = [
+      tx => tx.query(`SELECT public.exam_get_for_attempt($1, $2)`, [EX.paper, ids.member]),
+      tx => tx.query(`SELECT public.exam_get_my_result($1, $2)`, [EX.paper, ids.member]),
+      tx => tx.query(`SELECT public.exam_my_papers($1)`, [ids.member]),
+      tx => tx.query(`SELECT public.exam_get_paper_admin($1, $2)`, [EX.paper, ids.admin]),
+      tx => tx.query(`SELECT public.exam_get_stats($1, $2)`, [EX.paper, ids.admin]),
+      tx => tx.query(`SELECT public.exam_finalize_expired($1, $2)`, [EX.paper, ids.admin])
+    ];
+    for (const trigger of triggers) {
+      await withExam(async (tx, seed) => {
+        await seed(() => tx.query(`UPDATE public.exam_papers SET close_at = now() - interval '1 second' WHERE id = $1`, [EX.paper]));
+        await trigger(tx);
+        expect(await paperStatus(tx, EX.paper)).toBe("closed");
+      });
+    }
+  });
+});
+
+describe("測驗統計 exam_get_stats（#675 特徵）", () => {
+  const statId = n => `f${String(n).padStart(7, "0")}-0000-4000-8000-000000000000`;
+  const S = {
+    paper: statId(1),
+    q: statId(2),
+    teamOld: statId(3), team3: statId(4), team6: statId(5),
+    leader: statId(9),
+    user: n => statId(100 + n),
+    attempt: n => statId(200 + n),
+    plan: n => statId(300 + n)
+  };
+  // 1,2,6,10-14 讀完一遍；3 沒讀完；4 只有個人計畫；5 沒計畫；7 交卷未批改；8 作答中；9 試作不算
+  const USERS = [
+    [1, "大區甲", "牧區一", "小組一", "graded", 90], [2, "大區甲", "牧區一", "小組一", "graded", 80],
+    [3, "大區甲", "牧區一", "小組二", "graded", 70], [4, "大區乙", "牧區二", "小組三", "graded", 60],
+    [5, "大區乙", "牧區二", "小組三", "graded", 50], [6, "大區乙", "牧區二", "小組四", "graded", 40],
+    [7, "大區甲", "牧區一", "小組一", "submitted", null], [8, "大區乙", "牧區二", "小組三", "in_progress", null],
+    [9, "大區甲", "牧區一", "小組一", "graded", 100], [10, "大區甲", "牧區一", "小組一", "graded", 30],
+    [11, "大區甲", "", "", "graded", 20],
+    // 讓牧區一、小組一在開篩選時母體也滿 5 人，prZone／prGroup 才算得出來
+    [12, "大區甲", "牧區一", "小組一", "graded", 85], [13, "大區甲", "牧區一", "小組一", "graded", 75],
+    [14, "大區甲", "牧區一", "小組一", "graded", 65]
+  ];
+
+  async function seedStats(tx) {
+    const role = async code => (await tx.query(`SELECT id FROM public.role_definitions WHERE code = $1`, [code])).rows[0].id;
+    const memberRole = await role("member");
+    await seedExamPaper(tx, S.paper, { linkedPlan: ids.plan, closeAt: "now() - interval '1 hour'", openAt: "now() - interval '2 hours'", status: "closed" });
+    await seedExamQuestion(tx, S.q, S.paper, "single", 1, 10, 1);
+    for (const [n, region, zone, group, status, total] of USERS) {
+      await tx.query(
+        `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, is_active) VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+        [S.user(n), `統計會友 ${String(n).padStart(2, "0")}`, memberRole, region, zone, group]
+      );
+      await seedExamAttempt(tx, S.attempt(n), S.paper, S.user(n), { status, total, isTest: n === 9 });
+      if (status !== "in_progress") await seedExamAnswer(tx, S.attempt(n), S.q, "single", n % 2);
+    }
+    await tx.query(
+      `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, managed_zones, is_active) VALUES ($1, '統計牧區長', $2, '大區甲', '牧區一', '小組一', '牧區一', TRUE)`,
+      [S.leader, await role("zone_leader")]
+    );
+    const plan = (n, round, personal = false, globalPlan = ids.plan) => tx.query(
+      `INSERT INTO public.reading_plans (id, user_id, global_plan_id, name, start_date, end_date, target_books, current_round, is_personal)
+       VALUES ($1, $2, $3, '統計計畫', '2026-09-01', '2026-12-31', ARRAY['GEN'], $4, $5)`,
+      [S.plan(n), S.user(n), globalPlan, round, personal]
+    );
+    await plan(1, 2);
+    await plan(2, 1);
+    await plan(3, 1);
+    await plan(4, 2, true, null);
+    await plan(6, 3);
+    await plan(10, 2);
+    await plan(11, 2);
+    await plan(12, 2);
+    await plan(13, 2);
+    await plan(14, 2);
+    const logs = (n, chapters) => Promise.all(chapters.map(chapter => tx.query(
+      `INSERT INTO public.reading_logs (user_id, plan_id, book, chapter, round) VALUES ($1, $2, 'GEN', $3, 1)`,
+      [S.user(n), S.plan(n), chapter]
+    )));
+    await logs(2, [1, 2, 3]);
+    await logs(3, [1, 2]);
+    await logs(4, [1, 2, 3]); // 個人計畫的紀錄不算
+    await tx.query(
+      `INSERT INTO public.reading_teams (id, global_plan_id, division, name, captain_id, invite_code, carried_from_team_id, created_at) VALUES
+         ($1, $4, 3, '舊三人隊', $5, 'STATOLD001', NULL, now() - interval '30 days'),
+         ($2, $4, 3, '三人隊', $5, 'STATNEW001', $1, now() - interval '1 day'),
+         ($3, $4, 6, '六人隊', $6, 'STATSIX001', NULL, now() - interval '1 day')`,
+      [S.teamOld, S.team3, S.team6, ids.plan, S.user(1), S.user(4)]
+    );
+    const members = (team, division, users) => Promise.all(users.map(n => tx.query(
+      `INSERT INTO public.reading_team_members (team_id, global_plan_id, division, user_id, member_role) VALUES ($1, $2, $3, $4, 'member')`,
+      [team, ids.plan, division, S.user(n)]
+    )));
+    await members(S.team3, 3, [1, 2, 3]);
+    await members(S.team6, 6, [4, 5, 6]);
+  }
+
+  const stats = async (tx, actor, firstRound = false, book = null, chapters = null) => (await tx.query(
+    `SELECT public.exam_get_stats($1, $2, $3, $4, $5) AS result`, [S.paper, actor, firstRound, book, chapters]
+  )).rows[0].result;
+
+  /** 去掉隨每次執行變動的 id、把名單壓成一行，讓快照讀得懂。 */
+  const view = r => ({
+    meta: [r.scope, r.prVisible, r.resultsPublished, r.readingBook, r.requireFirstRound].join("|"),
+    overall: r.overall,
+    byRegion: r.byRegion,
+    byZone: r.byZone,
+    byGroup: r.byGroup,
+    byTeamSize: r.byTeamSize,
+    teamRanking: r.teamRanking.map(({ teamId: _teamId, ...team }) => team),
+    byQuestion: r.byQuestion,
+    roster: r.roster.map(row => [row.name.slice(-2), row.status, row.totalScore, row.timeSeconds, row.teamLabel, row.firstRoundDone, row.prChurch, row.prZone, row.prGroup].join("|"))
+  });
+
+  // 快照是改寫前的函式產生的（#675），之後不該因為效能改寫而變動
+  const expectStatsGolden = (result, name) =>
+    expect(`${JSON.stringify(view(result), null, 1)}\n`).toMatchFileSnapshot(`./fixtures/exam-stats-${name}.json`);
+
+  it("管理員、開「讀完一遍」篩選：母體、PR、缺口都只算讀完的人", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expectStatsGolden(await stats(tx, ids.admin, true, " GEN ", 3), "admin-first-round");
+    });
+  });
+
+  it("管理員、不開篩選但給書卷：統計全算，名單仍標出誰讀完", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expectStatsGolden(await stats(tx, ids.admin, false, "GEN", 3), "admin-book-only");
+    });
+  });
+
+  it("管理員、沒給書卷：firstRoundDone 是 NULL，notReadCount 是 0", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      const result = await stats(tx, ids.admin);
+      expect(result.overall.notReadCount).toBe(0);
+      expect(result.roster.every(row => row.firstRoundDone === null)).toBe(true);
+      // 開關開著但書卷空白：等於沒開
+      const blank = await stats(tx, ids.admin, true, "   ", 3);
+      expect(blank.requireFirstRound).toBe(false);
+      expect(blank.readingBook).toBeNull();
+      expect(view(blank).roster).toEqual(view(result).roster);
+    });
+  });
+
+  it("章數沒給或是 0：只有 current_round>=2 才算讀完", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      for (const chapters of [null, 0]) {
+        const flags = Object.fromEntries((await stats(tx, ids.admin, false, "GEN", chapters)).roster.map(row => [row.name.slice(-2), row.firstRoundDone]));
+        expect(flags).toMatchObject({ "01": true, "02": false, "03": false, "04": false, "05": false, "06": true, "10": true, "11": true });
+      }
+    });
+  });
+
+  it("牧區長只看自己牧區；成績未公布時看不到 PR", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expectStatsGolden(await stats(tx, S.leader, true, "GEN", 3), "zone-leader-first-round");
+    });
+  });
+
+  it("會友不能看", async () => {
+    await withExam(async (tx, seed) => {
+      await seed(() => seedStats(tx));
+      await expect(stats(tx, ids.member)).rejects.toThrow(/exam_admin_required/);
+    });
+  });
+});
+
+describe("測驗相關索引（#675）", () => {
+  it("新索引都建好；重複的都刪了，涵蓋它們的唯一索引都還在", async () => {
+    const { rows } = await db.query(`SELECT indexname FROM pg_indexes WHERE schemaname = 'public'`);
+    const names = new Set(rows.map(row => row.indexname));
+    for (const name of [
+      "idx_quiz_publications_quiz_id", "idx_reading_teams_carried_from_team_id",
+      "idx_exam_attempts_paper_is_test", "idx_exam_attempts_official_attempt_id",
+      "exam_questions_paper_id_section_position_key", "quiz_publications_global_plan_id_quiz_date_small_group_id_key",
+      "exam_answers_attempt_id_question_id_key", "lightning_quiz_attempts_question_id_user_id_key",
+      "verse_notes_user_id_book_chapter_verse_key", "highlights_user_id_book_chapter_verse_key"
+    ]) expect(names.has(name), name).toBe(true);
+    for (const name of [
+      "idx_exam_questions_paper", "idx_quiz_publications_plan_date_group", "idx_exam_answers_attempt",
+      "idx_lightning_quiz_attempts_question", "idx_verse_notes_user_chapter", "idx_highlights_user_chapter"
+    ]) expect(names.has(name), name).toBe(false);
+  });
+});
+
+describe("批次提醒未報名者（send_plan_join_invitations_batch，#676）", () => {
+  const person = n => `20000000-0000-4000-8000-0000000676${String(n).padStart(2, "0")}`;
+  const STAGE_PLAN_KEY = "stage-676";
+  const OTHER_PRESET_PLAN = "40000000-0000-4000-8000-000000000676";
+  // 收件人：組織三層都分得開，才測得出每個角色的範圍
+  const R = {
+    sameGroup: person(1),
+    otherGroup: person(2),
+    otherZone: person(3),
+    otherRegion: person(4),
+    inactive: person(5),
+    joined: person(6),
+    joinedByPreset: person(7),
+    noOrg: person(8),
+    unknown: "20000000-0000-4000-8000-000000067699"
+  };
+  // 發送者：含「管理範圍是空的」三種，一定要 fail closed
+  const A = {
+    pastor: person(20),
+    greatManaged: person(21),
+    greatFallback: person(22),
+    greatEmpty: person(23),
+    zoneManaged: person(24),
+    zoneFallback: person(25),
+    zoneEmpty: person(26),
+    groupManaged: person(27),
+    groupFallback: person(28),
+    groupEmpty: person(29),
+    otherZoneLeader: person(30),
+    member: person(31)
+  };
+
+  const addPerson = (tx, id, role, { region = "", zone = "", group = "", managedRegions = "", managedZones = "", managedGroups = "", active = true } = {}) => tx.query(
+    `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, managed_regions, managed_zones, managed_groups, is_active)
+     SELECT $1, '測試會友 0676', definition.id, $3, $4, $5, $6, $7, $8, $9 FROM public.role_definitions AS definition WHERE definition.code = $2`,
+    [id, role, region, zone, group, managedRegions, managedZones, managedGroups, active]
+  );
+
+  const seedPeople = async tx => {
+    const home = { region: "大區 A", zone: "牧區 A-1", group: "小組 A-1-1" };
+    await addPerson(tx, R.sameGroup, "member", home);
+    await addPerson(tx, R.otherGroup, "member", { ...home, group: "小組 A-1-2" });
+    await addPerson(tx, R.otherZone, "member", { region: "大區 A", zone: "牧區 A-2", group: "小組 A-2-1" });
+    await addPerson(tx, R.otherRegion, "member", { region: "大區 B", zone: "牧區 B-1", group: "小組 B-1-1" });
+    await addPerson(tx, R.inactive, "member", { ...home, active: false });
+    await addPerson(tx, R.joined, "member", home);
+    await addPerson(tx, R.joinedByPreset, "member", home);
+    await addPerson(tx, R.noOrg, "member");
+
+    await addPerson(tx, A.pastor, "pastor");
+    await addPerson(tx, A.greatManaged, "great_zone_leader", { region: "大區 B", managedRegions: "大區 A" });
+    await addPerson(tx, A.greatFallback, "great_zone_leader", { region: "大區 A" });
+    await addPerson(tx, A.greatEmpty, "great_zone_leader");
+    await addPerson(tx, A.zoneManaged, "zone_leader", { zone: "牧區 B-1", managedZones: "牧區 A-1, 牧區 A-2" });
+    await addPerson(tx, A.zoneFallback, "zone_leader", { zone: "牧區 A-1" });
+    await addPerson(tx, A.zoneEmpty, "zone_leader");
+    await addPerson(tx, A.groupManaged, "group_leader", { group: "小組 B-1-1", managedGroups: "小組 A-1-1" });
+    await addPerson(tx, A.groupFallback, "group_leader", { group: "小組 A-1-1" });
+    await addPerson(tx, A.groupEmpty, "group_leader");
+    await addPerson(tx, A.otherZoneLeader, "zone_leader", { zone: "牧區 B-1" });
+    await addPerson(tx, A.member, "member", home);
+
+    await tx.query(
+      `INSERT INTO public.global_plans (id, name, start_date, end_date, target_books) VALUES ($1, '另一個計畫', '2026-09-01', '2026-12-31', ARRAY['GEN'])`,
+      [OTHER_PRESET_PLAN]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+       SELECT $1, id, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`,
+      [R.joined, ids.plan]
+    );
+    await tx.query(
+      `INSERT INTO public.reading_plans (user_id, global_plan_id, preset_key, name, start_date, end_date, target_books)
+       SELECT $1, id, $3, name, start_date, end_date, target_books FROM public.global_plans WHERE id = $2`,
+      [R.joinedByPreset, OTHER_PRESET_PLAN, STAGE_PLAN_KEY]
+    );
+  };
+
+  const batch = async (tx, actorId, recipientIds, planKey = STAGE_PLAN_KEY, planId = ids.plan) => (await tx.query(
+    `SELECT public.send_plan_join_invitations_batch(p_global_plan_id => $1, p_recipient_ids => $2::uuid[], p_plan_key => $3, p_actor_id => $4) AS result`,
+    [planId, recipientIds, planKey, actorId]
+  )).rows[0].result.results;
+  const single = async (tx, actorId, recipientId, planKey = STAGE_PLAN_KEY) => (await tx.query(
+    `SELECT public.send_plan_join_invitation($1, $2, $3, $4) AS result`,
+    [ids.plan, recipientId, planKey, actorId]
+  )).rows[0].result;
+  const statusById = results => Object.fromEntries(results.map(row => [row.recipient_id, row.status]));
+  const reminders = async (tx, senderId) => (await tx.query(
+    `SELECT sender_id, recipient_id, global_plan_id, plan_key, reason, message, status, sent_on::text AS sent_on
+     FROM public.care_reminders WHERE sender_id = $1 ORDER BY recipient_id`,
+    [senderId]
+  )).rows;
+  const uuids = count => Array.from({ length: count }, (_, index) =>
+    `90000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
+
+  // 單筆的結果換成批次的狀態名稱，兩邊才比得起來
+  const SINGLE_ERROR_STATUS = {
+    plan_invitation_recipient_not_found: "not_found",
+    plan_invitation_self_not_allowed: "self",
+    plan_member_outside_scope: "outside_scope",
+    plan_invitation_recipient_already_joined: "already_joined"
+  };
+  const singleStatus = async (tx, actorId, recipientId) => {
+    await tx.exec("SAVEPOINT single_676");
+    try {
+      const result = await single(tx, actorId, recipientId);
+      return result.sent ? "sent" : "duplicate";
+    } catch (error) {
+      const code = Object.keys(SINGLE_ERROR_STATUS).find(key => String(error.message).includes(key));
+      if (!code) throw error;
+      return SINGLE_ERROR_STATUS[code];
+    } finally {
+      await tx.exec("ROLLBACK TO SAVEPOINT single_676");
+    }
+  };
+
+  it("每個角色、每種收件人，結果都跟單筆 RPC 一樣（含空範圍 fail closed）", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const recipients = Object.values(R);
+      const actors = [ids.admin, ...Object.values(A).filter(id => id !== A.member)];
+      const seen = new Set();
+      for (const actorId of actors) {
+        const everyone = [...recipients, actorId];
+        await tx.exec("SAVEPOINT batch_676");
+        const results = statusById(await batch(tx, actorId, everyone));
+        await tx.exec("ROLLBACK TO SAVEPOINT batch_676");
+        for (const recipientId of everyone) {
+          expect(results[recipientId], `actor ${actorId} → ${recipientId}`).toBe(await singleStatus(tx, actorId, recipientId));
+          seen.add(results[recipientId]);
+        }
+      }
+      // 這張表真的走過每一種結果，不是全部同一個答案剛好相等
+      expect([...seen].sort()).toEqual(["already_joined", "not_found", "outside_scope", "self", "sent"]);
+    });
+  }, 60_000);
+
+  it("超範圍的人明確回 outside_scope、不寫入；同一批範圍內的人照送", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const results = statusById(await batch(tx, A.zoneFallback, [R.sameGroup, R.otherGroup, R.otherZone, R.otherRegion]));
+      expect(results).toEqual({
+        [R.sameGroup]: "sent",
+        [R.otherGroup]: "sent",
+        [R.otherZone]: "outside_scope",
+        [R.otherRegion]: "outside_scope"
+      });
+      expect((await reminders(tx, A.zoneFallback)).map(row => row.recipient_id).sort()).toEqual([R.sameGroup, R.otherGroup].sort());
+    });
+  });
+
+  it.each([
+    ["大區長", "greatEmpty"],
+    ["區長", "zoneEmpty"],
+    ["小組長", "groupEmpty"]
+  ])("%s沒有管理範圍：所有人都 outside_scope、一筆都不寫（連組織也空白的人）", async (_label, key) => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const results = await batch(tx, A[key], [R.sameGroup, R.otherRegion, R.noOrg]);
+      expect(results.map(row => row.status)).toEqual(["outside_scope", "outside_scope", "outside_scope"]);
+      expect(await reminders(tx, A[key])).toEqual([]);
+    });
+  });
+
+  it("寫進去的內容和單筆完全一樣（訊息由伺服器決定）", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      await single(tx, A.pastor, R.sameGroup);
+      await batch(tx, A.greatFallback, [R.sameGroup]);
+      const [fromSingle] = await reminders(tx, A.pastor);
+      const [fromBatch] = await reminders(tx, A.greatFallback);
+      expect({ ...fromBatch, sender_id: null }).toEqual({ ...fromSingle, sender_id: null });
+      expect(fromBatch).toMatchObject({
+        sender_id: A.greatFallback,
+        plan_key: `plan-invite:${ids.plan}`,
+        reason: "encouragement",
+        message: "邀請你加入「測試計畫」讀經計畫，一起開始讀經吧！",
+        status: "unread"
+      });
+    });
+  });
+
+  it("今天已提醒的人不重複：批次再送、單筆先送都回 duplicate；別的發送者、昨天的不算", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      expect(statusById(await batch(tx, A.pastor, [R.sameGroup]))).toEqual({ [R.sameGroup]: "sent" });
+      expect(statusById(await batch(tx, A.pastor, [R.sameGroup, R.otherGroup]))).toEqual({ [R.sameGroup]: "duplicate", [R.otherGroup]: "sent" });
+      expect(await reminders(tx, A.pastor)).toHaveLength(2);
+
+      // 批次送過 → 單筆看得到
+      expect(await single(tx, A.pastor, R.otherGroup)).toEqual({ sent: false, duplicate: true });
+      // 單筆送過 → 批次看得到
+      await single(tx, A.pastor, R.otherZone);
+      expect(statusById(await batch(tx, A.pastor, [R.otherZone]))).toEqual({ [R.otherZone]: "duplicate" });
+
+      // 去重是每位發送者各自算，跟單筆的唯一鍵一樣
+      expect(statusById(await batch(tx, A.greatFallback, [R.sameGroup]))).toEqual({ [R.sameGroup]: "sent" });
+
+      // 昨天提醒過的，今天可以再提醒
+      await tx.query(
+        `INSERT INTO public.care_reminders (sender_id, recipient_id, global_plan_id, plan_key, reason, message, status, sent_on)
+         VALUES ($1, $2, $3, $4, 'encouragement', '昨天的提醒', 'unread', CURRENT_DATE - 1)`,
+        [A.pastor, R.otherRegion, ids.plan, `plan-invite:${ids.plan}`]
+      );
+      expect(statusById(await batch(tx, A.pastor, [R.otherRegion]))).toEqual({ [R.otherRegion]: "sent" });
+    });
+  });
+
+  it("重複的 id 只算一次、NULL 略過；空名單回空結果", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      const results = await batch(tx, A.pastor, [R.sameGroup, R.sameGroup, null, R.sameGroup]);
+      expect(results).toEqual([{ recipient_id: R.sameGroup, status: "sent" }]);
+      expect(await reminders(tx, A.pastor)).toHaveLength(1);
+      expect(await batch(tx, A.pastor, [])).toEqual([]);
+      expect(await batch(tx, A.pastor, null)).toEqual([]);
+    });
+  });
+
+  it(`上限 ${PLAN_INVITE_BATCH_MAX_RECIPIENTS} 人（跟前端分批一致），算的是去重後的人數`, async () => {
+    await asService(async tx => {
+      const atLimit = await batch(tx, ids.admin, uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS));
+      expect(atLimit).toHaveLength(PLAN_INVITE_BATCH_MAX_RECIPIENTS);
+      expect(new Set(atLimit.map(row => row.status))).toEqual(new Set(["not_found"]));
+      const withDuplicates = await batch(tx, ids.admin, [...uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS), ...uuids(10)]);
+      expect(withDuplicates).toHaveLength(PLAN_INVITE_BATCH_MAX_RECIPIENTS);
+    });
+    await expect(asService(tx => batch(tx, ids.admin, uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS + 1))))
+      .rejects.toThrow(/plan_invitation_batch_too_large/);
+  }, 60_000);
+
+  it("超過上限整批不寫", async () => {
+    await asService(async tx => {
+      await seedPeople(tx);
+      await tx.exec("SAVEPOINT too_large_676");
+      await expect(batch(tx, A.pastor, [R.sameGroup, ...uuids(PLAN_INVITE_BATCH_MAX_RECIPIENTS)]))
+        .rejects.toThrow(/plan_invitation_batch_too_large/);
+      await tx.exec("ROLLBACK TO SAVEPOINT too_large_676");
+      expect(await reminders(tx, A.pastor)).toEqual([]);
+    });
+  });
+
+  it("身分：沒帶 actor、不存在的 actor、一般會友都拒絕", async () => {
+    await expect(asService(tx => batch(tx, null, [ids.member]))).rejects.toThrow(/profile_required/);
+    await expect(asService(tx => batch(tx, person(98), [ids.member]))).rejects.toThrow(/profile_required/);
+    await expect(asService(tx => batch(tx, ids.member, [ids.other]))).rejects.toThrow(/plan_management_scope_required/);
+  });
+
+  it("計畫不存在回 plan_not_found", async () => {
+    await expect(asService(tx => batch(tx, ids.admin, [ids.member], "", "40000000-0000-4000-8000-00000000dead")))
+      .rejects.toThrow(/plan_not_found/);
+  });
+
+  it("只開給 service_role：client 不能直接呼叫，也不能傳別人的 actor", async () => {
+    const { rows } = await db.query(
+      `SELECT has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+              has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public' AND p.proname = 'send_plan_join_invitations_batch'`
+    );
+    expect(rows).toEqual([{ anon: false, authenticated: false, service: true }]);
+    await expect(as("authenticated", { sub: ids.adminAuth }, tx => batch(tx, null, [ids.member])))
+      .rejects.toThrow(/permission denied/);
+    await expect(as("authenticated", { sub: ids.memberAuth }, tx => batch(tx, ids.admin, [ids.other])))
+      .rejects.toThrow(/permission denied/);
+    await expect(as("anon", {}, tx => batch(tx, ids.admin, [ids.other])))
+      .rejects.toThrow(/permission denied/);
+  });
+});
+
+describe("克勞斯店家查看兌換紀錄（#679）", () => {
+  const SEED_WEEK = "2026-09-21";
+  const NOT_ON_LIST_MS = 4567;
+  const MERCHANT_KEYS = ["amount", "code", "expiresOn", "name", "rank", "redeemedAt", "redeemedVia", "riseDate", "status"];
+  const one = async (tx, sql, params) => (await tx.query(sql, params)).rows[0];
+
+  // 登入過的帳號（有 user_identities）才能被指定；ids.other 預設沒有身分。
+  const addIdentity = (tx, profileId, sub) => tx.query(
+    `INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES ($1, 'logto', $2, TRUE)`,
+    [profileId, sub]
+  );
+  const setMerchant = async (tx, profileId, enabled, actorId = ids.admin) =>
+    (await one(tx, `SELECT public.admin_set_voucher_merchant($1, $2, $3) AS r`, [profileId, enabled, actorId])).r;
+  const access = async (tx, actorId) =>
+    (await one(tx, `SELECT public.get_my_voucher_merchant_access($1) AS r`, [actorId])).r;
+  const list = async (tx, actorId, month = null) =>
+    (await one(tx, `SELECT public.get_voucher_merchant_vouchers($1, $2) AS r`, [month, actorId])).r;
+  const lookup = async (tx, actorId, code) =>
+    (await one(tx, `SELECT public.lookup_voucher_merchant_code($1, $2) AS r`, [code, actorId])).r;
+  const candidates = async (tx, query, actorId = ids.admin) =>
+    (await one(tx, `SELECT public.admin_search_voucher_merchant_candidates($1, $2) AS r`, [query, actorId])).r;
+  const merchants = async (tx, actorId = ids.admin) =>
+    (await one(tx, `SELECT public.admin_list_voucher_merchants($1) AS r`, [actorId])).r;
+
+  // 四張券：可使用／已兌換（本人）／已過期／已作廢，都是 member 得的；店家是 other。
+  const seedVouchers = async tx => {
+    await tx.query(
+      `INSERT INTO public.lightning_quiz_week_rankings (week_start, entries, display_days, display_until)
+       VALUES ($1::date, $2::jsonb, 1, $1::date + 7)`,
+      [SEED_WEEK, JSON.stringify(["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24"].map(riseDate => ({
+        riseDate,
+        winners: [{ rank: 1, userId: ids.member, name: "得獎者甲", pastoralZone: "牧區 A-1", elapsedMs: NOT_ON_LIST_MS }]
+      })))]
+    );
+    const { rows } = await tx.query(`SELECT id, code, rise_date::text AS rise_date FROM public.lightning_quiz_vouchers ORDER BY rise_date`);
+    const [available, redeemed, expired, voided] = rows;
+    await tx.query(`UPDATE public.lightning_quiz_vouchers SET redeemed_at = NOW(), redeemed_by = $2, redeemed_via = 'self' WHERE id = $1`, [redeemed.id, ids.member]);
+    await tx.query(`UPDATE public.lightning_quiz_vouchers SET expires_on = (NOW() AT TIME ZONE 'Asia/Taipei')::date - 1 WHERE id = $1`, [expired.id]);
+    await tx.query(`UPDATE public.lightning_quiz_vouchers SET voided_at = NOW() WHERE id = $1`, [voided.id]);
+    return { available, redeemed, expired, voided };
+  };
+  const asMerchant = fn => asService(async tx => {
+    await addIdentity(tx, ids.other, "merchant-sub-other");
+    await setMerchant(tx, ids.other, true);
+    return fn(tx);
+  });
+  const auditRows = async (tx, actionLike) => {
+    await tx.exec("RESET ROLE");
+    const { rows } = await tx.query(
+      `SELECT action, result, actor_id, actor_role, source, target_user_id, target_id, changes, detail
+       FROM audit.admin_events WHERE action LIKE $1 ORDER BY id`,
+      [actionLike]
+    );
+    return rows;
+  };
+  const thisMonth = tx => one(tx, `SELECT to_char(NOW() AT TIME ZONE 'Asia/Taipei', 'YYYY-MM') AS m`).then(row => row.m);
+
+  describe("權限", () => {
+    it("一般會友沒有入口，直接呼叫清單與查碼都被拒絕", async () => {
+      expect(await asService(tx => access(tx, ids.member))).toEqual({ isMerchant: false });
+      await expect(asService(tx => list(tx, ids.member))).rejects.toThrow(/voucher_merchant_required/);
+      await expect(asService(tx => lookup(tx, ids.member, "ABCDEF"))).rejects.toThrow(/voucher_merchant_required/);
+    });
+
+    it("系統管理員沒有被指定也不算店家", async () => {
+      expect(await asService(tx => access(tx, ids.admin))).toEqual({ isMerchant: false });
+      await expect(asService(tx => list(tx, ids.admin))).rejects.toThrow(/voucher_merchant_required/);
+    });
+
+    it("沒有帶呼叫者一律拒絕", async () => {
+      await expect(asService(tx => tx.query(`SELECT public.get_voucher_merchant_vouchers(NULL, NULL)`))).rejects.toThrow(/profile_required/);
+      await expect(asService(tx => tx.query(`SELECT public.lookup_voucher_merchant_code('ABCDEF', NULL)`))).rejects.toThrow(/profile_required/);
+    });
+
+    it("指定後查得到；移除後立刻查不到", async () => {
+      const outcome = await asMerchant(async tx => {
+        const before = await access(tx, ids.other);
+        await seedVouchers(tx);
+        const listed = await list(tx, ids.other);
+        await setMerchant(tx, ids.other, false);
+        const after = await access(tx, ids.other);
+        await tx.query("SAVEPOINT s");
+        const listError = await list(tx, ids.other).then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        const lookupError = await lookup(tx, ids.other, "ABCDEF").then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        return { before, listed, after, listError, lookupError };
+      });
+      expect(outcome.before).toEqual({ isMerchant: true });
+      expect(outcome.listed.vouchers.length).toBeGreaterThan(0);
+      expect(outcome.after).toEqual({ isMerchant: false });
+      expect(outcome.listError).toMatch(/voucher_merchant_required/);
+      expect(outcome.lookupError).toMatch(/voucher_merchant_required/);
+    });
+
+    it("帳號停用的店家查不到", async () => {
+      await expect(asMerchant(async tx => {
+        await tx.query(`UPDATE public.profiles SET is_active = FALSE WHERE id = $1`, [ids.other]);
+        return list(tx, ids.other);
+      })).rejects.toThrow(/profile_required/);
+    });
+
+    it("函式與資料表只給 service_role：anon／authenticated 都不能直接碰", async () => {
+      const { rows } = await db.query(
+        `SELECT p.proname,
+                has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+                has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+                has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+         FROM pg_proc p
+         WHERE p.proname IN ('get_my_voucher_merchant_access', 'get_voucher_merchant_vouchers', 'lookup_voucher_merchant_code',
+                             'admin_list_voucher_merchants', 'admin_search_voucher_merchant_candidates', 'admin_set_voucher_merchant',
+                             '_lightning_quiz_voucher_merchant_json', '_lightning_quiz_require_voucher_merchant',
+                             '_voucher_merchant_assert_admin', '_voucher_merchant_list_json')`
+      );
+      expect(rows).toHaveLength(10);
+      rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));
+
+      const { rows: tables } = await db.query(
+        `SELECT c.relname, c.relrowsecurity AS rls,
+                has_table_privilege('anon', c.oid, 'SELECT') AS anon,
+                has_table_privilege('authenticated', c.oid, 'SELECT') AS authenticated,
+                has_table_privilege('service_role', c.oid, 'SELECT') AS service
+         FROM pg_class c
+         WHERE c.relname IN ('lightning_quiz_voucher_merchants', 'lightning_quiz_voucher_lookup_limits') AND c.relkind = 'r'`
+      );
+      expect(tables).toHaveLength(2);
+      tables.forEach(row => expect(row, row.relname).toMatchObject({ rls: true, anon: false, authenticated: false, service: true }));
+    });
+  });
+
+  describe("清單", () => {
+    it("每張券只回白名單欄位，沒有牧區、秒數、會員 ID、管理員姓名", async () => {
+      const { result, redeemed } = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        return { result: await list(tx, ids.other), redeemed: seeded.redeemed };
+      });
+      expect(Object.keys(result).sort()).toEqual(["month", "months", "summary", "today", "truncated", "vouchers"]);
+      expect(result.vouchers.length).toBeGreaterThan(0);
+      result.vouchers.forEach(voucher => expect(Object.keys(voucher).sort()).toEqual(MERCHANT_KEYS));
+      const text = JSON.stringify(result);
+      for (const forbidden of ["牧區 A-1", ids.member, redeemed.id, "pastoralZone", "elapsedMs", "userId", "redeemedBy", "redeemedByName", "測試管理員", String(NOT_ON_LIST_MS)]) {
+        expect(text, forbidden).not.toContain(forbidden);
+      }
+    });
+
+    it("回可使用、已兌換、已過期；已作廢不回；月對帳只算已兌換", async () => {
+      const outcome = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        const month = await thisMonth(tx);
+        return { seeded, month, result: await list(tx, ids.other, month) };
+      });
+      const byCode = Object.fromEntries(outcome.result.vouchers.map(voucher => [voucher.code, voucher]));
+      expect(byCode[outcome.seeded.available.code].status).toBe("available");
+      expect(byCode[outcome.seeded.redeemed.code]).toMatchObject({ status: "redeemed", redeemedVia: "self", amount: 100, rank: 1, name: "得獎者甲" });
+      expect(byCode[outcome.seeded.expired.code].status).toBe("expired");
+      expect(byCode[outcome.seeded.voided.code]).toBeUndefined();
+      expect(outcome.result.vouchers.map(voucher => voucher.status)).not.toContain("void");
+      expect(outcome.result.summary).toEqual({ redeemedCount: 1, redeemedAmount: 100 });
+      expect(outcome.result.month).toBe(outcome.month);
+      expect(outcome.result.months).toContain(outcome.month);
+    });
+
+    it("已兌換的券算兌換月，其他算發券月；別的月份查不到", async () => {
+      const outcome = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        await tx.query(`UPDATE public.lightning_quiz_vouchers SET redeemed_at = '2026-08-31T16:30:00Z' WHERE id = $1`, [seeded.redeemed.id]); // 台灣 9/1 00:30
+        await tx.query(`UPDATE public.lightning_quiz_vouchers SET issued_at = '2026-07-15T00:00:00Z' WHERE id = $1`, [seeded.available.id]);
+        return {
+          seeded,
+          sept: await list(tx, ids.other, "2026-09"),
+          july: await list(tx, ids.other, "2026-07"),
+          empty: await list(tx, ids.other, "2020-01")
+        };
+      });
+      expect(outcome.sept.vouchers.map(v => v.code)).toEqual([outcome.seeded.redeemed.code]);
+      expect(outcome.sept.summary).toEqual({ redeemedCount: 1, redeemedAmount: 100 });
+      expect(outcome.july.vouchers.map(v => v.code)).toEqual([outcome.seeded.available.code]);
+      expect(outcome.july.summary).toEqual({ redeemedCount: 0, redeemedAmount: 0 });
+      expect(outcome.empty.vouchers).toEqual([]);
+      expect(outcome.sept.months).toEqual(expect.arrayContaining(["2026-09", "2026-07"]));
+      expect(outcome.empty.months).toContain("2020-01");
+    });
+
+    it("教會補記顯示 redeemedVia = admin，不帶管理員", async () => {
+      const voucher = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        await tx.query(`SELECT public.admin_set_lightning_quiz_voucher_redeemed($1, TRUE, $2)`, [seeded.available.id, ids.admin]);
+        return (await lookup(tx, ids.other, seeded.available.code)).voucher;
+      });
+      expect(voucher).toMatchObject({ status: "redeemed", redeemedVia: "admin" });
+      expect(Object.keys(voucher).sort()).toEqual(MERCHANT_KEYS);
+    });
+
+    it("月份格式不對就拒絕", async () => {
+      await expect(asMerchant(tx => list(tx, ids.other, "2026-13"))).rejects.toThrow(/voucher_merchant_invalid_month/);
+      await expect(asMerchant(tx => list(tx, ids.other, "x; DROP"))).rejects.toThrow(/voucher_merchant_invalid_month/);
+    });
+
+    it("看名單記一筆稽核（月份、筆數），不記內容", async () => {
+      const rows = await asMerchant(async tx => {
+        await seedVouchers(tx);
+        const month = await thisMonth(tx);
+        await list(tx, ids.other, month);
+        return auditRows(tx, "voucher_merchant.view_list");
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ result: "ok", actor_id: ids.other, actor_role: "member", source: "nlc-data" });
+      expect(rows[0].detail.rows).toBeGreaterThan(0);
+      expect(JSON.stringify(rows[0])).not.toContain("得獎者甲");
+    });
+  });
+
+  describe("查兌換碼", () => {
+    it("查得到可使用／已兌換／已過期，不受月份限制，只回白名單欄位", async () => {
+      const outcome = await asMerchant(async tx => {
+        const seeded = await seedVouchers(tx);
+        await tx.query(`UPDATE public.lightning_quiz_vouchers SET issued_at = '2020-01-01T00:00:00Z' WHERE id = $1`, [seeded.available.id]);
+        return {
+          available: await lookup(tx, ids.other, seeded.available.code),
+          redeemed: await lookup(tx, ids.other, seeded.redeemed.code),
+          expired: await lookup(tx, ids.other, seeded.expired.code)
+        };
+      });
+      expect(outcome.available).toMatchObject({ found: true, rateLimited: false, voucher: { status: "available" } });
+      expect(outcome.redeemed.voucher.status).toBe("redeemed");
+      expect(outcome.expired.voucher.status).toBe("expired");
+      Object.values(outcome).forEach(result => {
+        expect(Object.keys(result.voucher).sort()).toEqual(MERCHANT_KEYS);
+        expect(JSON.stringify(result)).not.toContain("牧區 A-1");
+      });
+    });
+
+    it("已作廢和不存在的回應一模一樣", async () => {
+      const outcome = await asMerchant(async tx => {
+        const { voided } = await seedVouchers(tx);
+        return { voided: await lookup(tx, ids.other, voided.code), missing: await lookup(tx, ids.other, "ZZZZZZ") };
+      });
+      expect(outcome.voided).toEqual({ found: false, rateLimited: false, voucher: null });
+      expect(outcome.missing).toEqual(outcome.voided);
+    });
+
+    it("小寫、空白、連字號都認得；格式不對不查也不算失敗次數", async () => {
+      const outcome = await asMerchant(async tx => {
+        const { available } = await seedVouchers(tx);
+        const spaced = `${available.code.slice(0, 3)}- ${available.code.slice(3).toLowerCase()}`;
+        const found = await lookup(tx, ids.other, spaced);
+        const badFormat = [];
+        for (const code of ["ABC", "ABCDEFG", "ABCDE0", "ABCDEI", "ABCDEL", "ABCDEO", "ABCDE1", "%%%%%%", "______", "", "A".repeat(500)]) {
+          badFormat.push(await lookup(tx, ids.other, code));
+        }
+        const nullCode = await lookup(tx, ids.other, null);
+        const limit = (await tx.query(`SELECT failed_count FROM public.lightning_quiz_voucher_lookup_limits WHERE profile_id = $1`, [ids.other])).rows[0];
+        return { found, badFormat, nullCode, limit };
+      });
+      expect(outcome.found.found).toBe(true);
+      outcome.badFormat.forEach(result => expect(result).toEqual({ found: false, rateLimited: false, voucher: null }));
+      expect(outcome.nullCode).toEqual({ found: false, rateLimited: false, voucher: null });
+      expect(outcome.limit?.failed_count ?? 0).toBe(0);
+    });
+
+    it("每小時猜錯 20 次就鎖住，連對的碼也查不到；時段過了才恢復；查到不算次數", async () => {
+      const outcome = await asMerchant(async tx => {
+        const { available, voided } = await seedVouchers(tx);
+        // 查到的不算失敗
+        for (let i = 0; i < 5; i += 1) await lookup(tx, ids.other, available.code);
+        // 已作廢的算失敗（和不存在一樣）
+        await lookup(tx, ids.other, voided.code);
+        for (let i = 0; i < 17; i += 1) await lookup(tx, ids.other, "ZZZZZZ");
+        const nineteenth = await lookup(tx, ids.other, "ZZZZZZ");
+        const stillOk = await lookup(tx, ids.other, available.code);
+        const twentieth = await lookup(tx, ids.other, "ZZZZZY");
+        const locked = await lookup(tx, ids.other, available.code);
+        const lockedBad = await lookup(tx, ids.other, "ABC");
+        await tx.query(`UPDATE public.lightning_quiz_voucher_lookup_limits SET window_started_at = NOW() - INTERVAL '61 minutes' WHERE profile_id = $1`, [ids.other]);
+        const reset = await lookup(tx, ids.other, available.code);
+        return { nineteenth, stillOk, twentieth, locked, lockedBad, reset };
+      });
+      expect(outcome.nineteenth.found).toBe(false);
+      expect(outcome.nineteenth.rateLimited).toBe(false);
+      expect(outcome.stillOk.found).toBe(true);
+      expect(outcome.twentieth).toEqual({ found: false, rateLimited: false, voucher: null });
+      expect(outcome.locked).toEqual({ found: false, rateLimited: true, voucher: null });
+      expect(outcome.lockedBad).toEqual({ found: false, rateLimited: true, voucher: null });
+      expect(outcome.reset.found).toBe(true);
+    });
+
+    it("每次查詢記稽核：查到、查不到、被鎖；格式不對不記", async () => {
+      const rows = await asMerchant(async tx => {
+        const { available, voided } = await seedVouchers(tx);
+        await lookup(tx, ids.other, available.code);
+        await lookup(tx, ids.other, voided.code);
+        await lookup(tx, ids.other, "ABC");
+        await tx.query(`INSERT INTO public.lightning_quiz_voucher_lookup_limits (profile_id, window_started_at, failed_count)
+                        VALUES ($1, NOW(), 20) ON CONFLICT (profile_id) DO UPDATE SET failed_count = 20`, [ids.other]);
+        await lookup(tx, ids.other, available.code);
+        return auditRows(tx, "voucher_merchant.lookup");
+      });
+      expect(rows.map(row => [row.result, row.detail.found])).toEqual([["ok", true], ["ok", false], ["denied", false]]);
+      rows.forEach(row => expect(row.actor_id).toBe(ids.other));
+    });
+  });
+
+  describe("管理員增刪", () => {
+    it("只有系統管理員能查、搜尋、指定", async () => {
+      await expect(asService(tx => merchants(tx, ids.member))).rejects.toThrow(/lightning_quiz_admin_required/);
+      await expect(asService(tx => candidates(tx, "測試", ids.member))).rejects.toThrow(/lightning_quiz_admin_required/);
+      await expect(asService(tx => setMerchant(tx, ids.member, true, ids.member))).rejects.toThrow(/lightning_quiz_admin_required/);
+      // 牧者（雲柱其他管理函式放行）也不行
+      await expect(asService(async tx => {
+        await tx.query(`UPDATE public.profiles SET role_id = (SELECT id FROM public.role_definitions WHERE code = 'pastor') WHERE id = $1`, [ids.member]);
+        return setMerchant(tx, ids.other, true, ids.member);
+      })).rejects.toThrow(/lightning_quiz_admin_required/);
+    });
+
+    it("沒登入過（沒有 user_identities）、帳號停用、不存在的都不能指定", async () => {
+      await expect(asService(tx => setMerchant(tx, ids.other, true))).rejects.toThrow(/voucher_merchant_not_eligible/);
+      await expect(asService(async tx => {
+        await addIdentity(tx, ids.other, "merchant-sub-other");
+        await tx.query(`UPDATE public.profiles SET is_active = FALSE WHERE id = $1`, [ids.other]);
+        return setMerchant(tx, ids.other, true);
+      })).rejects.toThrow(/voucher_merchant_not_eligible/);
+      await expect(asService(tx => setMerchant(tx, "21000000-0000-4000-8000-0000000000fe", true))).rejects.toThrow(/voucher_merchant_not_eligible/);
+    });
+
+    it("搜尋只找登入過、啟用中的帳號，email 遮罩，標出已指定", async () => {
+      const outcome = await asService(async tx => {
+        const none = await candidates(tx, "測試會友 0002");
+        await addIdentity(tx, ids.other, "merchant-sub-other");
+        await tx.query(`UPDATE public.profiles SET email = 'merchant-shop@example.invalid' WHERE id = $1`, [ids.other]);
+        const before = await candidates(tx, "測試會友 0002");
+        const byEmail = await candidates(tx, "merchant-shop");
+        await setMerchant(tx, ids.other, true);
+        const after = await candidates(tx, "測試會友 0002");
+        await tx.query("SAVEPOINT s");
+        const tooShortError = await candidates(tx, "a").then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        const wildcardError = await candidates(tx, "%%").then(() => null, error => String(error.message));
+        await tx.query("ROLLBACK TO SAVEPOINT s");
+        return { none, before, byEmail, after, tooShortError, wildcardError };
+      });
+      expect(outcome.none.candidates).toEqual([]);
+      expect(outcome.before.candidates).toHaveLength(1);
+      expect(outcome.before.candidates[0]).toMatchObject({ profileId: ids.other, name: "測試會友 0002", isMerchant: false });
+      expect(outcome.byEmail.candidates[0].emailMasked).toBeTruthy();
+      expect(outcome.byEmail.candidates[0].emailMasked).not.toContain("merchant-shop");
+      expect(outcome.after.candidates[0].isMerchant).toBe(true);
+      expect(outcome.tooShortError).toMatch(/voucher_merchant_query_too_short/);
+      expect(outcome.wildcardError).toMatch(/voucher_merchant_query_too_short/);
+    });
+
+    it("增刪都寫稽核（同一個交易）；重複加入、重複移除不多記", async () => {
+      const outcome = await asService(async tx => {
+        await addIdentity(tx, ids.other, "merchant-sub-other");
+        const added = await setMerchant(tx, ids.other, true);
+        const addedAgain = await setMerchant(tx, ids.other, true);
+        const listed = await merchants(tx);
+        const removed = await setMerchant(tx, ids.other, false);
+        const removedAgain = await setMerchant(tx, ids.other, false);
+        return { added, addedAgain, listed, removed, removedAgain, rows: await auditRows(tx, "voucher_merchant.%") };
+      });
+      expect(outcome.added.changed).toBe(true);
+      expect(outcome.added.merchants.map(row => row.profileId)).toEqual([ids.other]);
+      expect(outcome.addedAgain.changed).toBe(false);
+      expect(outcome.listed.merchants[0]).toMatchObject({ profileId: ids.other, name: "測試會友 0002" });
+      expect(outcome.removed).toMatchObject({ changed: true, merchants: [] });
+      expect(outcome.removedAgain.changed).toBe(false);
+      expect(outcome.rows.map(row => row.action)).toEqual(["voucher_merchant.add", "voucher_merchant.remove"]);
+      outcome.rows.forEach(row => expect(row).toMatchObject({ result: "ok", actor_id: ids.admin, actor_role: "admin", source: "nlc-data", target_user_id: ids.other }));
+      expect(outcome.rows[0].changes).toEqual({ merchant: { before: false, after: true } });
+      expect(outcome.rows[1].changes).toEqual({ merchant: { before: true, after: false } });
+    });
+  });
+});
+
+// ── #673 計畫統計名冊彙總：新 RPC 和舊前端算法逐人逐欄比對 ──────────────────────────
+// 同一份資料走兩條路：舊的 get_plan_stats_roster＋前端算法，新的 get_plan_stats_roster_summary。
+// 比對資料層的每個欄位（連續天數、補讀天數不經畫面的「有沒有讀」閘門）、組員總覽每一列、
+// 組織統計樹、兩份 CSV。有差異時訊息會寫出情境、人、欄位、兩邊的值。
+describe("計畫統計名冊彙總和舊算法逐人一致（get_plan_stats_roster_summary，#673）", () => {
+  const GLOBAL_PLAN = "71000000-0000-4000-8000-000000000001";
+  const OTHER_GLOBAL_PLAN = "71000000-0000-4000-8000-000000000002";
+  const PLAN_NAME = "十月速讀";
+  const ORG_STRUCTURE = {
+    regions: ["大區一", "大區二"],
+    zones: { 大區一: ["牧區一", "牧區二"], 大區二: ["牧區三"] },
+    groups: { 牧區一: ["小組一", "小組二"], 牧區二: ["小組三"], 牧區三: ["小組四"] }
+  };
+  const ACTOR = "72000000-0000-4000-8000-000000000000";
+  // 別名展開：全域計畫的 id、預設代號、名稱都算同一個計畫（getPlanFilterAliases）
+  const GLOBAL_PLANS = [{ id: GLOBAL_PLAN, presetKey: "十月-preset", name: PLAN_NAME, books: ["利未記"] }];
+  let memberRoleId;
+  let app;
+
+  const pad = (value, length) => String(value).padStart(length, "0");
+  const taipei = (date, time = "12:00:00") => `${date}T${time}+08:00`;
+  const addDays = (date, days) => {
+    const value = new Date(`${date}T00:00:00Z`);
+    value.setUTCDate(value.getUTCDate() + days);
+    return value.toISOString().slice(0, 10);
+  };
+
+  function mulberry32(seed) {
+    let a = seed;
+    return () => {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // 一份情境資料。id 是固定的（失敗可重現），打卡 id 由亂數決定，順序跟插入順序無關。
+  function createFixture(seed = 1) {
+    const rng = mulberry32(seed);
+    const randomUuid = () => {
+      const hex = n => Array.from({ length: n }, () => Math.floor(rng() * 16).toString(16)).join("");
+      return `${hex(8)}-${hex(4)}-4${hex(3)}-8${hex(3)}-${hex(12)}`;
+    };
+    const fixture = { rng, profiles: [], plans: [], logs: [], randomUuid };
+    fixture.person = (name, { region = "大區一", zone = "牧區一", group = "小組一" } = {}) => {
+      const id = `72000000-0000-4000-8000-${pad(fixture.profiles.length + 1, 12)}`;
+      fixture.profiles.push({ id, name, region, zone, group });
+      return id;
+    };
+    // n：想要的 id 順序（一個人多筆報名時，「第一筆」看的就是 id）
+    fixture.enroll = (userId, { books = ["利未記"], round = 1, handled = false, global = GLOBAL_PLAN, preset = null, name = PLAN_NAME, personal = false, n = null } = {}) => {
+      const id = `73000000-0000-4000-8000-${pad(n ?? fixture.plans.length + 1, 12)}`;
+      fixture.plans.push({ id, userId, books, round, handled, global, preset, name, personal });
+      return id;
+    };
+    fixture.read = (userId, planId, book, chapter, at, round = 1) => {
+      fixture.logs.push({ id: randomUuid(), userId, planId, book, chapter, at, round });
+    };
+    return fixture;
+  }
+
+  async function insertFixture(tx, fixture) {
+    for (const person of fixture.profiles) {
+      await tx.query(
+        `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE)`,
+        [person.id, person.name, memberRoleId, person.region, person.zone, person.group]
+      );
+    }
+    for (const plan of fixture.plans) {
+      await tx.query(
+        `INSERT INTO public.reading_plans (id, user_id, global_plan_id, name, start_date, end_date, target_books, preset_key, current_round, upgrade_prompt_handled, is_personal)
+         VALUES ($1, $2, $3, $4, '2026-10-01', '2026-12-31', $5::text[], $6, $7, $8, $9)`,
+        [plan.id, plan.userId, plan.personal ? null : plan.global, plan.name, plan.books, plan.personal ? null : plan.preset, plan.round, plan.handled, plan.personal]
+      );
+    }
+    if (fixture.logs.length) {
+      await tx.query(
+        `INSERT INTO public.reading_logs (id, user_id, plan_id, book, chapter, round, read_at)
+         SELECT (row ->> 'id')::uuid, (row ->> 'userId')::uuid, (row ->> 'planId')::uuid, row ->> 'book',
+                (row ->> 'chapter')::integer, (row ->> 'round')::integer, (row ->> 'at')::timestamptz
+         FROM jsonb_array_elements($1::jsonb) AS row`,
+        [JSON.stringify(fixture.logs)]
+      );
+    }
+  }
+
+  // 寫入都先關掉 trigger（階段開放時間那些），外部的計畫列也不用真的存在。測試結束 rollback。
+  async function inRosterTx(fn) {
+    let result;
+    let failure;
+    try {
+      await db.transaction(async tx => {
+        await tx.exec(`SET LOCAL session_replication_role = replica`);
+        try {
+          result = await fn(tx);
+        } catch (error) {
+          failure = error;
+        }
+        await tx.rollback();
+      });
+    } catch (error) {
+      if (!failure && !/rollback|aborted/i.test(String(error?.message))) throw error;
+    }
+    if (failure) throw failure;
+    return result;
+  }
+
+  // 假的 nlc-data：參數一律走真的 args builder，SQL 在 PGlite 用 service_role 跑。
+  function createClient(tx, { summary = true, visibleIds = null, calls = [] } = {}) {
+    const run = async (sql, params) => {
+      await tx.exec(`SAVEPOINT roster_rpc; SET LOCAL ROLE service_role`);
+      try {
+        const { rows: [{ result }] } = await tx.query(sql, params);
+        await tx.exec(`RESET ROLE; RELEASE SAVEPOINT roster_rpc`);
+        return { data: result, error: null };
+      } catch (error) {
+        await tx.exec(`ROLLBACK TO SAVEPOINT roster_rpc; RESET ROLE`);
+        return { data: null, error: { message: String(error?.message) } };
+      }
+    };
+    return {
+      rpc: async (name, args) => {
+        calls.push(name);
+        if (name === PLAN_STATS_ROSTER_SUMMARY_RPC) {
+          if (!summary) return { data: null, error: { code: "PGRST202", message: `Could not find the function public.${name}` } };
+          const built = buildPlanStatsRosterSummaryArgs(JSON.parse(JSON.stringify(args)), visibleIds, ACTOR);
+          return run(
+            `SELECT public.get_plan_stats_roster_summary($1::text[], $2, $3, $4::date, $5::jsonb, $6, $7::uuid[], $8) AS result`,
+            [built.p_plan_aliases, built.p_pastoral_zone, built.p_timezone, built.p_start_date,
+              built.p_schedule === null ? null : JSON.stringify(built.p_schedule),
+              built.p_whole_church, built.p_visible_ids, built.p_actor_id]
+          );
+        }
+        if (name === "get_plan_stats_roster") {
+          const built = buildPlanStatsRosterArgs(args, visibleIds, ACTOR);
+          return run(
+            `SELECT public.get_plan_stats_roster($1::text[], $2, $3::date, $4, $5::uuid[], $6) AS result`,
+            [built.p_plan_aliases, built.p_pastoral_zone, built.p_note_date, built.p_whole_church, built.p_visible_ids, built.p_actor_id]
+          );
+        }
+        return { data: null, error: { message: `unexpected rpc ${name}` } };
+      }
+    };
+  }
+
+  const show = value => (value === undefined ? "undefined" : JSON.stringify(value));
+
+  function diffRosterRuns(label, legacy, summary, statsPlan) {
+    const diffs = [];
+    const usersOf = run => new Map(run.merged.users.map(user => [user.id, user]));
+    const oldUsers = usersOf(legacy);
+    const newUsers = usersOf(summary);
+    for (const id of new Set([...oldUsers.keys(), ...newUsers.keys()])) {
+      const before = oldUsers.get(id);
+      const after = newUsers.get(id);
+      const who = `${label}／${(before || after).name}（${id}）`;
+      if (!before || !after) {
+        diffs.push(`${who}：名單不同，舊=${Boolean(before)} 新=${Boolean(after)}`);
+        continue;
+      }
+      for (const field of new Set([...Object.keys(before), ...Object.keys(after)])) {
+        // 靈修全文沒有任何畫面在讀（#673 不再回傳）；roster_stats 下面另外比
+        if (field === "today_devotional" || field === "roster_stats") continue;
+        if (show(before[field]) !== show(after[field])) diffs.push(`${who}.${field}：舊=${show(before[field])} 新=${show(after[field])}`);
+      }
+      const logs = legacy.merged.logsByUserId.get(id) || [];
+      const oldStreak = computePlanScopedStreak(logs, { preFiltered: true });
+      if (oldStreak !== after.roster_stats?.streak) diffs.push(`${who}.最高連續：舊=${oldStreak} 新=${show(after.roster_stats?.streak)}`);
+      if (statsPlan) {
+        const oldMakeup = countLateCompletedDays(statsPlan.days, statsPlan.startDate, buildRound1ReadDateMap(logs));
+        if (oldMakeup !== after.roster_stats?.makeup) diffs.push(`${who}.補讀天數：舊=${oldMakeup} 新=${show(after.roster_stats?.makeup)}`);
+      }
+    }
+    if (legacy.rows && summary.rows) {
+      const rowKey = row => row.id;
+      const oldRows = new Map(legacy.rows.map(row => [rowKey(row), row]));
+      summary.rows.forEach((row, index) => {
+        const before = oldRows.get(rowKey(row));
+        if (legacy.rows[index]?.id !== row.id) diffs.push(`${label}／組員總覽第 ${index + 1} 列順序：舊=${legacy.rows[index]?.name} 新=${row.name}`);
+        for (const field of Object.keys(row)) {
+          if (show(before?.[field]) !== show(row[field])) diffs.push(`${label}／組員總覽 ${row.name}.${field}：舊=${show(before?.[field])} 新=${show(row[field])}`);
+        }
+      });
+      if (legacy.rows.length !== summary.rows.length) diffs.push(`${label}／組員總覽人數：舊=${legacy.rows.length} 新=${summary.rows.length}`);
+      if (legacy.participantsCsv !== summary.participantsCsv) diffs.push(`${label}／組員總覽 CSV 不同\n舊：\n${legacy.participantsCsv}\n新：\n${summary.participantsCsv}`);
+      if (legacy.orgTree !== summary.orgTree) diffs.push(`${label}／組織統計樹不同`);
+      if (legacy.zoneCsv !== summary.zoneCsv) diffs.push(`${label}／牧區 CSV 不同\n舊：\n${legacy.zoneCsv}\n新：\n${summary.zoneCsv}`);
+    }
+    return diffs;
+  }
+
+  async function withTimezone(timezone, fn) {
+    const previous = process.env.TZ;
+    process.env.TZ = timezone;
+    try {
+      return await fn();
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
+  }
+
+  // 同一份資料跑兩條路。回傳差異清單（空的才對）＋兩邊的結果給呼叫端再驗。
+  async function compareRoster(tx, label, { statsPlan, filter = GLOBAL_PLAN, timezone = "Asia/Taipei", visibleIds = null, pastoralZone = "", globalPlans = GLOBAL_PLANS }) {
+    return withTimezone(timezone, async () => {
+      const options = { filter, statsPlan, globalPlans, orgStructure: ORG_STRUCTURE, pastoralZone };
+      const oldCalls = [];
+      const legacy = await app.render({ ...options, client: createClient(tx, { summary: false, visibleIds, calls: oldCalls }) });
+      const newCalls = [];
+      const summary = await app.render({ ...options, client: createClient(tx, { summary: true, visibleIds, calls: newCalls }) });
+      // 確認兩條路真的是兩條路：舊路有逐筆打卡；新路只呼叫新 RPC、沒有逐筆打卡
+      expect(oldCalls).toContain("get_plan_stats_roster");
+      expect(new Set(newCalls)).toEqual(new Set([PLAN_STATS_ROSTER_SUMMARY_RPC]));
+      expect(summary.merged.logsByUserId.size).toBe(0);
+      // 畫面真的畫出來了，比對才有意義
+      if (statsPlan && !pastoralZone) {
+        expect(summary.rows.length).toBe(summary.merged.users.length);
+        expect(summary.participantsCsv).toContain(summary.rows[0]?.name ?? "人數");
+        expect(summary.orgTree).toContain("總閱讀章數");
+        expect(summary.zoneCsv).toContain("牧區一");
+      }
+      return { diffs: diffRosterRuns(`${label}［${timezone}］`, legacy, summary, statsPlan), legacy, summary };
+    });
+  }
+
+  const dayOf = (...chapters) => ({ chapters: chapters.map(([book, chapter]) => ({ book, chapter })) });
+  const lev = n => ["利未記", n];
+  // 第 2、5 天是休息日（比對尺上沒有章節）
+  const BASE_DAYS = [
+    dayOf(lev(1), lev(2)), dayOf(lev(3)), dayOf(), dayOf(lev(4), lev(5)), dayOf(lev(6)), dayOf(),
+    dayOf(lev(7), lev(8), lev(9)), dayOf(lev(10)), dayOf(lev(11)), dayOf(lev(12))
+  ];
+  const makeStatsPlan = (days = BASE_DAYS, overrides = {}) => ({
+    id: "stats-plan", globalPlanId: GLOBAL_PLAN, presetKey: null, name: "統計的計畫",
+    startDate: "2026-10-01", endDate: "2026-10-10", days, ...overrides
+  });
+
+  // 每個情境 build(f) 建資料，回傳 compareRoster 的選項；至少要有一個人才有比到東西。
+  const SCENARIOS = {
+    遲到加入: f => {
+      const late = f.person("晚加入");
+      const plan = f.enroll(late);
+      // 第五天才開始，前面全部當天補完
+      [1, 2, 3, 4, 5, 6].forEach(chapter => f.read(late, plan, "利未記", chapter, taipei("2026-10-05")));
+      const onTime = f.person("準時");
+      const planB = f.enroll(onTime);
+      f.read(onTime, planB, "利未記", 1, taipei("2026-10-01"));
+      f.read(onTime, planB, "利未記", 2, taipei("2026-10-01"));
+      f.read(onTime, planB, "利未記", 3, taipei("2026-10-02"));
+      return {};
+    },
+    補讀: f => {
+      const u = f.person("補讀的人");
+      const plan = f.enroll(u);
+      // 第 0 天兩章：一章當天、一章隔兩天 → 補讀；第 1 天沒讀完整 → 不算；第 3 天當天完成 → 不算
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "利未記", 2, taipei("2026-10-03"));
+      f.read(u, plan, "利未記", 4, taipei("2026-10-04"));
+      f.read(u, plan, "利未記", 5, taipei("2026-10-04"));
+      f.read(u, plan, "利未記", 7, taipei("2026-10-09"));
+      // 第 6 天只讀了 2/3 章：不算補讀
+      f.read(u, plan, "利未記", 8, taipei("2026-10-09"));
+      // 提早讀不算補讀
+      f.read(u, plan, "利未記", 12, taipei("2026-10-02"));
+      return {};
+    },
+    休息日: f => {
+      const u = f.person("跨休息日");
+      const plan = f.enroll(u);
+      // 休息日也有打卡：連續天數算、補讀天數不受影響
+      ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"].forEach((date, index) => f.read(u, plan, "利未記", index + 1, taipei(date)));
+      return { statsPlan: makeStatsPlan([dayOf(), dayOf(lev(1)), dayOf(), dayOf(lev(2), lev(3)), dayOf()]) };
+    },
+    多遍: f => {
+      const confirmed = f.person("第二遍已確認");
+      const a = f.enroll(confirmed, { round: 2, handled: true });
+      for (let chapter = 1; chapter <= 27; chapter += 1) f.read(confirmed, a, "利未記", chapter, taipei("2026-10-02"));
+      f.read(confirmed, a, "利未記", 1, taipei("2026-10-08"), 2);
+      f.read(confirmed, a, "利未記", 2, taipei("2026-10-09"), 2);
+      const unconfirmed = f.person("存第二遍但沒確認也沒紀錄");
+      const b = f.enroll(unconfirmed, { round: 2, handled: false });
+      f.read(unconfirmed, b, "利未記", 1, taipei("2026-10-01"));
+      const advanced = f.person("存第三遍有第三遍紀錄");
+      const c = f.enroll(advanced, { round: 3, handled: false });
+      f.read(advanced, c, "利未記", 1, taipei("2026-10-01"), 3);
+      f.read(advanced, c, "利未記", 2, taipei("2026-10-02"), 2);
+      const stuck = f.person("存第三遍只有第二遍紀錄");
+      const d = f.enroll(stuck, { round: 3, handled: false });
+      f.read(stuck, d, "利未記", 1, taipei("2026-10-01"), 2);
+      // 只有第二遍紀錄：第一遍日期沒有，補讀應該是 0
+      const onlySecond = f.person("只有第二遍紀錄");
+      const e = f.enroll(onlySecond, { round: 2, handled: true });
+      f.read(onlySecond, e, "利未記", 1, taipei("2026-10-09"), 2);
+      f.read(onlySecond, e, "利未記", 2, taipei("2026-10-09"), 2);
+      const finished = f.person("第一遍剛好讀完");
+      const g = f.enroll(finished);
+      for (let chapter = 1; chapter <= 27; chapter += 1) f.read(finished, g, "利未記", chapter, taipei("2026-10-03"));
+      return {};
+    },
+    沒報名: f => {
+      f.person("完全沒報名");
+      const other = f.person("只報別的計畫");
+      const otherPlan = f.enroll(other, { global: OTHER_GLOBAL_PLAN, name: "別的計畫" });
+      f.read(other, otherPlan, "利未記", 1, taipei("2026-10-01"));
+      const noLogs = f.person("有報名沒打卡");
+      f.enroll(noLogs);
+      return {};
+    },
+    退出後重加: f => {
+      // 退出＝報名列刪掉、打卡跟著 CASCADE 刪掉（這裡不插入舊資料）；重加是新的一列，只剩新打卡
+      const u = f.person("退出又回來");
+      const plan = f.enroll(u, { n: 900 });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-08"));
+      f.read(u, plan, "利未記", 2, taipei("2026-10-09"));
+      return {};
+    },
+    同一人多筆報名: f => {
+      // 別名同時對到兩筆：章數只算 id 第一筆；連續天數、補讀天數看兩筆全部，同章後面的 plan 蓋前面的
+      const u = f.person("兩筆報名");
+      const first = f.enroll(u, { n: 10, global: null, preset: "十月-preset", books: ["利未記"] });
+      const second = f.enroll(u, { n: 20, global: GLOBAL_PLAN, books: ["利未記"] });
+      f.read(u, first, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, first, "利未記", 2, taipei("2026-10-01"));
+      f.read(u, second, "利未記", 1, taipei("2026-10-05"));
+      f.read(u, second, "利未記", 3, taipei("2026-10-02"));
+      f.read(u, second, "利未記", 4, taipei("2026-10-03"));
+      // 反過來：全域計畫那筆 id 比較小
+      const v = f.person("兩筆報名（反序）");
+      const low = f.enroll(v, { n: 30, global: GLOBAL_PLAN, books: ["利未記"] });
+      const high = f.enroll(v, { n: 40, global: null, preset: "十月-preset", books: ["民數記"], round: 2, handled: true });
+      f.read(v, low, "利未記", 1, taipei("2026-10-05"));
+      f.read(v, high, "利未記", 1, taipei("2026-10-01"));
+      f.read(v, high, "利未記", 2, taipei("2026-10-01"));
+      f.read(v, high, "民數記", 1, taipei("2026-10-09"));
+      return {};
+    },
+    自訂計畫與個人計畫: f => {
+      // 同名的個人計畫不能混進來；統計對象也可以是不是教會活動的一般計畫（用名稱當別名）
+      const u = f.person("有個人計畫");
+      const plan = f.enroll(u, { global: null, preset: "custom-key", name: "自訂讀經" });
+      const personal = f.enroll(u, { personal: true, name: "自訂讀經" });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-02"));
+      f.read(u, personal, "利未記", 2, taipei("2026-10-03"));
+      f.read(u, personal, "利未記", 3, taipei("2026-10-04"));
+      return { filter: "custom-key", statsPlan: makeStatsPlan(BASE_DAYS, { globalPlanId: null, presetKey: "custom-key", name: "自訂讀經" }) };
+    },
+    書卷範圍外的打卡: f => {
+      // 計畫外的書卷不算章數、也不算最後打卡，但連續天數和補讀的日期照舊算得到（舊算法就是這樣）
+      const u = f.person("讀到別卷");
+      const plan = f.enroll(u, { books: ["利未記"] });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "民數記", 1, taipei("2026-10-02"));
+      f.read(u, plan, "民數記", 2, taipei("2026-10-03"));
+      const outOnly = f.person("全部讀到別卷");
+      const planB = f.enroll(outOnly, { books: ["利未記"] });
+      f.read(outOnly, planB, "民數記", 1, taipei("2026-10-02"));
+      // 舊的半卷寫法：書卷名稱對不上「詩篇」，全部被濾掉，總章數也是 0
+      const half = f.person("半卷寫法");
+      const planC = f.enroll(half, { books: ["詩篇 1-110"] });
+      f.read(half, planC, "詩篇", 1, taipei("2026-10-01"));
+      const blank = f.person("書卷只有空字串");
+      const planD = f.enroll(blank, { books: [""] });
+      f.read(blank, planD, "民數記", 1, taipei("2026-10-01"));
+      return { statsPlan: makeStatsPlan([dayOf(lev(1), ["民數記", 1]), dayOf(["民數記", 2])]) };
+    },
+    報名沒有書卷清單: f => {
+      // target_books 空的要退回 state.globalPlans 的 books：伺服器算不出來，只有這種人回逐筆
+      const u = f.person("沒有書卷清單");
+      const plan = f.enroll(u, { books: [] });
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "民數記", 1, taipei("2026-10-02"));
+      const none = f.person("沒有書卷清單也沒打卡");
+      f.enroll(none, { books: [] });
+      const normal = f.person("正常的人");
+      const planB = f.enroll(normal);
+      f.read(normal, planB, "利未記", 1, taipei("2026-10-01"));
+      return {};
+    },
+    同一毫秒與微秒: f => {
+      const u = f.person("同毫秒");
+      const plan = f.enroll(u);
+      f.read(u, plan, "利未記", 1, "2026-10-01T03:00:00.123456+00:00");
+      f.read(u, plan, "利未記", 2, "2026-10-01T03:00:00.123999+00:00");
+      f.read(u, plan, "利未記", 3, "2026-10-01T03:00:00.123001+00:00");
+      f.read(u, plan, "利未記", 4, "2026-10-01T02:59:59.999999+00:00");
+      const v = f.person("同一批打卡");
+      const planB = f.enroll(v);
+      f.read(v, planB, "利未記", 1, "2026-10-02T03:00:00.5+00:00");
+      f.read(v, planB, "利未記", 2, "2026-10-02T03:00:00.5+00:00");
+      return {};
+    },
+    進度四捨五入: f => {
+      // 7 / 40 × 100 用浮點數算會落在 17.5 附近；總數用出埃及記 40 章
+      const u = f.person("七章");
+      const plan = f.enroll(u, { books: ["出埃及記"] });
+      for (let chapter = 1; chapter <= 7; chapter += 1) f.read(u, plan, "出埃及記", chapter, taipei("2026-10-02"));
+      const v = f.person("一章");
+      const planB = f.enroll(v, { books: ["詩篇"] });
+      f.read(v, planB, "詩篇", 1, taipei("2026-10-02"));
+      const w = f.person("三十三章");
+      const planC = f.enroll(w, { books: ["出埃及記", "利未記"] });
+      for (let chapter = 1; chapter <= 33; chapter += 1) f.read(w, planC, "出埃及記", (chapter % 40) + 1, taipei("2026-10-02"));
+      return {};
+    }
+  };
+
+  beforeAll(async () => {
+    memberRoleId = (await db.query(`SELECT id FROM public.role_definitions WHERE code = 'member'`)).rows[0].id;
+    app = createRosterApp({ bibleBooks: BIBLE_BOOK_CHAPTERS });
+  });
+
+  afterAll(() => {
+    app?.close();
+  });
+
+  for (const [name, build] of Object.entries(SCENARIOS)) {
+    it(`情境：${name}`, async () => {
+      const diffs = await inRosterTx(async tx => {
+        const fixture = createFixture();
+        const options = build(fixture);
+        await insertFixture(tx, fixture);
+        const { diffs: found, summary } = await compareRoster(tx, name, { statsPlan: makeStatsPlan(), ...options });
+        return { found, people: summary.merged.users.length, enrolled: fixture.plans.length };
+      });
+      expect(diffs.found).toEqual([]);
+      expect(diffs.people).toBeGreaterThan(0);
+    }, 60_000);
+  }
+
+  it("情境：跨時區邊界（台北午夜前後、看的人在其他時區）", async () => {
+    const found = await inRosterTx(async tx => {
+      const f = createFixture();
+      const u = f.person("午夜前後");
+      const plan = f.enroll(u);
+      // UTC 15:59:59／16:00:00＝台北的當天最後一秒／隔天第一秒
+      f.read(u, plan, "利未記", 1, "2026-09-30T15:59:59+00:00");
+      f.read(u, plan, "利未記", 2, "2026-09-30T16:00:00+00:00");
+      f.read(u, plan, "利未記", 3, "2026-10-01T15:59:59+00:00");
+      f.read(u, plan, "利未記", 4, "2026-10-02T16:00:00+00:00");
+      f.read(u, plan, "利未記", 5, "2026-10-03T23:30:00+00:00");
+      f.read(u, plan, "利未記", 6, "2026-10-05T00:30:00+00:00");
+      // 紐約 11/1 日光節約結束那一天（一天 25 小時），前後都有打卡
+      const dst = f.person("跨日光節約");
+      const planB = f.enroll(dst);
+      ["2026-10-31T12:00:00Z", "2026-11-01T12:00:00Z", "2026-11-02T12:00:00Z"].forEach((at, index) => f.read(dst, planB, "利未記", index + 1, at));
+      await insertFixture(tx, f);
+      const all = [];
+      for (const timezone of ["Asia/Taipei", "UTC", "America/New_York", "Asia/Kolkata", "Pacific/Auckland"]) {
+        all.push(...(await compareRoster(tx, "跨時區", { statsPlan: makeStatsPlan(), timezone })).diffs);
+      }
+      return all;
+    });
+    expect(found).toEqual([]);
+  }, 120_000);
+
+  it("情境：教會原始日程（真的活動定義鋪出來的比對尺）", async () => {
+    const found = await inRosterTx(async tx => {
+      const definition = getChurchCampaignStageDefinition(1);
+      const days = buildChurchCampaignDays(definition, BIBLE_BOOK_CHAPTERS, []);
+      const startDate = definition.startDate;
+      const f = createFixture(7);
+      const books = [...new Set(days.flatMap(day => day.chapters.map(chapter => chapter.book)))];
+      for (const [index, lag] of [0, 1, 3, 10].entries()) {
+        const u = f.person(`落後 ${lag} 天`);
+        const plan = f.enroll(u, { books });
+        days.slice(0, 30).forEach((day, dayIndex) => {
+          day.chapters.forEach(chapter => f.read(u, plan, chapter.book, chapter.chapter, taipei(addDays(startDate, dayIndex + lag), `0${index}:30:00`)));
+        });
+      }
+      await insertFixture(tx, f);
+      return (await compareRoster(tx, "教會原始日程", {
+        statsPlan: makeStatsPlan(days, { startDate, endDate: definition.endDate })
+      })).diffs;
+    });
+    expect(found).toEqual([]);
+  }, 120_000);
+
+  it("情境：限定牧區（首頁的同牧區路徑）和沒有計畫篩選", async () => {
+    const found = await inRosterTx(async tx => {
+      const f = createFixture();
+      const a = f.person("牧區一的人", { zone: "牧區一" });
+      const b = f.person("牧區二的人", { zone: "牧區二", group: "小組三" });
+      const none = f.person("牧區一沒報名", { zone: "牧區一" });
+      f.enroll(none, { global: OTHER_GLOBAL_PLAN, name: "別的計畫", n: 1 });
+      const planA = f.enroll(a, { n: 2 });
+      const planA2 = f.enroll(a, { global: OTHER_GLOBAL_PLAN, name: "別的計畫", books: ["民數記"], n: 3 });
+      const planB = f.enroll(b, { n: 4 });
+      f.read(a, planA, "利未記", 1, taipei("2026-10-01"));
+      f.read(a, planA2, "民數記", 1, taipei("2026-10-02"));
+      // 沒有計畫篩選時兩筆報名的同一章要去重、留最早的時間
+      f.read(a, planA2, "利未記", 1, taipei("2026-09-20"));
+      f.read(b, planB, "利未記", 1, taipei("2026-10-01"));
+      f.read(b, planB, "利未記", 2, taipei("2026-10-02"), 2);
+      f.profiles.push({ id: ACTOR, name: "沒有計畫的人", region: "大區一", zone: "牧區一", group: "小組一" });
+      await insertFixture(tx, f);
+      return [
+        ...(await compareRoster(tx, "限定牧區", { statsPlan: null, pastoralZone: "牧區一" })).diffs,
+        ...(await compareRoster(tx, "沒有計畫篩選", { statsPlan: null, filter: null })).diffs,
+        ...(await compareRoster(tx, "沒有計畫篩選＋牧區", { statsPlan: null, filter: null, pastoralZone: "牧區二" })).diffs
+      ];
+    });
+    expect(found).toEqual([]);
+  }, 60_000);
+
+  it("情境：管理範圍（不是全教會時只算可見名單裡的人）", async () => {
+    const found = await inRosterTx(async tx => {
+      const f = createFixture();
+      const inside = f.person("範圍內");
+      const outside = f.person("範圍外");
+      const planA = f.enroll(inside);
+      const planB = f.enroll(outside);
+      f.read(inside, planA, "利未記", 1, taipei("2026-10-03"));
+      f.read(outside, planB, "利未記", 1, taipei("2026-10-03"));
+      await insertFixture(tx, f);
+      const { diffs, summary } = await compareRoster(tx, "管理範圍", { statsPlan: makeStatsPlan(), visibleIds: [inside] });
+      expect(summary.merged.users.map(user => user.id)).toEqual([inside]);
+      return diffs;
+    });
+    expect(found).toEqual([]);
+  }, 60_000);
+
+  // 亂數資料：每個種子一份資料、一個時區，各種邊界混在一起。
+  const RANDOM_TIMEZONES = ["Asia/Taipei", "America/New_York", "UTC", "Asia/Kolkata", "Pacific/Auckland", "Asia/Taipei"];
+  function buildRandomFixture(seed) {
+    const f = createFixture(seed);
+    const { rng } = f;
+    const pick = list => list[Math.floor(rng() * list.length)];
+    const int = (min, max) => min + Math.floor(rng() * (max - min + 1));
+    const days = Array.from({ length: int(10, 30) }, () => {
+      if (rng() < 0.15) return dayOf();
+      return dayOf(...Array.from({ length: int(1, 3) }, () => [pick(["利未記", "民數記"]), int(1, 20)]));
+    });
+    const randomMoment = () => {
+      const date = addDays("2026-09-28", int(0, 40));
+      const roll = rng();
+      if (roll < 0.25) return taipei(date, "00:00:00"); // 台北午夜
+      if (roll < 0.4) return taipei(date, "23:59:59.999");
+      if (roll < 0.5) return `${date}T00:00:00+00:00`; // UTC 午夜
+      if (roll < 0.6) return `${date}T03:00:00.${pad(int(0, 999999), 6)}+00:00`; // 微秒、同毫秒
+      return taipei(date, `${pad(int(0, 23), 2)}:${pad(int(0, 59), 2)}:${pad(int(0, 59), 2)}`);
+    };
+    const count = int(20, 40);
+    for (let index = 0; index < count; index += 1) {
+      const region = pick(["大區一", "大區二"]);
+      const zone = region === "大區一" ? pick(["牧區一", "牧區二"]) : "牧區三";
+      const group = rng() < 0.1 ? "" : pick(["小組一", "小組二", "小組三", "小組四"]);
+      const user = f.person(`人${index}`, { region, zone, group });
+      if (rng() < 0.1) continue; // 沒報名
+      const planSeed = rng();
+      const books = planSeed < 0.6 ? ["利未記", "民數記"]
+        : planSeed < 0.75 ? ["利未記"]
+          : planSeed < 0.85 ? []
+            : planSeed < 0.95 ? ["利未記", "民數記", "詩篇 1-110"] : [""];
+      // 這個人的報名 id 順序打亂：「第一筆」不一定是全域計畫那筆
+      const slots = [0, 1, 2, 3].map(slot => ({ slot, order: rng() })).sort((x, y) => x.order - y.order).map(({ slot }) => 1000 + index * 10 + slot);
+      const enrollments = [f.enroll(user, { books, round: int(1, 3), handled: rng() < 0.4, n: slots[0] })];
+      if (rng() < 0.2) enrollments.push(f.enroll(user, { global: null, preset: "十月-preset", n: slots[1], books: ["利未記"], round: int(1, 2) }));
+      if (rng() < 0.15) enrollments.push(f.enroll(user, { personal: true, name: PLAN_NAME, n: slots[2] }));
+      if (rng() < 0.2) enrollments.push(f.enroll(user, { global: OTHER_GLOBAL_PLAN, name: "別的計畫", n: slots[3] }));
+      for (const planId of enrollments) {
+        if (rng() < 0.1) continue;
+        const seen = new Set();
+        const logCount = int(0, 40);
+        for (let n = 0; n < logCount; n += 1) {
+          const book = pick(["利未記", "利未記", "民數記", "申命記"]);
+          const chapter = int(1, 20);
+          const round = pick([1, 1, 1, 2, 3]);
+          const key = `${book}_${chapter}_${round}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          f.read(user, planId, book, chapter, randomMoment(), round);
+        }
+      }
+    }
+    return { f, days };
+  }
+
+  for (const [index, timezone] of RANDOM_TIMEZONES.entries()) {
+    const seed = 6730 + index;
+    it(`亂數資料：種子 ${seed}（${timezone}）`, async () => {
+      const result = await inRosterTx(async tx => {
+        const { f, days } = buildRandomFixture(seed);
+        await insertFixture(tx, f);
+        const { diffs, summary } = await compareRoster(tx, `亂數 ${seed}`, {
+          statsPlan: makeStatsPlan(days),
+          timezone
+        });
+        return { diffs, people: summary.merged.users.length, logs: f.logs.length };
+      });
+      expect(result.diffs).toEqual([]);
+      expect(result.people).toBeGreaterThan(5);
+      expect(result.logs).toBeGreaterThan(50);
+    }, 60_000);
+  }
+
+  it("同一份報名不可能有重複的 (書卷, 章, 遍)：彙總直接照這個資料庫約束數章數", async () => {
+    await inRosterTx(async tx => {
+      const f = createFixture();
+      const u = f.person("重複");
+      const plan = f.enroll(u);
+      f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+      f.read(u, plan, "利未記", 1, taipei("2026-10-02"));
+      await expect(insertFixture(tx, f)).rejects.toThrow(/reading_logs_unique/);
+    });
+  });
+
+  describe("權限與範圍", () => {
+    const SIGNATURE = "public.get_plan_stats_roster_summary(text[], text, text, date, jsonb, boolean, uuid[], uuid)";
+    const callWith = (tx, wholeChurch, visibleIds, actor = ACTOR, timezone = "Asia/Taipei") => tx.query(
+      `SELECT public.get_plan_stats_roster_summary($1::text[], NULL, $2, '2026-10-01', '[]'::jsonb, $3, $4::uuid[], $5) AS result`,
+      [[GLOBAL_PLAN], timezone, wholeChurch, visibleIds, actor]
+    );
+
+    it("不是全教會、可見名單是空的或 NULL、沒有呼叫者 → 什麼都不回（fail closed）", async () => {
+      const people = await inRosterTx(async tx => {
+        const f = createFixture();
+        const u = f.person("某人");
+        const plan = f.enroll(u);
+        f.read(u, plan, "利未記", 1, taipei("2026-10-01"));
+        await insertFixture(tx, f);
+        await tx.exec(`SET LOCAL ROLE service_role`);
+        const results = [];
+        for (const [wholeChurch, visibleIds, actor] of [[false, [], ACTOR], [false, null, ACTOR], [null, null, ACTOR], [true, null, null]]) {
+          const { rows: [{ result }] } = await callWith(tx, wholeChurch, visibleIds, actor);
+          results.push(result.people.length, result.plans.length);
+        }
+        const { rows: [{ result: allowed }] } = await callWith(tx, true, null);
+        return { results, allowed: allowed.people.length };
+      });
+      expect(people.results).toEqual(new Array(8).fill(0));
+      expect(people.allowed).toBe(1);
+    });
+
+    it("沒帶時區回 NULL（前端退回舊路徑），不是算出錯的日期", async () => {
+      const result = await inRosterTx(async tx => {
+        await tx.exec(`SET LOCAL ROLE service_role`);
+        return (await callWith(tx, true, null, ACTOR, null)).rows[0].result;
+      });
+      expect(result).toBeNull();
+    });
+
+    it("只有 service_role 能呼叫；是 SECURITY DEFINER，search_path 是空的", async () => {
+      const { rows: [row] } = await db.query(
+        `SELECT p.prosecdef, p.proconfig,
+                has_function_privilege('anon', p.oid, 'EXECUTE') AS anon,
+                has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
+                has_function_privilege('service_role', p.oid, 'EXECUTE') AS service
+         FROM pg_proc p WHERE p.oid = $1::regprocedure`,
+        [SIGNATURE]
+      );
+      expect(row).toMatchObject({ prosecdef: true, anon: false, authenticated: false, service: true });
+      expect(row.proconfig.join(",")).toMatch(/search_path=("")?/);
+      await expect(as("authenticated", { sub: ids.adminAuth }, tx => callWith(tx, true, null)))
+        .rejects.toThrow(/permission denied/);
+    });
+  });
+
+  // 驗收：合成 800 人 × 250 章。PGlite 只看相對差距，不代表正式站的絕對耗時。
+  it("回應大小：800 人 × 250 章，彙總在舊的 1/10 以下", async () => {
+    const measured = await inRosterTx(async tx => {
+      const chapters = [];
+      for (const book of BIBLE_BOOK_CHAPTERS) {
+        for (let chapter = 1; chapter <= book.chapters && chapters.length < 250; chapter += 1) chapters.push([book.name, chapter]);
+      }
+      const books = [...new Set(chapters.map(([book]) => book))];
+      await tx.query(
+        `INSERT INTO public.profiles (id, name, role_id, great_region, pastoral_zone, small_group, is_active)
+         SELECT ('74000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, '會友' || n, $1, '大區一', '牧區' || (n % 20), '小組' || (n % 80), TRUE
+         FROM generate_series(1, 800) AS n`,
+        [memberRoleId]
+      );
+      await tx.query(
+        `INSERT INTO public.reading_plans (id, user_id, global_plan_id, name, start_date, end_date, target_books)
+         SELECT ('75000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, ('74000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+                $1, $2, '2026-10-01', '2026-12-31', $3::text[]
+         FROM generate_series(1, 800) AS n`,
+        [GLOBAL_PLAN, PLAN_NAME, books]
+      );
+      await tx.query(
+        `INSERT INTO public.reading_logs (user_id, plan_id, book, chapter, round, read_at)
+         SELECT ('74000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid, ('75000000-0000-4000-8000-' || lpad(n::text, 12, '0'))::uuid,
+                entry ->> 0, (entry ->> 1)::integer, 1,
+                '2026-10-01 08:00:00+08'::timestamptz + (ordinality * interval '6 hours') + (n * interval '1 second') + interval '123 milliseconds'
+         FROM generate_series(1, 800) AS n
+         CROSS JOIN jsonb_array_elements($1::jsonb) WITH ORDINALITY AS item(entry, ordinality)`,
+        [JSON.stringify(chapters)]
+      );
+      const schedule = chapters.map(([book, chapter], index) => [Math.floor(index / 3), book, chapter]);
+      await tx.exec(`SET LOCAL ROLE service_role`);
+      const timed = async (sql, params) => {
+        const started = Date.now();
+        const { rows: [{ bytes }] } = await tx.query(sql, params);
+        return { bytes: Number(bytes), ms: Date.now() - started };
+      };
+      const before = await timed(
+        `SELECT octet_length(public.get_plan_stats_roster($1::text[], NULL, '2026-11-05', TRUE, NULL, $2)::text) AS bytes`,
+        [[GLOBAL_PLAN], ACTOR]
+      );
+      const after = await timed(
+        `SELECT octet_length(public.get_plan_stats_roster_summary($1::text[], NULL, 'Asia/Taipei', '2026-10-01', $2::jsonb, TRUE, NULL, $3)::text) AS bytes`,
+        [[GLOBAL_PLAN], JSON.stringify(schedule), ACTOR]
+      );
+      return { before, after };
+    });
+    console.info(`#673 size: old ${measured.before.bytes} bytes, ${measured.before.ms} ms; new ${measured.after.bytes} bytes, ${measured.after.ms} ms; ratio 1/${(measured.before.bytes / measured.after.bytes).toFixed(1)}`);
+    expect(measured.after.bytes).toBeLessThan(measured.before.bytes / 10);
+  }, 240_000);
+});
+
+describe("回報狀態與結案流程（#683）", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const daysAgo = n => new Date(Date.now() - n * DAY).toISOString();
+
+  // 先用 superuser 種資料，再切回 service_role（admin-api、排程實際用的角色）
+  const seeded = fn => asService(async tx => {
+    await tx.exec("RESET ROLE");
+    const beService = () => tx.exec("SET LOCAL ROLE service_role");
+    return fn(tx, beService);
+  });
+
+  const addReport = async (tx, { status = "pending", createdAt = daysAgo(1), lastMessageAt = null, closedAt = null, closeReason = null } = {}) => {
+    const { rows: [row] } = await tx.query(
+      `INSERT INTO public.issue_reports (user_id, category, description, status, created_at, last_message_at, closed_at, close_reason)
+       VALUES ($1, 'bug', '測試回報', $2, $3::timestamptz, $4::timestamptz, $5::timestamptz, $6) RETURNING id`,
+      [ids.member, status, createdAt, lastMessageAt, closedAt, closeReason]
+    );
+    return row.id;
+  };
+  const addMessage = async (tx, reportId, { role = "member", body = "訊息", internal = false, attachment = null, createdAt = null } = {}) => {
+    const { rows: [row] } = await tx.query(
+      `INSERT INTO public.issue_report_messages (report_id, author_role, author_id, body, is_internal_note, attachment_path, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now())) RETURNING id`,
+      [reportId, role, role === "admin" ? ids.admin : ids.member, body, internal, attachment, createdAt]
+    );
+    return row.id;
+  };
+  const report = async (tx, id) => (await tx.query(
+    `SELECT status, closed_at, close_reason, last_message_at FROM public.issue_reports WHERE id = $1`, [id]
+  )).rows[0];
+  const messages = async (tx, id) => (await tx.query(
+    `SELECT author_role, author_id, body, is_internal_note FROM public.issue_report_messages WHERE report_id = $1 ORDER BY created_at, id`, [id]
+  )).rows;
+  const post = async (tx, id, { body = "回覆", internal = false, attachment = false } = {}) => (await tx.query(
+    `SELECT public.admin_api_report_post($1, 'admin', $2, $3, $4, $5, 'req-683') AS result`,
+    [ids.admin, id, body, internal, attachment]
+  )).rows[0].result;
+  const close = async (tx, id, reason, body) => (await tx.query(
+    `SELECT public.admin_api_report_close($1, 'admin', $2, $3, $4, 'req-683') AS result`,
+    [ids.admin, id, reason, body]
+  )).rows[0].result;
+  const setStatus = async (tx, id, status) => (await tx.query(
+    `SELECT public.admin_api_report_set_status($1, 'admin', $2, $3, 'req-683') AS result`,
+    [ids.admin, id, status]
+  )).rows[0].result;
+  const list = async (tx, status, cursor = {}, limit = 30) => (await tx.query(
+    `SELECT public.admin_api_report_list($1, FALSE, $2::timestamptz, $3::uuid, $4) AS result`,
+    [status, cursor.at ?? null, cursor.id ?? null, limit]
+  )).rows[0].result;
+
+  describe("自動轉換", () => {
+    it("管理者公開回覆後變成等會友；內部備註不變", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        await beService();
+        await post(tx, id, { internal: true });
+        expect((await report(tx, id)).status).toBe("pending");
+        await post(tx, id);
+        expect((await report(tx, id)).status).toBe("waiting_member");
+      });
+    });
+
+    it("附截圖的回覆要上傳成功才轉換；上傳失敗清掉佔位列後仍是待回覆", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        await beService();
+        const failed = await post(tx, id, { body: "", attachment: true });
+        expect((await report(tx, id)).status).toBe("pending");
+        await tx.query(`SELECT public.admin_api_report_drop_attachment($1, 'admin', $2, FALSE, NULL)`, [ids.admin, failed.id]);
+        expect((await report(tx, id)).status).toBe("pending");
+
+        const uploaded = await post(tx, id, { body: "", attachment: true });
+        await tx.query(
+          `SELECT public.admin_api_report_set_attachment($1, $2, 'image/webp', 100, 10, 10)`,
+          [uploaded.id, `${id}/${uploaded.id}.webp`]
+        );
+        expect((await report(tx, id)).status).toBe("waiting_member");
+      });
+    });
+
+    it("會友在等會友或已結案的回報留言會回到待回覆，並清掉結案資訊", async () => {
+      await seeded(async tx => {
+        const waiting = await addReport(tx, { status: "waiting_member" });
+        await addMessage(tx, waiting);
+        expect((await report(tx, waiting)).status).toBe("pending");
+
+        const closed = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        await addMessage(tx, closed);
+        expect(await report(tx, closed)).toMatchObject({ status: "pending", closed_at: null, close_reason: null });
+      });
+    });
+
+    it("等開發不因任何一方留言改變；管理者回覆已結案的回報也不會打開", async () => {
+      await seeded(async (tx, beService) => {
+        const dev = await addReport(tx, { status: "processing" });
+        await addMessage(tx, dev);
+        await addMessage(tx, dev, { role: "admin" });
+        expect((await report(tx, dev)).status).toBe("processing");
+
+        const closed = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        await beService();
+        await post(tx, closed);
+        expect((await report(tx, closed)).status).toBe("resolved");
+      });
+    });
+  });
+
+  describe("結案", () => {
+    it("依原因決定狀態，並在同一個交易留下給會友的訊息與稽核", async () => {
+      await seeded(async (tx, beService) => {
+        const fixed = await addReport(tx);
+        const noted = await addReport(tx);
+        await beService();
+        const result = await close(tx, fixed, "fixed", "已修好");
+        expect(result).toMatchObject({ id: fixed, status: "resolved", close_reason: "fixed" });
+        expect(result.closed_at).toBeTruthy();
+        expect(await messages(tx, fixed)).toEqual([
+          { author_role: "admin", author_id: ids.admin, body: "已修好", is_internal_note: false }
+        ]);
+        expect((await close(tx, noted, "suggestion_noted", "已記錄")).status).toBe("ignored");
+
+        await tx.exec("RESET ROLE");
+        const { rows: [audit] } = await tx.query(
+          `SELECT changes, target_id FROM audit.admin_events WHERE action = 'report.close' AND target_id = $1`, [fixed]
+        );
+        expect(audit.changes).toMatchObject({
+          status: { before: "pending", after: "resolved" },
+          close_reason: { before: null, after: "fixed" }
+        });
+      });
+    });
+
+    it("沒有原因、沒有訊息、重複結案都會被擋下，資料不變", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        const done = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        await beService();
+        for (const [target, reason, body, code] of [
+          [id, null, "訊息", "invalid_close_reason"],
+          [id, "no_response", "訊息", "invalid_close_reason"],
+          [id, "fixed", "   ", "empty_message"],
+          [id, "fixed", "字".repeat(501), "body_too_long"],
+          [done, "fixed", "訊息", "already_closed"]
+        ]) {
+          await tx.exec("SAVEPOINT attempt");
+          await expect(close(tx, target, reason, body), code).rejects.toThrow(code);
+          await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        }
+        expect((await report(tx, id)).status).toBe("pending");
+        expect(await messages(tx, id)).toEqual([]);
+        expect(await close(tx, "99999999-9999-4999-8999-999999999999", "fixed", "訊息")).toBeNull();
+      });
+    });
+
+    it("不能只改狀態就結案；重新打開會清掉結案資訊", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        const closed = await addReport(tx, { status: "ignored", closedAt: daysAgo(1), closeReason: "other" });
+        await beService();
+        for (const status of ["resolved", "ignored"]) {
+          await tx.exec("SAVEPOINT attempt");
+          await expect(setStatus(tx, id, status)).rejects.toThrow("close_requires_reason");
+          await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        }
+        expect((await setStatus(tx, id, "processing")).status).toBe("processing");
+        expect((await setStatus(tx, id, "waiting_member")).status).toBe("waiting_member");
+        expect((await setStatus(tx, closed, "pending")).status).toBe("pending");
+        expect(await report(tx, closed)).toMatchObject({ status: "pending", closed_at: null, close_reason: null });
+      });
+    });
+
+    it("App 泡泡走的 issue_admin_close 規則相同，只有管理員能用", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        await beService();
+        const legacyClose = (actor, reason, body) => tx.query(
+          `SELECT public.issue_admin_close($1, $2, $3, $4) AS result`, [id, reason, body, actor]
+        );
+        await tx.exec("SAVEPOINT attempt");
+        await expect(legacyClose(ids.member, "fixed", "訊息")).rejects.toThrow("forbidden");
+        await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        await expect(legacyClose(ids.admin, null, "訊息")).rejects.toThrow("invalid_close_reason");
+        await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        const { rows: [{ result }] } = await legacyClose(ids.admin, "answered", "已回答");
+        expect(result).toMatchObject({ status: "resolved", close_reason: "answered" });
+        await tx.exec("SAVEPOINT attempt");
+        await expect(tx.query(`SELECT public.issue_admin_set_status($1, 'ignored', $2)`, [id, ids.admin])).rejects.toThrow("close_requires_reason");
+      });
+    });
+
+    it("新函式 anon、authenticated 都不能直接執行", async () => {
+      const { rows: [row] } = await db.query(`
+        SELECT bool_or(has_function_privilege('anon', p.oid, 'EXECUTE')) AS anon,
+               bool_or(has_function_privilege('authenticated', p.oid, 'EXECUTE')) AS authenticated
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public' AND p.proname IN (
+          '_issue_close_report', 'admin_api_report_close', 'issue_admin_close', 'issue_report_digest_counts',
+          'invoke_issue_report_digest', 'issue_threads_autoclose', '_issue_touch_report_on_message', 'issue_admin_set_status')`);
+      expect(row).toEqual({ anon: false, authenticated: false });
+    });
+  });
+
+  describe("自動結案", () => {
+    it("只結案超過 14 天的等會友，並留下訊息；會友回覆就重新打開", async () => {
+      await seeded(async (tx, beService) => {
+        const stale = await addReport(tx, { status: "waiting_member", createdAt: daysAgo(30), lastMessageAt: daysAgo(15) });
+        const fresh = await addReport(tx, { status: "waiting_member", createdAt: daysAgo(30), lastMessageAt: daysAgo(13) });
+        const dev = await addReport(tx, { status: "processing", createdAt: daysAgo(30), lastMessageAt: daysAgo(15) });
+        const todo = await addReport(tx, { status: "pending", createdAt: daysAgo(30), lastMessageAt: daysAgo(15) });
+        await beService();
+        const { rows: [{ closed }] } = await tx.query(`SELECT public.issue_threads_autoclose() AS closed`);
+        expect(closed).toBe(1);
+
+        const closedRow = await report(tx, stale);
+        expect(closedRow).toMatchObject({ status: "ignored", close_reason: "no_response" });
+        expect(closedRow.closed_at).toBeTruthy();
+        const [notice] = await messages(tx, stale);
+        expect(notice).toMatchObject({ author_role: "admin", author_id: null, is_internal_note: false });
+        expect(notice.body).toContain("超過 14 天");
+        expect((await report(tx, fresh)).status).toBe("waiting_member");
+        expect((await report(tx, dev)).status).toBe("processing");
+        expect((await report(tx, todo)).status).toBe("pending");
+
+        await tx.exec("RESET ROLE");
+        await addMessage(tx, stale);
+        expect(await report(tx, stale)).toMatchObject({ status: "pending", closed_at: null, close_reason: null });
+      });
+    });
+  });
+
+  describe("收件匣與數字", () => {
+    it("待回覆從等最久的排起，翻頁不漏不重複", async () => {
+      await seeded(async (tx, beService) => {
+        const created = [];
+        for (const days of [3, 9, 6, 12, 1]) created.push({ id: await addReport(tx, { createdAt: daysAgo(days) }), days });
+        await beService();
+        const seen = [];
+        let cursor = {};
+        for (let i = 0; i < 10; i++) {
+          const page = await list(tx, "pending", cursor, 2);
+          seen.push(...page.items.map(item => item.id));
+          if (!page.next_cursor) break;
+          cursor = page.next_cursor;
+        }
+        expect(seen).toEqual([...created].sort((a, b) => b.days - a.days).map(item => item.id));
+      });
+    });
+
+    it("等開發也由舊到新；全部維持由新到舊", async () => {
+      await seeded(async (tx, beService) => {
+        const oldDev = await addReport(tx, { status: "processing", createdAt: daysAgo(9) });
+        const newDev = await addReport(tx, { status: "processing", createdAt: daysAgo(2) });
+        await beService();
+        expect((await list(tx, "processing")).items.map(item => item.id)).toEqual([oldDev, newDev]);
+        const all = (await list(tx, null)).items.map(item => item.id);
+        expect(all.indexOf(newDev)).toBeLessThan(all.indexOf(oldDev));
+      });
+    });
+
+    it("已結案篩選含兩種狀態與原因；筆數分開算；舊的 open 仍可用", async () => {
+      await seeded(async (tx, beService) => {
+        await addReport(tx);
+        const waiting = await addReport(tx, { status: "waiting_member" });
+        const resolved = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        const ignored = await addReport(tx, { status: "ignored", closedAt: daysAgo(1), closeReason: "other" });
+        await beService();
+        const closedPage = await list(tx, "closed");
+        expect(closedPage.items.map(item => item.id).sort()).toEqual([resolved, ignored].sort());
+        expect(closedPage.items.find(item => item.id === resolved).close_reason).toBe("fixed");
+        expect(closedPage.counts).toMatchObject({ all: 4, open: 2, pending: 1, waiting_member: 1, processing: 0, closed: 2, resolved: 1, ignored: 1 });
+        expect((await list(tx, "open")).items.map(item => item.id)).toContain(waiting);
+        const { rows: [{ result }] } = await tx.query(
+          `SELECT public.admin_api_report_export($1, 'admin', 'closed', 'req-683') AS result`, [ids.admin]
+        );
+        expect(result.total).toBe(2);
+      });
+    });
+
+    it("首頁只算待回覆，等待時間看最後一則公開訊息", async () => {
+      await seeded(async (tx, beService) => {
+        const oldestAt = daysAgo(5);
+        await addReport(tx, { createdAt: daysAgo(20), lastMessageAt: oldestAt });
+        await addReport(tx, { createdAt: daysAgo(2) });
+        await addReport(tx, { status: "waiting_member", createdAt: daysAgo(40) });
+        await addReport(tx, { status: "processing", createdAt: daysAgo(30) });
+        await beService();
+        const { rows: [{ result }] } = await tx.query(
+          `SELECT public.admin_api_home_counts($1, NULL) AS result`, [ids.admin]
+        );
+        expect(result.reports).toMatchObject({ pending: 2, processing: 1, unread: 0 });
+        expect(Date.parse(result.reports.oldest_pending_at)).toBe(Date.parse(oldestAt));
+      });
+    });
+
+    it("每日摘要的數字：新回報、待回覆、最久、有新訊息、等開發", async () => {
+      await seeded(async (tx, beService) => {
+        const oldestAt = daysAgo(8);
+        await addReport(tx, { createdAt: daysAgo(30), lastMessageAt: oldestAt });
+        const fresh = await addReport(tx, { createdAt: new Date(Date.now() - 3600_000).toISOString() });
+        await addReport(tx, { status: "processing", createdAt: daysAgo(10) });
+        await addMessage(tx, fresh);
+        await beService();
+        const { rows: [{ result }] } = await tx.query(`SELECT public.issue_report_digest_counts() AS result`);
+        expect(result).toMatchObject({ new_24h: 1, pending: 2, processing: 1, unread: 1 });
+        expect(Date.parse(result.oldest_pending_at)).toBe(Date.parse(oldestAt));
+        expect(JSON.stringify(result)).not.toContain("測試");
+      });
+    });
+
+    it("每日摘要排在台北時間 08:00", async () => {
+      const { rows: [job] } = await db.query(`SELECT schedule, command FROM cron.job WHERE jobname = 'issue-report-daily-digest'`);
+      expect(job).toEqual({ schedule: "0 0 * * *", command: "SELECT public.invoke_issue_report_digest();" });
+    });
   });
 });

@@ -1,0 +1,161 @@
+{
+ "meta": "all|true|false|GEN|true",
+ "overall": {
+  "graded": 8,
+  "avgAuto": 60.6,
+  "attempts": 8,
+  "avgTotal": 60.6,
+  "maxTotal": 90,
+  "minTotal": 20,
+  "avgManual": null,
+  "submitted": 8,
+  "inProgress": 0,
+  "notReadCount": 4,
+  "eligibleCount": 9,
+  "participationRate": 0.889
+ },
+ "byRegion": [
+  {
+   "pr": null,
+   "name": "大區乙",
+   "count": 1,
+   "graded": 1,
+   "avgTotal": 40
+  },
+  {
+   "pr": null,
+   "name": "大區甲",
+   "count": 7,
+   "graded": 7,
+   "avgTotal": 63.6
+  }
+ ],
+ "byZone": [
+  {
+   "pr": null,
+   "name": "牧區二",
+   "count": 1,
+   "graded": 1,
+   "region": "大區乙",
+   "avgTotal": 40
+  },
+  {
+   "pr": null,
+   "name": "牧區一",
+   "count": 6,
+   "graded": 6,
+   "region": "大區甲",
+   "avgTotal": 70.8
+  },
+  {
+   "pr": null,
+   "name": "（未分牧區）",
+   "count": 1,
+   "graded": 1,
+   "region": "大區甲",
+   "avgTotal": 20
+  }
+ ],
+ "byGroup": [
+  {
+   "pr": null,
+   "name": "小組一",
+   "zone": "牧區一",
+   "count": 6,
+   "graded": 6,
+   "avgTotal": 70.8
+  },
+  {
+   "pr": null,
+   "name": "小組四",
+   "zone": "牧區二",
+   "count": 1,
+   "graded": 1,
+   "avgTotal": 40
+  },
+  {
+   "pr": null,
+   "name": "（未分組）",
+   "zone": "（未分牧區）",
+   "count": 1,
+   "graded": 1,
+   "avgTotal": 20
+  }
+ ],
+ "byTeamSize": [
+  {
+   "count": 2,
+   "label": "3 人團隊",
+   "graded": 2,
+   "avgTotal": 85
+  },
+  {
+   "count": 1,
+   "label": "6 人團隊",
+   "graded": 1,
+   "avgTotal": 40
+  },
+  {
+   "count": 5,
+   "label": "未組隊",
+   "graded": 5,
+   "avgTotal": 55
+  }
+ ],
+ "teamRanking": [
+  {
+   "pr": null,
+   "name": "三人隊",
+   "rank": 1,
+   "notRead": 1,
+   "avgTotal": 56.7,
+   "division": 3,
+   "completed": 2,
+   "notTested": 0,
+   "submitted": 2,
+   "teamTotal": 170,
+   "emptySlots": 0,
+   "greatRegion": "大區甲",
+   "pastoralZone": "牧區一"
+  },
+  {
+   "pr": null,
+   "name": "六人隊",
+   "rank": 1,
+   "notRead": 2,
+   "avgTotal": 6.7,
+   "division": 6,
+   "completed": 1,
+   "notTested": 0,
+   "submitted": 1,
+   "teamTotal": 40,
+   "emptySlots": 3,
+   "greatRegion": "大區乙",
+   "pastoralZone": "牧區二"
+  }
+ ],
+ "byQuestion": [
+  {
+   "correct": 0,
+   "section": "single",
+   "answered": 8,
+   "position": 1,
+   "correctRate": 0,
+   "sectionRank": 2
+  }
+ ],
+ "roster": [
+  "01|graded|90|1800|3 人團隊|true|94|92|92",
+  "12|graded|85|1800|個人|true|81|75|75",
+  "02|graded|80|1800|3 人團隊|true|69|58|58",
+  "13|graded|75|1800|個人|true|56|42|42",
+  "03|graded|70|1800|3 人團隊|false|||",
+  "14|graded|65|1800|個人|true|44|25|25",
+  "04|graded|60|1800|6 人團隊|false|||",
+  "05|graded|50|1800|6 人團隊|false|||",
+  "06|graded|40|1800|6 人團隊|true|31||",
+  "10|graded|30|1800|個人|true|19|8|8",
+  "11|graded|20|1800|個人|true|6||",
+  "07|submitted||1800|個人|false|||"
+ ]
+}

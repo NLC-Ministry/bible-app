@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
+import { currentMigrationSql } from "./migration-sql.mjs";
 
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -28,7 +29,7 @@ describe("多試卷首頁與個人紀錄", () => {
 });
 
 describe("複習獨立寬限期", () => {
-  const sql = read("supabase/migrations/0124_exam_practice_grace_period.sql");
+  const sql = currentMigrationSql("0124_exam_practice_grace_period.sql");
   it("正式關閉只收 official，練習期限為活動結束後一天", () => {
     expect(sql).toContain("attempt_kind='official' AND status='in_progress'");
     expect(sql).toContain("close_at + INTERVAL '1 day'");

@@ -66,7 +66,7 @@ function respond(action: string, params: any) {
     case "user_timeline":
       return { items: [log("t1", "2026-10-09T00:00:00Z", 7)], next_cursor: null };
     case "report_list":
-      return { items: [], next_cursor: null, counts: { all: 0, open: 0, pending: 0, processing: 0, resolved: 0, ignored: 0, unread: 0 } };
+      return { items: [], next_cursor: null, counts: { all: 0, open: 0, pending: 0, waiting_member: 0, processing: 0, closed: 0, resolved: 0, ignored: 0, unread: 0 } };
     case "reveal_pii":
       return { email: "wang@example.com", phone: "0912345678", identities: [{ provider: "logto", email: "wang@example.com", is_primary: true }] };
     default:

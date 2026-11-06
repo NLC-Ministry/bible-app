@@ -66,9 +66,12 @@ export function capabilitiesForRole(roleCode: unknown): Capability[] {
 // 個人頁點開才調閱的區塊（#567 多了 plans、teams、notifications）
 export const USER_SECTIONS = ["plans", "reading_logs", "teams", "team_events", "tests", "vouchers", "reports", "notifications"] as const;
 
-export const REPORT_STATUSES = ["pending", "processing", "resolved", "ignored"] as const;
-// 收件匣篩選多一個 open（待處理＋處理中）
-export const REPORT_FILTERS = ["open", ...REPORT_STATUSES] as const;
+// 可以直接改的狀態；已結案（resolved、ignored）只能走 report_close，一定要有原因和給會友的訊息（#683）
+export const REPORT_STATUSES = ["pending", "waiting_member", "processing"] as const;
+// 收件匣篩選多 open（三種未結案）、closed（兩種已結案）和個別的已結案狀態
+export const REPORT_FILTERS = ["open", "closed", ...REPORT_STATUSES, "resolved", "ignored"] as const;
+// no_response 只給自動結案，不能手動選
+export const REPORT_CLOSE_REASONS = ["fixed", "answered", "cannot_reproduce", "suggestion_noted", "other"] as const;
 
 export type RateLimit = { bucket: string; limit: number; windowSeconds: number };
 export type { ActionContext };
@@ -382,10 +385,31 @@ export const ADMIN_ACTIONS: Readonly<Record<string, ActionSpec>> = Object.freeze
     notFoundError: "report_not_found",
     buildArgs: (params, ctx) => {
       if (!isUuid(params.report_id)) return { ok: false, error: "invalid_report_id" };
+      if (params.status === "resolved" || params.status === "ignored") return { ok: false, error: "close_requires_reason" };
       if (typeof params.status !== "string" || !(REPORT_STATUSES as readonly string[]).includes(params.status)) {
         return { ok: false, error: "invalid_status" };
       }
       return { ok: true, args: { ...actorArgs(ctx), p_report_id: params.report_id, p_status: params.status, p_request_id: ctx.requestId } };
+    }
+  },
+  report_close: {
+    capabilities: ["support.write"],
+    rateLimit: WRITE_LIMIT,
+    rpc: "admin_api_report_close",
+    notFoundOnNull: true,
+    notFoundError: "report_not_found",
+    buildArgs: (params, ctx) => {
+      if (!isUuid(params.report_id)) return { ok: false, error: "invalid_report_id" };
+      if (typeof params.close_reason !== "string" || !(REPORT_CLOSE_REASONS as readonly string[]).includes(params.close_reason)) {
+        return { ok: false, error: "invalid_close_reason" };
+      }
+      if (params.body !== undefined && typeof params.body !== "string") return { ok: false, error: "invalid_body" };
+      const body = typeof params.body === "string" ? params.body : "";
+      if (!body.trim()) return { ok: false, error: "empty_message" };
+      if (body.trim().length > MAX_REPLY_CHARS) return { ok: false, error: "body_too_long" };
+      return { ok: true, args: {
+        ...actorArgs(ctx), p_report_id: params.report_id, p_close_reason: params.close_reason, p_body: body, p_request_id: ctx.requestId
+      } };
     }
   },
   report_post: {

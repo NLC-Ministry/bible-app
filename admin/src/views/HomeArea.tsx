@@ -68,7 +68,7 @@ function HomeBody({ home, can, onOpenInbox, onOpenPlan, now }: {
   const { plan, reports, commentary, quiz, changes } = home;
   const planId = plan?.plan.id || "";
   const planName = plan ? text(plan.plan.name, "未命名計畫") : "";
-  const wait = reports ? waitingText(waitingDays(reports.oldest_open_at, now)) : "";
+  const wait = reports ? waitingText(waitingDays(reports.oldest_pending_at, now)) : "";
 
   return (
     <>
@@ -86,11 +86,17 @@ function HomeBody({ home, can, onOpenInbox, onOpenPlan, now }: {
 
       <div className="adm-home__grid">
         {reports && can("support.read") && (
-          <a className={`adm-tile adm-home__tile${reports.open > 0 ? " adm-home__tile--todo" : ""}`} href={formatRoute({ view: "inbox", reportId: null })}
+          <a className={`adm-tile adm-home__tile${reports.pending > 0 ? " adm-home__tile--todo" : ""}`} href={formatRoute({ view: "inbox", reportId: null })}
             onClick={onOpenInbox}>
-            <span><Inbox className="adm-icon adm-icon--small" aria-hidden="true" />未結案的回報</span>
-            <strong>{reports.open}</strong>
-            <small>{reports.open > 0 ? [`有新訊息 ${reports.unread} 則`, wait].filter(Boolean).join("・") : "沒有未結案的回報"}</small>
+            <span><Inbox className="adm-icon adm-icon--small" aria-hidden="true" />待回覆的回報</span>
+            <strong>{reports.pending}</strong>
+            <small>
+              {[
+                reports.pending > 0 ? wait : "沒有待回覆的回報",
+                reports.unread > 0 ? `有新訊息 ${reports.unread} 則` : "",
+                reports.processing > 0 ? `等開發 ${reports.processing} 則` : ""
+              ].filter(Boolean).join("・")}
+            </small>
           </a>
         )}
 

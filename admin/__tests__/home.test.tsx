@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 後台首頁（#569）：開後台＝bootstrap＋1 個 home_summary；只有數字、不含任何人的名字；
-// 點「需要關心」「還沒滿的隊」「未結案的回報」進去時，那一頁的篩選已經設好，人數和首頁一樣。
+// 點「需要關心」「還沒滿的隊」「待回覆的回報」進去時，那一頁的篩選已經設好，人數和首頁一樣。
 // 回應用伺服器同一份規則（_shared/progress/plan-report.mjs）產生。
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { act } from "react";
@@ -42,7 +42,7 @@ const homeSummary = (extra: Partial<HomeSummary> = {}): HomeSummary => ({
     plan: SUMMARY.plan, today: SUMMARY.today, schedule: SUMMARY.schedule, funnel: SUMMARY.funnel,
     care: SUMMARY.care, teams: SUMMARY.teams, meta: SUMMARY.meta
   },
-  reports: { open: 3, unread: 1, oldest_open_at: "2026-11-08T01:00:00Z" },
+  reports: { pending: 3, processing: 1, unread: 1, oldest_pending_at: "2026-11-08T01:00:00Z" },
   commentary: { pending: 355, approved: 2 },
   quiz: { enabled: true, configured: true, date: "2026-11-12", status: "waiting", needs_attention: true },
   changes: [{ action: "app_feature_settings.update", label: "修改功能開放設定", occurredAt: "2026-11-10T02:00:00Z" }],
@@ -85,7 +85,7 @@ async function mount(initialHash: string, { caps = ALL_CAPS, home = homeSummary(
       case "plan_summary": data = SUMMARY; break;
       case "plan_roster": data = ROSTER; break;
       case "team_list": data = { plan: {}, today: TODAY, teams: [], counts: { teams: 0, unfilled: 0, issues: 0, members: 0 } }; break;
-      case "report_list": data = { items: [], next_cursor: null, counts: { all: 3, open: 3, pending: 2, processing: 1, resolved: 0, ignored: 0, unread: 1 } }; break;
+      case "report_list": data = { items: [], next_cursor: null, counts: { all: 3, open: 3, pending: 2, waiting_member: 0, processing: 1, closed: 0, resolved: 0, ignored: 0, unread: 1 } }; break;
       default: data = null;
     }
     return new Response(JSON.stringify({ data, request_id: "srv" }), { status: 200 });
@@ -134,8 +134,8 @@ describe("home page", () => {
     const { el } = await mount("#/");
     const text = el.textContent || "";
     expect(text).toContain("約翰福音 21 天");
-    expect(tile(el, "未結案的回報")?.textContent).toContain("3");
-    expect(tile(el, "未結案的回報")?.textContent).toContain("有新訊息 1 則");
+    expect(tile(el, "待回覆的回報")?.textContent).toContain("3");
+    expect(tile(el, "待回覆的回報")?.textContent).toContain("有新訊息 1 則");
     expect(tile(el, "需要關心")?.textContent).toContain(`${SUMMARY.care.total} 人`);
     expect(tile(el, "還沒滿的隊")?.textContent).toContain(`${SUMMARY.teams.unfilled} 隊`);
     expect(tile(el, "待審的經文注釋")?.textContent).toContain("355 則");
@@ -164,17 +164,17 @@ describe("home page", () => {
     expect(active.some((label) => label?.includes("還沒滿"))).toBe(true);
   });
 
-  it("「未結案的回報」opens the inbox on 未結案", async () => {
+  it("「待回覆的回報」opens the inbox on 待回覆", async () => {
     const { requests, el } = await mount("#/");
-    await follow(tile(el, "未結案的回報"));
+    await follow(tile(el, "待回覆的回報"));
     expect(window.location.hash).toBe("#/support");
-    expect(requests.at(-1)).toEqual({ action: "report_list", params: { status: "open", limit: 30 } });
-    expect(el.querySelector(".adm-chip--active")?.textContent).toContain("未結案");
+    expect(requests.at(-1)).toEqual({ action: "report_list", params: { status: "pending", limit: 30 } });
+    expect(el.querySelector(".adm-chip--active")?.textContent).toContain("待回覆");
   });
 
   it("hides what the account cannot open, and the quiz when it is off or not set up", async () => {
     const { el } = await mount("#/", { caps: ["console.access", "support.read"], home: homeSummary({ quiz: { enabled: false, configured: true, date: "2026-11-12", status: "waiting", needs_attention: true } }) });
-    expect(tile(el, "未結案的回報")).toBeTruthy();
+    expect(tile(el, "待回覆的回報")).toBeTruthy();
     expect(tile(el, "需要關心")).toBeUndefined();
     expect(tile(el, "待審的經文注釋")).toBeUndefined();
     expect(tile(el, "明天的小測驗")).toBeUndefined();
@@ -185,12 +185,12 @@ describe("home page", () => {
     const { el } = await mount("#/", { home: homeSummary({ plan: null }) });
     expect(el.textContent).toContain("還沒有任何計畫");
     expect(tile(el, "需要關心")).toBeUndefined();
-    expect(tile(el, "未結案的回報")).toBeTruthy();
+    expect(tile(el, "待回覆的回報")).toBeTruthy();
   });
 });
 
 describe("home rules", () => {
-  it("counts how long the oldest open report has waited", () => {
+  it("counts how long the longest-waiting report has waited", () => {
     const now = new Date("2026-11-11T02:00:00Z");
     expect(waitingDays("2026-11-08T01:00:00Z", now)).toBe(3);
     expect(waitingDays("2026-11-11T01:00:00Z", now)).toBe(0);

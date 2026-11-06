@@ -80,8 +80,14 @@ export function maskEmail(email) {
   return `${local.slice(0, local.length > 2 ? 2 : 1)}***${value.slice(at)}`;
 }
 
-// #663：告訴會友「現在」是用什麼登入，他才知道要換成另一種。
+// #682：遮罩後網域不變，可以判斷。Gmail 按 Google 會由 Logto 連回同一個帳號，提示才能直接建議。
+export function isGmailAccount(masked) {
+  return /@gmail\.com$/i.test(String(masked || ""));
+}
+
+// #663：告訴會友「現在」是哪個帳號，他才知道要換成另一個。
 // 帳號只有手機或只有 Email 才說得準；兩者都有（或都沒有）就不猜。
+// #682：method 只代表帳號有什麼資料，不是實際的登入方式（可能是 Google、LINE），不要顯示成「用 Email 登入」。
 export function currentLoginMethod(user) {
   const phone = maskPhone(user && user.phone);
   const email = maskEmail(user && user.email);
@@ -90,18 +96,38 @@ export function currentLoginMethod(user) {
   return { method: "", masked: "" };
 }
 
-export function accountSwitchHintMarkup(currentUser) {
+// #664：裝置記得上次是哪個帳號：改成驗證當時的方式就能找回。文案不提帳號、合併。
+function recoverPlanMarkup(offer, copy) {
+  const template = isGmailAccount(offer.masked)
+    ? (copy.recoverBodyGmail || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分（有設密碼也可以輸入密碼），就能把它們找回來，之後用之前或現在的方式登入都看得到。")
+    : (copy.recoverBody || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。");
+  const body = template
+    .replace("{account}", () => `<span class="account-switch-hint__account">${escapeText(offer.masked)}</span>`);
+  const cta = copy.recoverCta || "確認身分，找回我的計畫";
+  return `
+    <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">
+      <h3 class="account-switch-hint__title" id="account-switch-hint-title">
+        <span class="nlc-icon nlc-icon--sm" data-icon="info" aria-hidden="true"></span>
+        <span>${copy.title || "找不到你的讀經計畫嗎？"}</span>
+      </h3>
+      <p class="account-switch-hint__body">${body}</p>
+      <p class="account-switch-hint__status hidden" data-account-recover-status role="status"></p>
+      <div class="account-switch-hint__actions">
+        <button type="button" class="primary-btn account-switch-hint__switch" data-account-recover-plan>${cta}</button>
+        <button type="button" class="secondary-btn" data-account-switch-dismiss>${copy.recoverDismissCta || "不是我／我是第一次參加"}</button>
+      </div>
+    </section>
+  `;
+}
+
+export function accountSwitchHintMarkup(currentUser, recoveryOffer = null) {
   const copy = (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.accountSwitchHint) || {};
+  if (recoveryOffer) return recoverPlanMarkup(recoveryOffer, copy);
   const { method, masked } = currentLoginMethod(currentUser);
   const account = `<span class="account-switch-hint__account">${escapeText(masked)}</span>`;
-  let body;
-  if (method === "phone") {
-    body = (copy.bodyPhone || "你現在是用手機 {account} 登入的。如果你以前參加時是用 Email 或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account);
-  } else if (method === "email") {
-    body = (copy.bodyEmail || "你現在是用 Email {account} 登入的。如果你以前參加時是用手機號碼或其他方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account);
-  } else {
-    body = copy.bodyUnknown || "如果你以前參加時是用另一種方式（Email 或手機號碼）登入，計畫會在那裡，請登出後改用那個方式登入。";
-  }
+  const body = method
+    ? (copy.bodyKnown || "你現在是用 {account} 登入的。如果你以前參加時是用別的方式登入，計畫會在那裡，請登出後改用那個方式登入。").replace("{account}", () => account)
+    : (copy.bodyUnknown || "如果你以前參加時是用另一種方式（Email 或手機號碼）登入，計畫會在那裡，請登出後改用那個方式登入。");
   return `
     <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">
       <h3 class="account-switch-hint__title" id="account-switch-hint-title">
@@ -120,7 +146,7 @@ export function accountSwitchHintMarkup(currentUser) {
   `;
 }
 
-export function bindAccountSwitchHint(container, { profileId, onSwitch } = {}) {
+export function bindAccountSwitchHint(container, { profileId, onSwitch, onRecover } = {}) {
   const card = container && container.querySelector("[data-account-switch-hint]");
   if (!card) return;
   if (typeof window !== "undefined" && typeof window.hydrateIcons === "function") window.hydrateIcons(card);
@@ -129,6 +155,23 @@ export function bindAccountSwitchHint(container, { profileId, onSwitch } = {}) {
     switchBtn.onclick = () => {
       switchBtn.disabled = true;
       if (typeof onSwitch === "function") onSwitch();
+    };
+  }
+  const recoverBtn = card.querySelector("[data-account-recover-plan]");
+  if (recoverBtn) {
+    const statusEl = card.querySelector("[data-account-recover-status]");
+    recoverBtn.onclick = async () => {
+      recoverBtn.disabled = true;
+      statusEl.classList.add("hidden");
+      // 從 Logto 按返回、瀏覽器直接還原這一頁（bfcache）：頁面不會重新跑，按鈕要自己恢復
+      window.addEventListener("pageshow", event => {
+        if (event.persisted) recoverBtn.disabled = false;
+      }, { once: true });
+      const result = typeof onRecover === "function" ? await onRecover() : null;
+      if (result && result.ok) return; // 正在跳轉
+      recoverBtn.disabled = false;
+      statusEl.textContent = (result && result.message) || "";
+      statusEl.classList.toggle("hidden", !statusEl.textContent);
     };
   }
   const dismissBtn = card.querySelector("[data-account-switch-dismiss]");

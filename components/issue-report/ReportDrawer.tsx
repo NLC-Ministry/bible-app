@@ -1,9 +1,7 @@
 // components/issue-report/ReportDrawer.tsx
 import React from "react";
 import { Loader2, CheckCircle, AlertCircle, X, ChevronLeft, ImagePlus, Send, Shield } from "lucide-react";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, type FieldErrors, type Resolver } from "react-hook-form";
 import {
   ReportPipeline,
   ThreadPipeline,
@@ -18,17 +16,38 @@ import {
 import { Textarea } from "../ui/textarea.tsx";
 import { AdminThreadPane, AdminMiniList } from "./AdminReportView.tsx";
 
-export const reportSchema = z.object({
-  category: z.enum(["bug", "ui", "data", "other"], {
-    error: () => "請選擇有效的問題分類"
-  }),
-  description: z.string()
-    .trim()
-    .min(1, "請填寫問題描述")
-    .max(500, "問題描述最多限制 500 字")
-});
+const REPORT_CATEGORIES = ["bug", "ui", "data", "other"] as const;
 
-type ReportFormValues = z.infer<typeof reportSchema>;
+interface ReportFormValues {
+  category: (typeof REPORT_CATEGORIES)[number];
+  description: string;
+}
+
+// 只驗證＋去掉頭尾空白；消毒留給提交管線（ValidateReportBlock）統一做一次。
+export function validateReport(input: { category?: unknown; description?: unknown }): {
+  values: ReportFormValues;
+  errors: { category?: string; description?: string };
+} {
+  const category = input.category as ReportFormValues["category"];
+  const description = typeof input.description === "string" ? input.description.trim() : "";
+  const errors: { category?: string; description?: string } = {};
+
+  if (!REPORT_CATEGORIES.includes(category)) errors.category = "請選擇有效的問題分類";
+  if (description.length < 1) errors.description = "請填寫問題描述";
+  else if (description.length > 500) errors.description = "問題描述最多限制 500 字";
+
+  return { values: { category, description }, errors };
+}
+
+export const reportFormResolver: Resolver<ReportFormValues> = (input) => {
+  const { values, errors } = validateReport(input);
+  const fieldErrors: FieldErrors<ReportFormValues> = {};
+  if (errors.category) fieldErrors.category = { type: "validate", message: errors.category };
+  if (errors.description) fieldErrors.description = { type: "validate", message: errors.description };
+  return Object.keys(fieldErrors).length > 0
+    ? { values: {}, errors: fieldErrors }
+    : { values, errors: {} };
+};
 
 export function descriptionCounterClassName(length: number): string {
   return length > 500 ? "text-xs text-destructive" : "text-xs text-muted-foreground";
@@ -185,7 +204,7 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({
     formState: { errors },
     reset
   } = useForm<ReportFormValues>({
-    resolver: zodResolver(reportSchema),
+    resolver: reportFormResolver,
     defaultValues: {
       category: "bug",
       description: ""
@@ -519,13 +538,15 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({
 export const CATEGORY_LABEL: Record<string, string> = {
   bug: "Bug 錯誤", ui: "UI 建議", data: "資料問題", other: "其他"
 };
+// 會友看到的狀態；管理者看到的另有一套（lib/issue-report/report-status.ts）
 export const STATUS_LABEL: Record<string, string> = {
-  pending: "待處理", processing: "處理中", resolved: "已解決", ignored: "已存檔"
+  pending: "待處理", waiting_member: "等你回覆", processing: "處理中", resolved: "已解決", ignored: "已結案"
 };
 // 一律用設計系統的 .stat-badge token（隨 light/dark/warm 主題切換、對比達標）。
 // 不要在這裡塞 rgba/hex —— 深色主題下會看不清。
 const STATUS_BADGE_VARIANT: Record<string, string> = {
   pending: "stat-badge--warning",
+  waiting_member: "stat-badge--warning",
   processing: "stat-badge--brand",
   resolved: "stat-badge--success",
   ignored: "stat-badge--neutral"

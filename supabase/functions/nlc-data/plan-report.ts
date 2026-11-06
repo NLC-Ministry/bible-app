@@ -24,10 +24,11 @@ export type PlanReportDeps = {
 };
 export type PlanReportResult = { status: number; body: Record<string, unknown>; planId?: string; people?: number };
 
+// loadVisibleIds 是函式：參數檢查過了才查，檢查不過就不必多一趟（#674）。
 export async function runPlanReport(
   action: string,
   rawArgs: any,
-  visibleIds: string[] | null,
+  loadVisibleIds: () => Promise<string[] | null>,
   actorId: string,
   deps: PlanReportDeps
 ): Promise<PlanReportResult> {
@@ -40,7 +41,8 @@ export async function runPlanReport(
     scope = parsed.scope;
   }
 
-  const plan = await deps.fetchPlanRow(planId);
+  // 範圍和計畫列互不依賴，一起查（#674）。用 Promise.all 才不會有一邊失敗、另一邊沒人接的 rejection。
+  const [plan, visibleIds] = await Promise.all([deps.fetchPlanRow(planId), loadVisibleIds()]);
   if (plan.error) return { status: 400, body: { error: plan.error.message || "plan_lookup_failed", code: plan.error.code } };
   if (!plan.data) return { status: 404, body: { error: "plan_not_found" } };
   const resolved = resolvePlanForReport(plan.data);

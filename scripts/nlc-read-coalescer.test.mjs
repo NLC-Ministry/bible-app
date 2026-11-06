@@ -90,15 +90,72 @@ describe("createReadCoalescer", () => {
     expect(await b).toEqual({ data: "one:exam_home_banner", error: null });
     expect(sendOne).toHaveBeenCalledTimes(1);
 
-    // 之後的 RPC 不再放進 batch（每次都被退、多繞一趟），select 照樣合併
-    const c = coalescer.send(rpc("exam_home_exams"));
-    expect(await c).toEqual({ data: "one:exam_home_exams", error: null });
+    // 這支之後不再放進 batch（每次都被退、多繞一趟），select 照樣合併
+    coalescer.invalidate();
+    const c = coalescer.send(rpc("exam_home_banner"));
+    expect(await c).toEqual({ data: "one:exam_home_banner", error: null });
     const d = coalescer.send(select("church_announcements"));
     const e = coalescer.send(select("app_feature_settings"));
     flush();
     // 這個假伺服器每批都退第二格，所以第二格的 select 也單支補送
     expect(await Promise.all([d, e])).toEqual([{ data: "batched", error: null }, { data: "one:app_feature_settings", error: null }]);
     expect(sendOne).toHaveBeenCalledTimes(3);
+    expect(sendBatch).toHaveBeenCalledTimes(2);
+  });
+
+  it("only the refused RPC goes single; the others keep batching (#672)", async () => {
+    const { coalescer, sendOne, sendBatch, flush } = setup({
+      batch: async (queries) => ({
+        data: queries.map(q => q.function === "get_my_reading_team" ? { error: "batch_read_only" } : { data: `batch:${q.function}` }),
+        error: null
+      })
+    });
+    const first = [coalescer.send(rpc("get_my_reading_team")), coalescer.send(rpc("exam_home_exams"))];
+    flush();
+    expect(await Promise.all(first)).toEqual([
+      { data: "one:get_my_reading_team", error: null },
+      { data: "batch:exam_home_exams", error: null }
+    ]);
+    coalescer.invalidate();
+
+    const refused = coalescer.send(rpc("get_my_reading_team"));
+    expect(await refused).toEqual({ data: "one:get_my_reading_team", error: null });
+    const next = [coalescer.send(rpc("exam_home_exams")), coalescer.send(rpc("exam_home_banner"))];
+    flush();
+    await Promise.all(next);
+    expect(sendBatch).toHaveBeenCalledTimes(2);
+    expect(sendOne).toHaveBeenCalledTimes(2);
+  });
+
+  it("tries the batch again after a while: the client outlives a deploy of nlc-data (#672)", async () => {
+    let at = 1000;
+    let deployed = false;
+    const { coalescer, sendBatch, flush } = setup({
+      now: () => at,
+      unsupportedRetryMs: 60000,
+      batch: async (queries) => deployed
+        ? { data: queries.map(q => ({ data: `batch:${q.function}` })), error: null }
+        : { data: queries.map(() => ({ error: "batch_read_only" })), error: null }
+    });
+    const reads = () => [rpc("get_my_reading_team"), rpc("get_pastoral_zone_leaderboard")].map(request => coalescer.send(request));
+    let results = reads();
+    flush();
+    await Promise.all(results);
+    expect(sendBatch).toHaveBeenCalledTimes(1);
+
+    deployed = true;
+    coalescer.invalidate();
+    await Promise.all(reads());
+    expect(sendBatch).toHaveBeenCalledTimes(1);
+
+    at += 60000;
+    coalescer.invalidate();
+    results = reads();
+    flush();
+    expect(await Promise.all(results)).toEqual([
+      { data: "batch:get_my_reading_team", error: null },
+      { data: "batch:get_pastoral_zone_leaderboard", error: null }
+    ]);
     expect(sendBatch).toHaveBeenCalledTimes(2);
   });
 

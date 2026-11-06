@@ -10,7 +10,7 @@
 export type AdminAction =
   | "bootstrap" | "home_summary" | "user_search" | "user_summary" | "user_section" | "user_timeline" | "reveal_pii"
   // 回報收件匣（#550）
-  | "report_list" | "report_thread" | "report_diagnostics" | "report_set_status" | "report_post"
+  | "report_list" | "report_thread" | "report_diagnostics" | "report_set_status" | "report_close" | "report_post"
   | "report_attachment_delete" | "report_delete" | "report_export"
   // 帳號與權限（#550）
   | "directory_list" | "directory_export" | "scope_overview" | "scope_set" | "org_export"
@@ -232,6 +232,9 @@ export function describeAdminError(err: unknown): string {
     case "quiz_image_too_large": return "圖片太大（最多 700 KB），請換一張小一點的。";
     case "quiz_image_invalid": return "這張圖片無法處理，請換一張。";
     case "invalid_status": return "不正確的處理狀態。";
+    case "close_requires_reason": return "結案要選原因並傳訊息給會友，請用「結案」按鈕。";
+    case "invalid_close_reason": return "請選擇結案原因。";
+    case "already_closed": return "這則回報已經結案了，請重新整理。";
     case "invalid_org_filter": return "大區／牧區／小組的篩選條件不正確，請清除篩選再試。";
     case "invalid_plan_id":
     case "invalid_plan_filter": return "計畫的篩選條件不正確，請清除篩選再試。";

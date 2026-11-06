@@ -19,7 +19,7 @@ const daysAgo = days => new Date(NOW - days * DAY).toISOString();
 
 const PHONE_ACCOUNT = { phone: "886912345678", email: "" };
 const EMAIL_ACCOUNT = { phone: "", email: "abcdef@gmail.com" };
-const GENERIC_HINT = "請用跟上次相同的方式（手機或 Email）登入，才看得到你的計畫。";
+const GENERIC_HINT = "請用跟上次相同的方式（手機、Email、Google 或 LINE）登入，才看得到你的計畫。";
 
 function memoryStorage(entries = {}) {
   const store = new Map(Object.entries(entries));
@@ -110,7 +110,7 @@ describe("readLastLoginMethod", () => {
     const storage = memoryStorage({
       [OFFLINE_IDENTITY_KEY]: snapshot({ ...PHONE_ACCOUNT, created_at: daysAgo(200) }, 90)
     });
-    expect(readLastLoginMethod({ storage, now: NOW })).toEqual({ method: "phone", masked: "0912-***-678" });
+    expect(readLastLoginMethod({ storage, now: NOW })).toEqual({ method: "phone", masked: "0912-***-678", profileId: "p1" });
     expect(JSON.parse(storage.store.get(LAST_LOGIN_METHOD_KEY)).method).toBe("phone");
   });
 
@@ -139,11 +139,36 @@ describe("readLastLoginMethod", () => {
 });
 
 describe("loginMethodHintText", () => {
-  it("names the method and masked account when known", () => {
-    expect(loginMethodHintText({ method: "phone", masked: "0912-***-678" }))
-      .toBe("上次在這台裝置是用手機 0912-***-678 登入，請用同一個方式才看得到你的計畫。");
+  // #682：紀錄只知道帳號有手機還是 Email，分不出密碼、Google、LINE，所以不斷定登入方式。
+  it("a Gmail account is told to press Google first (Logto links the same address to this account)", () => {
     expect(loginMethodHintText({ method: "email", masked: "ab***@gmail.com" }))
-      .toBe("上次在這台裝置是用 Email ab***@gmail.com 登入，請用同一個方式才看得到你的計畫。");
+      .toBe("上次在這台裝置登入的帳號是 ab***@gmail.com。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。");
+    expect(loginMethodHintText({ method: "email", masked: "ab***@GMail.com" })).toContain("請按 Google 登入");
+  });
+
+  it("another Email address lists every way, without claiming which one they used", () => {
+    expect(loginMethodHintText({ method: "email", masked: "ab***@church.org" }))
+      .toBe("上次在這台裝置登入的帳號是 ab***@church.org。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。");
+    expect(loginMethodHintText({ method: "email", masked: "ab***@notgmail.com" })).not.toContain("請按 Google 登入");
+  });
+
+  it("a phone account lists every way, without claiming which one they used", () => {
+    expect(loginMethodHintText({ method: "phone", masked: "0912-***-678" }))
+      .toBe("上次在這台裝置登入的帳號是 0912-***-678。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。");
+  });
+
+  it("zh-Hant has the same lines as the defaults here", () => {
+    const copy = readFileSync("js/copy/zh-Hant.js", "utf8");
+    const source = readFileSync("js/login-method-memory.mjs", "utf8");
+    for (const line of [
+      "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。",
+      "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。",
+      "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。",
+      GENERIC_HINT
+    ]) {
+      expect(copy).toContain(line);
+      expect(source).toContain(line);
+    }
   });
 
   it("falls back to the generic line with no record or an unknown method", () => {
@@ -200,7 +225,7 @@ describe("db records the method after the plan list loads", () => {
 
   it("an old account is recorded once the plan list arrives", async () => {
     await load(ok([]));
-    expect(JSON.parse(stored())).toEqual({ method: "phone", masked: "0912-***-678" });
+    expect(JSON.parse(stored())).toEqual({ method: "phone", masked: "0912-***-678", profileId: "profile-a" });
   });
 
   it("a new empty account is not recorded", async () => {
