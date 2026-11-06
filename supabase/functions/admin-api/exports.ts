@@ -54,10 +54,11 @@ export const REPORT_CATEGORY_LABEL: Readonly<Record<string, string>> = {
 };
 
 export const REPORT_STATUS_LABEL: Readonly<Record<string, string>> = {
-  pending: "待處理",
-  processing: "處理中",
-  resolved: "已解決",
-  ignored: "已存檔"
+  pending: "待回覆",
+  waiting_member: "等會友",
+  processing: "等開發",
+  resolved: "已結案・已解決",
+  ignored: "已結案・已存檔"
 };
 
 export type ReportExportRow = {

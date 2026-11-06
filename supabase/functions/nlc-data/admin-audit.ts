@@ -50,6 +50,7 @@ export const AUDITED_ADMIN_RPCS = new Set([
   "admin_set_lightning_quiz_answer_key",
   // 回報、注釋審核
   "issue_admin_set_status",
+  "issue_admin_close",
   "set_commentary_reviewers",
   "resubmit_commentary",
   "publish_approved_commentary"

@@ -4406,3 +4406,319 @@ describe("計畫統計名冊彙總和舊算法逐人一致（get_plan_stats_rost
     expect(measured.after.bytes).toBeLessThan(measured.before.bytes / 10);
   }, 240_000);
 });
+
+describe("回報狀態與結案流程（#683）", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const daysAgo = n => new Date(Date.now() - n * DAY).toISOString();
+
+  // 先用 superuser 種資料，再切回 service_role（admin-api、排程實際用的角色）
+  const seeded = fn => asService(async tx => {
+    await tx.exec("RESET ROLE");
+    const beService = () => tx.exec("SET LOCAL ROLE service_role");
+    return fn(tx, beService);
+  });
+
+  const addReport = async (tx, { status = "pending", createdAt = daysAgo(1), lastMessageAt = null, closedAt = null, closeReason = null } = {}) => {
+    const { rows: [row] } = await tx.query(
+      `INSERT INTO public.issue_reports (user_id, category, description, status, created_at, last_message_at, closed_at, close_reason)
+       VALUES ($1, 'bug', '測試回報', $2, $3::timestamptz, $4::timestamptz, $5::timestamptz, $6) RETURNING id`,
+      [ids.member, status, createdAt, lastMessageAt, closedAt, closeReason]
+    );
+    return row.id;
+  };
+  const addMessage = async (tx, reportId, { role = "member", body = "訊息", internal = false, attachment = null, createdAt = null } = {}) => {
+    const { rows: [row] } = await tx.query(
+      `INSERT INTO public.issue_report_messages (report_id, author_role, author_id, body, is_internal_note, attachment_path, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::timestamptz, now())) RETURNING id`,
+      [reportId, role, role === "admin" ? ids.admin : ids.member, body, internal, attachment, createdAt]
+    );
+    return row.id;
+  };
+  const report = async (tx, id) => (await tx.query(
+    `SELECT status, closed_at, close_reason, last_message_at FROM public.issue_reports WHERE id = $1`, [id]
+  )).rows[0];
+  const messages = async (tx, id) => (await tx.query(
+    `SELECT author_role, author_id, body, is_internal_note FROM public.issue_report_messages WHERE report_id = $1 ORDER BY created_at, id`, [id]
+  )).rows;
+  const post = async (tx, id, { body = "回覆", internal = false, attachment = false } = {}) => (await tx.query(
+    `SELECT public.admin_api_report_post($1, 'admin', $2, $3, $4, $5, 'req-683') AS result`,
+    [ids.admin, id, body, internal, attachment]
+  )).rows[0].result;
+  const close = async (tx, id, reason, body) => (await tx.query(
+    `SELECT public.admin_api_report_close($1, 'admin', $2, $3, $4, 'req-683') AS result`,
+    [ids.admin, id, reason, body]
+  )).rows[0].result;
+  const setStatus = async (tx, id, status) => (await tx.query(
+    `SELECT public.admin_api_report_set_status($1, 'admin', $2, $3, 'req-683') AS result`,
+    [ids.admin, id, status]
+  )).rows[0].result;
+  const list = async (tx, status, cursor = {}, limit = 30) => (await tx.query(
+    `SELECT public.admin_api_report_list($1, FALSE, $2::timestamptz, $3::uuid, $4) AS result`,
+    [status, cursor.at ?? null, cursor.id ?? null, limit]
+  )).rows[0].result;
+
+  describe("自動轉換", () => {
+    it("管理者公開回覆後變成等會友；內部備註不變", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        await beService();
+        await post(tx, id, { internal: true });
+        expect((await report(tx, id)).status).toBe("pending");
+        await post(tx, id);
+        expect((await report(tx, id)).status).toBe("waiting_member");
+      });
+    });
+
+    it("附截圖的回覆要上傳成功才轉換；上傳失敗清掉佔位列後仍是待回覆", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        await beService();
+        const failed = await post(tx, id, { body: "", attachment: true });
+        expect((await report(tx, id)).status).toBe("pending");
+        await tx.query(`SELECT public.admin_api_report_drop_attachment($1, 'admin', $2, FALSE, NULL)`, [ids.admin, failed.id]);
+        expect((await report(tx, id)).status).toBe("pending");
+
+        const uploaded = await post(tx, id, { body: "", attachment: true });
+        await tx.query(
+          `SELECT public.admin_api_report_set_attachment($1, $2, 'image/webp', 100, 10, 10)`,
+          [uploaded.id, `${id}/${uploaded.id}.webp`]
+        );
+        expect((await report(tx, id)).status).toBe("waiting_member");
+      });
+    });
+
+    it("會友在等會友或已結案的回報留言會回到待回覆，並清掉結案資訊", async () => {
+      await seeded(async tx => {
+        const waiting = await addReport(tx, { status: "waiting_member" });
+        await addMessage(tx, waiting);
+        expect((await report(tx, waiting)).status).toBe("pending");
+
+        const closed = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        await addMessage(tx, closed);
+        expect(await report(tx, closed)).toMatchObject({ status: "pending", closed_at: null, close_reason: null });
+      });
+    });
+
+    it("等開發不因任何一方留言改變；管理者回覆已結案的回報也不會打開", async () => {
+      await seeded(async (tx, beService) => {
+        const dev = await addReport(tx, { status: "processing" });
+        await addMessage(tx, dev);
+        await addMessage(tx, dev, { role: "admin" });
+        expect((await report(tx, dev)).status).toBe("processing");
+
+        const closed = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        await beService();
+        await post(tx, closed);
+        expect((await report(tx, closed)).status).toBe("resolved");
+      });
+    });
+  });
+
+  describe("結案", () => {
+    it("依原因決定狀態，並在同一個交易留下給會友的訊息與稽核", async () => {
+      await seeded(async (tx, beService) => {
+        const fixed = await addReport(tx);
+        const noted = await addReport(tx);
+        await beService();
+        const result = await close(tx, fixed, "fixed", "已修好");
+        expect(result).toMatchObject({ id: fixed, status: "resolved", close_reason: "fixed" });
+        expect(result.closed_at).toBeTruthy();
+        expect(await messages(tx, fixed)).toEqual([
+          { author_role: "admin", author_id: ids.admin, body: "已修好", is_internal_note: false }
+        ]);
+        expect((await close(tx, noted, "suggestion_noted", "已記錄")).status).toBe("ignored");
+
+        await tx.exec("RESET ROLE");
+        const { rows: [audit] } = await tx.query(
+          `SELECT changes, target_id FROM audit.admin_events WHERE action = 'report.close' AND target_id = $1`, [fixed]
+        );
+        expect(audit.changes).toMatchObject({
+          status: { before: "pending", after: "resolved" },
+          close_reason: { before: null, after: "fixed" }
+        });
+      });
+    });
+
+    it("沒有原因、沒有訊息、重複結案都會被擋下，資料不變", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        const done = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        await beService();
+        for (const [target, reason, body, code] of [
+          [id, null, "訊息", "invalid_close_reason"],
+          [id, "no_response", "訊息", "invalid_close_reason"],
+          [id, "fixed", "   ", "empty_message"],
+          [id, "fixed", "字".repeat(501), "body_too_long"],
+          [done, "fixed", "訊息", "already_closed"]
+        ]) {
+          await tx.exec("SAVEPOINT attempt");
+          await expect(close(tx, target, reason, body), code).rejects.toThrow(code);
+          await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        }
+        expect((await report(tx, id)).status).toBe("pending");
+        expect(await messages(tx, id)).toEqual([]);
+        expect(await close(tx, "99999999-9999-4999-8999-999999999999", "fixed", "訊息")).toBeNull();
+      });
+    });
+
+    it("不能只改狀態就結案；重新打開會清掉結案資訊", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        const closed = await addReport(tx, { status: "ignored", closedAt: daysAgo(1), closeReason: "other" });
+        await beService();
+        for (const status of ["resolved", "ignored"]) {
+          await tx.exec("SAVEPOINT attempt");
+          await expect(setStatus(tx, id, status)).rejects.toThrow("close_requires_reason");
+          await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        }
+        expect((await setStatus(tx, id, "processing")).status).toBe("processing");
+        expect((await setStatus(tx, id, "waiting_member")).status).toBe("waiting_member");
+        expect((await setStatus(tx, closed, "pending")).status).toBe("pending");
+        expect(await report(tx, closed)).toMatchObject({ status: "pending", closed_at: null, close_reason: null });
+      });
+    });
+
+    it("App 泡泡走的 issue_admin_close 規則相同，只有管理員能用", async () => {
+      await seeded(async (tx, beService) => {
+        const id = await addReport(tx);
+        await beService();
+        const legacyClose = (actor, reason, body) => tx.query(
+          `SELECT public.issue_admin_close($1, $2, $3, $4) AS result`, [id, reason, body, actor]
+        );
+        await tx.exec("SAVEPOINT attempt");
+        await expect(legacyClose(ids.member, "fixed", "訊息")).rejects.toThrow("forbidden");
+        await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        await expect(legacyClose(ids.admin, null, "訊息")).rejects.toThrow("invalid_close_reason");
+        await tx.exec("ROLLBACK TO SAVEPOINT attempt");
+        const { rows: [{ result }] } = await legacyClose(ids.admin, "answered", "已回答");
+        expect(result).toMatchObject({ status: "resolved", close_reason: "answered" });
+        await tx.exec("SAVEPOINT attempt");
+        await expect(tx.query(`SELECT public.issue_admin_set_status($1, 'ignored', $2)`, [id, ids.admin])).rejects.toThrow("close_requires_reason");
+      });
+    });
+
+    it("新函式 anon、authenticated 都不能直接執行", async () => {
+      const { rows: [row] } = await db.query(`
+        SELECT bool_or(has_function_privilege('anon', p.oid, 'EXECUTE')) AS anon,
+               bool_or(has_function_privilege('authenticated', p.oid, 'EXECUTE')) AS authenticated
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public' AND p.proname IN (
+          '_issue_close_report', 'admin_api_report_close', 'issue_admin_close', 'issue_report_digest_counts',
+          'invoke_issue_report_digest', 'issue_threads_autoclose', '_issue_touch_report_on_message', 'issue_admin_set_status')`);
+      expect(row).toEqual({ anon: false, authenticated: false });
+    });
+  });
+
+  describe("自動結案", () => {
+    it("只結案超過 14 天的等會友，並留下訊息；會友回覆就重新打開", async () => {
+      await seeded(async (tx, beService) => {
+        const stale = await addReport(tx, { status: "waiting_member", createdAt: daysAgo(30), lastMessageAt: daysAgo(15) });
+        const fresh = await addReport(tx, { status: "waiting_member", createdAt: daysAgo(30), lastMessageAt: daysAgo(13) });
+        const dev = await addReport(tx, { status: "processing", createdAt: daysAgo(30), lastMessageAt: daysAgo(15) });
+        const todo = await addReport(tx, { status: "pending", createdAt: daysAgo(30), lastMessageAt: daysAgo(15) });
+        await beService();
+        const { rows: [{ closed }] } = await tx.query(`SELECT public.issue_threads_autoclose() AS closed`);
+        expect(closed).toBe(1);
+
+        const closedRow = await report(tx, stale);
+        expect(closedRow).toMatchObject({ status: "ignored", close_reason: "no_response" });
+        expect(closedRow.closed_at).toBeTruthy();
+        const [notice] = await messages(tx, stale);
+        expect(notice).toMatchObject({ author_role: "admin", author_id: null, is_internal_note: false });
+        expect(notice.body).toContain("超過 14 天");
+        expect((await report(tx, fresh)).status).toBe("waiting_member");
+        expect((await report(tx, dev)).status).toBe("processing");
+        expect((await report(tx, todo)).status).toBe("pending");
+
+        await tx.exec("RESET ROLE");
+        await addMessage(tx, stale);
+        expect(await report(tx, stale)).toMatchObject({ status: "pending", closed_at: null, close_reason: null });
+      });
+    });
+  });
+
+  describe("收件匣與數字", () => {
+    it("待回覆從等最久的排起，翻頁不漏不重複", async () => {
+      await seeded(async (tx, beService) => {
+        const created = [];
+        for (const days of [3, 9, 6, 12, 1]) created.push({ id: await addReport(tx, { createdAt: daysAgo(days) }), days });
+        await beService();
+        const seen = [];
+        let cursor = {};
+        for (let i = 0; i < 10; i++) {
+          const page = await list(tx, "pending", cursor, 2);
+          seen.push(...page.items.map(item => item.id));
+          if (!page.next_cursor) break;
+          cursor = page.next_cursor;
+        }
+        expect(seen).toEqual([...created].sort((a, b) => b.days - a.days).map(item => item.id));
+      });
+    });
+
+    it("等開發也由舊到新；全部維持由新到舊", async () => {
+      await seeded(async (tx, beService) => {
+        const oldDev = await addReport(tx, { status: "processing", createdAt: daysAgo(9) });
+        const newDev = await addReport(tx, { status: "processing", createdAt: daysAgo(2) });
+        await beService();
+        expect((await list(tx, "processing")).items.map(item => item.id)).toEqual([oldDev, newDev]);
+        const all = (await list(tx, null)).items.map(item => item.id);
+        expect(all.indexOf(newDev)).toBeLessThan(all.indexOf(oldDev));
+      });
+    });
+
+    it("已結案篩選含兩種狀態與原因；筆數分開算；舊的 open 仍可用", async () => {
+      await seeded(async (tx, beService) => {
+        await addReport(tx);
+        const waiting = await addReport(tx, { status: "waiting_member" });
+        const resolved = await addReport(tx, { status: "resolved", closedAt: daysAgo(1), closeReason: "fixed" });
+        const ignored = await addReport(tx, { status: "ignored", closedAt: daysAgo(1), closeReason: "other" });
+        await beService();
+        const closedPage = await list(tx, "closed");
+        expect(closedPage.items.map(item => item.id).sort()).toEqual([resolved, ignored].sort());
+        expect(closedPage.items.find(item => item.id === resolved).close_reason).toBe("fixed");
+        expect(closedPage.counts).toMatchObject({ all: 4, open: 2, pending: 1, waiting_member: 1, processing: 0, closed: 2, resolved: 1, ignored: 1 });
+        expect((await list(tx, "open")).items.map(item => item.id)).toContain(waiting);
+        const { rows: [{ result }] } = await tx.query(
+          `SELECT public.admin_api_report_export($1, 'admin', 'closed', 'req-683') AS result`, [ids.admin]
+        );
+        expect(result.total).toBe(2);
+      });
+    });
+
+    it("首頁只算待回覆，等待時間看最後一則公開訊息", async () => {
+      await seeded(async (tx, beService) => {
+        const oldestAt = daysAgo(5);
+        await addReport(tx, { createdAt: daysAgo(20), lastMessageAt: oldestAt });
+        await addReport(tx, { createdAt: daysAgo(2) });
+        await addReport(tx, { status: "waiting_member", createdAt: daysAgo(40) });
+        await addReport(tx, { status: "processing", createdAt: daysAgo(30) });
+        await beService();
+        const { rows: [{ result }] } = await tx.query(
+          `SELECT public.admin_api_home_counts($1, NULL) AS result`, [ids.admin]
+        );
+        expect(result.reports).toMatchObject({ pending: 2, processing: 1, unread: 0 });
+        expect(Date.parse(result.reports.oldest_pending_at)).toBe(Date.parse(oldestAt));
+      });
+    });
+
+    it("每日摘要的數字：新回報、待回覆、最久、有新訊息、等開發", async () => {
+      await seeded(async (tx, beService) => {
+        const oldestAt = daysAgo(8);
+        await addReport(tx, { createdAt: daysAgo(30), lastMessageAt: oldestAt });
+        const fresh = await addReport(tx, { createdAt: new Date(Date.now() - 3600_000).toISOString() });
+        await addReport(tx, { status: "processing", createdAt: daysAgo(10) });
+        await addMessage(tx, fresh);
+        await beService();
+        const { rows: [{ result }] } = await tx.query(`SELECT public.issue_report_digest_counts() AS result`);
+        expect(result).toMatchObject({ new_24h: 1, pending: 2, processing: 1, unread: 1 });
+        expect(Date.parse(result.oldest_pending_at)).toBe(Date.parse(oldestAt));
+        expect(JSON.stringify(result)).not.toContain("測試");
+      });
+    });
+
+    it("每日摘要排在台北時間 08:00", async () => {
+      const { rows: [job] } = await db.query(`SELECT schedule, command FROM cron.job WHERE jobname = 'issue-report-daily-digest'`);
+      expect(job).toEqual({ schedule: "0 0 * * *", command: "SELECT public.invoke_issue_report_digest();" });
+    });
+  });
+});

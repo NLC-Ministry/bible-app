@@ -346,6 +346,27 @@ select vault.create_secret(
 );
 ```
 
+## 回報每日摘要（`issue-report-maintenance`，#683）
+
+每天台北時間 08:00，排程 `issue-report-daily-digest` 呼叫 `issue-report-maintenance`（body `{"digest":true}`）。有待回覆或新訊息才寄信給維護者；信裡只有數字和後台連結，沒有會友姓名或回報內容。寄信由 Google Apps Script 做，收件地址和密鑰只放在 Apps Script，不進 repo。
+
+沒設下面的 secrets 就只是不寄信（回 `digest: "not_configured"`），排程照跑。
+
+### 設定（只有正式站需要，要維護者在自己的 Google 帳號操作）
+
+1. 自己產生一組隨機字串當共用密鑰。
+2. 到 https://script.google.com 新增專案，貼上 `issue-report-maintenance/digest-apps-script.gs.txt`，填入 `SHARED_SECRET` 和 `RECIPIENT`。
+3. 部署 → 新增部署作業 → 網頁應用程式：執行身分選「我」，存取權選「任何人」。第一次要授權寄信。複製網址。
+4. 設定 secrets（寫入託管專案，要維護者同意）：
+   ```bash
+   node scripts/supabase-env.mjs production secrets set ISSUE_REPORT_DIGEST_WEBHOOK_URL=<網址> ISSUE_REPORT_DIGEST_WEBHOOK_SECRET=<共用密鑰>
+   ```
+   `ISSUE_REPORT_DIGEST_ADMIN_URL` 選填，是信裡的後台連結，預設正式站後台的回報收件匣。
+
+### 確認有在寄
+
+沒事不寄信，所以「沒收到信」不一定是壞了。寄信失敗時函式回 502（`digest_send_failed`），查 `net._http_response` 或 Edge Function 紀錄。手動試一次：`SELECT public.invoke_issue_report_digest();`。
+
 ## issue-report-sheet-sync
 
 Mirrors every new `public.issue_reports` row to an engineering-team Google

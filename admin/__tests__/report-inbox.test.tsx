@@ -16,7 +16,7 @@ const R2 = "21111111-2222-4333-8444-555555555555";
 const MEMBER = "6f1c2d3e-4a5b-4c6d-8e7f-0123456789ab";
 
 const reporter = { id: MEMBER, name: "王小明", great_region: "北區", pastoral_zone: "一牧區", small_group: "喜樂小組" };
-const COUNTS = { all: 9, open: 2, pending: 1, processing: 1, resolved: 5, ignored: 2, unread: 1 };
+const COUNTS = { all: 9, open: 3, pending: 1, waiting_member: 1, processing: 1, closed: 6, resolved: 4, ignored: 2, unread: 1 };
 
 function row(id: string, extra: Record<string, unknown> = {}) {
   return {
@@ -61,7 +61,9 @@ function makeRespond(overrides: Partial<Record<string, (params: any) => unknown>
       case "report_diagnostics":
         return { data: { diagnostics: { app_version: "abc123", recent_requests: [], recent_errors: [{ at: "2026-10-11T02:00:00Z", kind: "error", message: "<i>boom</i>" }] } } };
       case "report_set_status":
-        return { data: { status: params.status, closed_at: params.status === "resolved" ? "2026-10-12T00:00:00Z" : null } };
+        return { data: { status: params.status, closed_at: null, close_reason: null } };
+      case "report_close":
+        return { data: { id: params.report_id, status: "resolved", close_reason: params.close_reason, closed_at: "2026-10-12T00:00:00Z" } };
       case "report_post":
         return { data: { message_id: "m4" } };
       case "report_delete":
@@ -146,14 +148,15 @@ async function setValue(input: HTMLTextAreaElement | HTMLSelectElement | HTMLInp
 }
 
 describe("inbox request budget", () => {
-  it("opens with one report_list (open reports, first page with counts)", async () => {
+  it("opens with one report_list (reports waiting for a reply, first page with counts)", async () => {
     const { requests, el } = await mount("#/support");
     expect(requests).toEqual([
       { action: "bootstrap", params: {} },
-      { action: "report_list", params: { status: "open", limit: 30 } }
+      { action: "report_list", params: { status: "pending", limit: 30 } }
     ]);
     expect(el.querySelector(".adm-tab--active")?.textContent).toContain("回報收件匣");
-    expect(el.querySelector(".adm-chip--active")?.textContent).toBe("未結案2");
+    expect(el.querySelector(".adm-chip--active")?.textContent).toBe("待回覆1");
+    expect([...el.querySelectorAll(".adm-chip")].map((chip) => chip.textContent)).toEqual(["待回覆1", "等會友1", "等開發1", "已結案6", "有新訊息1", "全部9"]);
     expect(el.querySelectorAll(".adm-report-row")).toHaveLength(1);
     expect(el.querySelector(".adm-report-row .adm-dot")).not.toBeNull();
     expect(el.querySelector(".adm-report-row")?.getAttribute("href")).toBe(`#/support/report/${R1}`);
@@ -203,14 +206,41 @@ describe("inbox request budget", () => {
   it("loads more with the cursor and switches filters", async () => {
     const { requests, el } = await mount("#/support");
     await click(button(el, "載入更多"));
-    expect(requests.at(-1)).toEqual({ action: "report_list", params: { status: "open", limit: 30, cursor: { at: "2026-10-11T03:00:00Z", id: R1 } } });
+    expect(requests.at(-1)).toEqual({ action: "report_list", params: { status: "pending", limit: 30, cursor: { at: "2026-10-11T03:00:00Z", id: R1 } } });
     expect(el.querySelectorAll(".adm-report-row")).toHaveLength(2);
 
     await click(button(el, "有新訊息"));
     expect(requests.at(-1)).toEqual({ action: "report_list", params: { unread_only: true, limit: 30 } });
     expect(el.querySelector<HTMLButtonElement>('[aria-label="匯出 CSV"]')!.disabled).toBe(true);
     expect(filterParams("all")).toEqual({});
-    expect(filterParams("ignored")).toEqual({ status: "ignored" });
+    expect(filterParams("closed")).toEqual({ status: "closed" });
+  });
+
+  it("shows how long a report has waited, but not for ones waiting on the member", async () => {
+    const respond = makeRespond({
+      report_list: () => ({ items: [
+        row(R1, { sort_at: new Date(Date.now() - 3 * 86400000).toISOString() }),
+        row(R2, { status: "waiting_member", sort_at: new Date(Date.now() - 3 * 86400000).toISOString() })
+      ], next_cursor: null, counts: COUNTS })
+    });
+    const { el } = await mount("#/support", respond);
+    const rows = el.querySelectorAll(".adm-report-row");
+    expect(rows[0].textContent).toContain("已等 3 天");
+    expect(rows[1].textContent).toContain("等會友");
+    expect(rows[1].textContent).not.toContain("已等");
+  });
+
+  it("closed reports show the reason; older ones without a reason still have a label", async () => {
+    const respond = makeRespond({
+      report_list: () => ({ items: [
+        row(R1, { status: "resolved", close_reason: "fixed" }),
+        row(R2, { status: "ignored", close_reason: null })
+      ], next_cursor: null, counts: COUNTS })
+    });
+    const { el } = await mount("#/support", respond);
+    const rows = el.querySelectorAll(".adm-report-row");
+    expect(rows[0].textContent).toContain("已結案・已修復");
+    expect(rows[1].textContent).toContain("已結案・已存檔");
   });
 
   it("a failed list shows retry and does not retry by itself", async () => {
@@ -263,15 +293,15 @@ describe("report thread", () => {
     expect(requests.slice(before)).toEqual([
       { action: "report_post", params: { report_id: R1, body: "已修正，請重新整理", is_internal: false } },
       { action: "report_thread", params: { report_id: R1, refresh: true } },
-      { action: "report_list", params: { status: "open", limit: 30 } }
+      { action: "report_list", params: { status: "pending", limit: 30 } }
     ]);
     expect(el.querySelector<HTMLTextAreaElement>("#adm-reply")!.value).toBe("");
   });
 
   it("changes status and deletes with a confirmation", async () => {
     const { requests, el } = await mount(`#/support/report/${R1}`);
-    await setValue(el.querySelector<HTMLSelectElement>("#adm-report-status")!, "resolved", "change");
-    expect(requests.find((r) => r.action === "report_set_status")).toEqual({ action: "report_set_status", params: { report_id: R1, status: "resolved" } });
+    await setValue(el.querySelector<HTMLSelectElement>("#adm-report-status")!, "processing", "change");
+    expect(requests.find((r) => r.action === "report_set_status")).toEqual({ action: "report_set_status", params: { report_id: R1, status: "processing" } });
 
     await click(button(el, "刪除回報"));
     expect(actions(requests)).not.toContain("report_delete");
@@ -279,6 +309,52 @@ describe("report thread", () => {
     await click(button(el, "確定刪除"));
     expect(requests.find((r) => r.action === "report_delete")).toEqual({ action: "report_delete", params: { report_id: R1, reason: "重複回報" } });
     expect(window.location.hash).toBe("#/support");
+  });
+
+  it("the status picker cannot close a report", async () => {
+    const { el } = await mount(`#/support/report/${R1}`);
+    const options = [...el.querySelector<HTMLSelectElement>("#adm-report-status")!.options].map((option) => option.value);
+    expect(options).toEqual(["pending", "waiting_member", "processing"]);
+  });
+
+  it("closes with a reason and a message to the member, then refreshes", async () => {
+    const { requests, el } = await mount(`#/support/report/${R1}`);
+    await click([...el.querySelectorAll<HTMLButtonElement>(".adm-thread__actions button")].find((b) => b.textContent === "結案")!);
+    const confirm = button(el, "確定結案");
+    expect(confirm.disabled).toBe(true); // 還沒選原因
+    const reason = el.querySelector<HTMLSelectElement>("#adm-close-reason")!;
+    expect([...reason.options].map((option) => option.value)).toEqual(["", "fixed", "answered", "cannot_reproduce", "suggestion_noted", "other"]);
+
+    await setValue(reason, "fixed", "change");
+    const body = el.querySelector<HTMLTextAreaElement>("#adm-close-body")!;
+    expect(body.value).toContain("已經修好了");
+
+    // 沒改過的預設文字會跟著原因換；手改過的不動
+    await setValue(reason, "answered", "change");
+    expect(body.value).toContain("已經回覆了");
+    await setValue(body, "我改過的內容");
+    await setValue(reason, "fixed", "change");
+    expect(body.value).toBe("我改過的內容");
+
+    const before = requests.length;
+    await click(button(el, "確定結案"));
+    expect(requests.slice(before)).toEqual([
+      { action: "report_close", params: { report_id: R1, close_reason: "fixed", body: "我改過的內容" } },
+      { action: "report_thread", params: { report_id: R1, refresh: true } },
+      { action: "report_list", params: { status: "pending", limit: 30 } }
+    ]);
+    expect(el.querySelector("#adm-close-reason")).toBeNull();
+  });
+
+  it("a closed report has no close button, and picking another status reopens it", async () => {
+    const closed = thread(R1);
+    (closed.report as any).status = "resolved";
+    (closed.report as any).close_reason = "fixed";
+    const { requests, el } = await mount(`#/support/report/${R1}`, makeRespond({ report_thread: () => closed }));
+    expect(el.querySelector(".adm-thread__header")?.textContent).toContain("已結案・已修復");
+    expect([...el.querySelectorAll(".adm-thread__actions button")].some((b) => b.textContent === "結案")).toBe(false);
+    await setValue(el.querySelector<HTMLSelectElement>("#adm-report-status")!, "pending", "change");
+    expect(requests.find((r) => r.action === "report_set_status")).toEqual({ action: "report_set_status", params: { report_id: R1, status: "pending" } });
   });
 
   it("read-only support staff see no composer, status picker or delete", async () => {
@@ -318,7 +394,7 @@ describe("export", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloads.push(this.download); });
     const { requests, el } = await mount("#/support");
     await click(el.querySelector<HTMLButtonElement>('[aria-label="匯出 CSV"]')!);
-    expect(requests.at(-1)).toEqual({ action: "report_export", params: { status: "open" } });
+    expect(requests.at(-1)).toEqual({ action: "report_export", params: { status: "pending" } });
     expect(downloads).toEqual(["回報匯出_2026-10-12.csv"]);
     expect(el.textContent).toContain("已匯出 1 筆");
   });

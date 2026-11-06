@@ -538,13 +538,15 @@ export const ReportDrawer: React.FC<ReportDrawerProps> = ({
 export const CATEGORY_LABEL: Record<string, string> = {
   bug: "Bug 錯誤", ui: "UI 建議", data: "資料問題", other: "其他"
 };
+// 會友看到的狀態；管理者看到的另有一套（lib/issue-report/report-status.ts）
 export const STATUS_LABEL: Record<string, string> = {
-  pending: "待處理", processing: "處理中", resolved: "已解決", ignored: "已存檔"
+  pending: "待處理", waiting_member: "等你回覆", processing: "處理中", resolved: "已解決", ignored: "已結案"
 };
 // 一律用設計系統的 .stat-badge token（隨 light/dark/warm 主題切換、對比達標）。
 // 不要在這裡塞 rgba/hex —— 深色主題下會看不清。
 const STATUS_BADGE_VARIANT: Record<string, string> = {
   pending: "stat-badge--warning",
+  waiting_member: "stat-badge--warning",
   processing: "stat-badge--brand",
   resolved: "stat-badge--success",
   ignored: "stat-badge--neutral"

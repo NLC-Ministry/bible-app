@@ -8,6 +8,14 @@ import { groupMessages, dayKey, dayLabel, clockTime, formatWhen, statusBadgeClas
 import { csvCell } from "../../js/modules/csv-cell.mjs";
 import { fetchNlcTracked } from "../../js/diagnostics/report-diagnostics.mjs";
 import { diagnosticsSummaryRows, taipeiTime } from "../../lib/issue-report/report-diagnostics-summary.ts";
+import {
+  REPORT_CLOSE_REASONS,
+  REPORT_CLOSE_REASON_LABEL,
+  REPORT_OPEN_STATUSES,
+  REPORT_STATUS_LABEL,
+  closeMessageForReason,
+  isClosedStatus
+} from "../../lib/issue-report/report-status.ts";
 
 interface IssueReport {
   id: string;
@@ -206,7 +214,7 @@ export const AdminReportView: React.FC = () => {
 // ───────────────────────── 管理端對話 pane ─────────────────────────
 
 const CAT_LABEL: Record<string, string> = { bug: "Bug 錯誤", ui: "UI 建議", data: "資料問題", other: "其他" };
-const ST_LABEL: Record<string, string> = { pending: "待處理", processing: "處理中", resolved: "已解決", ignored: "已存檔" };
+const ST_LABEL = REPORT_STATUS_LABEL;
 
 // taipeiTime／diagnosticsSummaryRows 搬到獨立模組，後台（admin/）也用同一份（#550）
 export { diagnosticsSummaryRows } from "../../lib/issue-report/report-diagnostics-summary.ts";
@@ -297,6 +305,9 @@ export const AdminThreadPane: React.FC<{
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const [closeBody, setCloseBody] = useState("");
   const scroller = React.useRef<HTMLDivElement | null>(null);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
   const taRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -356,6 +367,20 @@ export const AdminThreadPane: React.FC<{
     if (r.success) { await load(); onChanged(); }
   };
 
+  const closeReport = async () => {
+    if (busy || !closeReason || !closeBody.trim()) return;
+    setBusy(true); setErr(null);
+    const r = await ThreadPipeline.close(reportId, closeReason, closeBody);
+    setBusy(false);
+    if (r.success) {
+      setClosing(false); setCloseReason(""); setCloseBody("");
+      await load();
+      onChanged();
+    } else {
+      setErr("結案失敗，請再試一次。");
+    }
+  };
+
   const delAttachment = async (messageId: string) => {
     if (!window.confirm("刪除這張截圖？")) return;
     const r = await ThreadPipeline.deleteAttachment(messageId);
@@ -382,11 +407,44 @@ export const AdminThreadPane: React.FC<{
                 className="text-sm rounded-md border border-border bg-card text-foreground px-2 py-1"
                 aria-label="變更狀態"
               >
-                {Object.entries(ST_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                {isClosedStatus(report.status) && <option value={report.status} disabled>{ST_LABEL[report.status]}</option>}
+                {REPORT_OPEN_STATUSES.map((v) => <option key={v} value={v}>{ST_LABEL[v]}</option>)}
               </select>
+              {!isClosedStatus(report.status) && (
+                <button type="button" className="secondary-btn text-sm" onClick={() => setClosing(true)} disabled={busy || closing}>結案</button>
+              )}
             </>
           )}
         </div>
+
+        {closing && report && !isClosedStatus(report.status) && (
+          <div className="shrink-0 flex flex-col gap-2 border-b border-border p-3 text-sm">
+            <p className="text-xs text-muted-foreground">這段訊息會傳給會友。會友之後回覆，回報會自動重新打開。</p>
+            <select
+              value={closeReason}
+              onChange={(e) => {
+                setCloseBody(closeMessageForReason(closeBody, closeReason, e.target.value));
+                setCloseReason(e.target.value);
+              }}
+              className="text-sm rounded-md border border-border bg-card text-foreground px-2 py-1"
+              aria-label="結案原因"
+            >
+              <option value="" disabled>請選擇結案原因</option>
+              {REPORT_CLOSE_REASONS.map((v) => <option key={v} value={v}>{REPORT_CLOSE_REASON_LABEL[v]}</option>)}
+            </select>
+            <textarea
+              rows={3}
+              value={closeBody}
+              onChange={(e) => setCloseBody(e.target.value.slice(0, 500))}
+              aria-label="給會友的訊息"
+              className="resize-none rounded-md border border-border bg-card px-2 py-1 text-base text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <div className="flex gap-2">
+              <button type="button" className="primary-btn text-sm" disabled={busy || !closeReason || !closeBody.trim()} onClick={closeReport}>確定結案</button>
+              <button type="button" className="secondary-btn text-sm" disabled={busy} onClick={() => setClosing(false)}>取消</button>
+            </div>
+          </div>
+        )}
 
         <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto p-3 flex flex-col gap-3">
           {loading && !thread ? (

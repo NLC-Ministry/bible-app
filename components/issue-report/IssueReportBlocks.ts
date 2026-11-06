@@ -547,6 +547,12 @@ export class ThreadPipeline {
     const r = await rpc("issue_admin_set_status", { p_report_id: reportId, p_status: status });
     return { success: r.success, error: r.error };
   }
+
+  /** 結案一定要有原因和給會友的訊息（#683） */
+  static async close(reportId: string, reason: string, body: string): Promise<{ success: boolean; error?: string }> {
+    const r = await rpc("issue_admin_close", { p_report_id: reportId, p_close_reason: reason, p_body: body });
+    return { success: r.success, error: r.error };
+  }
 }
 
 /** 把一則離線訊息排入佇列（送出失敗時用） */

@@ -1,19 +1,24 @@
 // 回報對話串維護（migration 0153）。由排程（Supabase Scheduled Function / Cron）
 // 每天呼叫一次。verify_jwt = false —— 用共享密鑰 header 守門。
 //
-//   POST { }                → 只跑 autoclose（管理員回覆後 14 天無回應 → 結案）
+//   POST { }                → 只跑 autoclose（等會友超過 14 天 → 結案）
 //   POST { "purge": true }   → 另外跑 purge（結案 180 天 → 刪訊息列）+ 掃孤兒截圖
+//   POST { "digest": true }  → 只寄每日摘要（#683），不跑上面兩項
 //
 // 需要的 secrets：
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY（平台內建）
 //   ISSUE_REPORT_MAINTENANCE_SECRET（自訂；排程呼叫時放在 x-maintenance-secret）
+//   ISSUE_REPORT_DIGEST_WEBHOOK_URL、ISSUE_REPORT_DIGEST_WEBHOOK_SECRET（選填；沒設就不寄摘要）
+//   ISSUE_REPORT_DIGEST_ADMIN_URL（選填；信裡的後台連結，預設正式站後台）
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildDigestEmail, shouldSendDigest, type DigestCounts } from "./digest.ts";
 
 const BUCKET = "issue-report-shots";
 const PAGE_SIZE = 1000;
 const LIST_CONCURRENCY = 5;
 const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_ADMIN_INBOX_URL = "https://bible-speed-reading-admin.vercel.app/#/support";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -99,6 +104,38 @@ async function sweepOrphanShots(supabase: any): Promise<number> {
   return removed;
 }
 
+// 回 HTTP 錯誤碼，失敗才查得到（net._http_response）；錯誤內容不帶寄信網址或密鑰。
+async function sendDigest(supabase: any): Promise<Response> {
+  const hookUrl = Deno.env.get("ISSUE_REPORT_DIGEST_WEBHOOK_URL");
+  const hookSecret = Deno.env.get("ISSUE_REPORT_DIGEST_WEBHOOK_SECRET");
+  if (!hookUrl || !hookSecret) return jsonResponse({ ok: true, digest: "not_configured" });
+
+  const { data, error } = await supabase.rpc("issue_report_digest_counts");
+  if (error || !data) {
+    console.error("issue-report digest counts failed:", error);
+    return jsonResponse({ error: "digest_counts_failed" }, 500);
+  }
+  const counts = data as DigestCounts;
+  if (!shouldSendDigest(counts)) return jsonResponse({ ok: true, digest: "nothing_to_send" });
+
+  const adminUrl = Deno.env.get("ISSUE_REPORT_DIGEST_ADMIN_URL") || DEFAULT_ADMIN_INBOX_URL;
+  const email = buildDigestEmail(counts, new Date(), adminUrl);
+  try {
+    const response = await fetch(hookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ secret: hookSecret, ...email })
+    });
+    // Apps Script 出錯也回 200，要看內容
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.ok !== true) throw new Error(`apps_script_status_${response.status}_${result?.error ?? "no_ok"}`);
+  } catch (err) {
+    console.error("issue-report digest send failed:", String((err as any)?.message || err));
+    return jsonResponse({ error: "digest_send_failed" }, 502);
+  }
+  return jsonResponse({ ok: true, digest: "sent" });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
 
@@ -118,6 +155,8 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
+
+  if (body?.digest === true) return sendDigest(supabase);
 
   const out: Record<string, unknown> = {};
 
