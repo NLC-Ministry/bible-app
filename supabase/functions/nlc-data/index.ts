@@ -469,11 +469,13 @@ const ISSUE_RPC_FUNCTIONS = new Set([
   "issue_thread_unread_summary",
   "issue_my_reports",
   "issue_admin_thread_list",
-  "issue_admin_set_status"
+  "issue_admin_set_status",
+  "issue_admin_close"
 ]);
 const ISSUE_ADMIN_RPC_FUNCTIONS = new Set([
   "issue_admin_thread_list",
-  "issue_admin_set_status"
+  "issue_admin_set_status",
+  "issue_admin_close"
 ]);
 // 首頁「快問快答」（lightning quiz，migration 0202；每題各自發布／鎖定見 0211）。
 // 會友端 RPC 在 SQL 端只看已發布的活動；admin_* 系列自己用

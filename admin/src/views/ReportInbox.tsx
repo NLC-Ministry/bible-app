@@ -7,7 +7,9 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { Download, RefreshCw } from "lucide-react";
 import { isAbortError, type AdminApi } from "../api.ts";
 import { downloadCsv } from "../download.ts";
-import { REPORT_CATEGORY_LABEL, REPORT_STATUS_LABEL, formatDateTime, label, text } from "../format.ts";
+import { reportStatusText } from "../../../lib/issue-report/report-status.ts";
+import { REPORT_CATEGORY_LABEL, formatDateTime, label, text } from "../format.ts";
+import { waitingDays } from "../home.ts";
 import { formatRoute } from "../route.ts";
 import type { ReportCounts, ReportExport, ReportListItem, ReportPage, Cursor } from "../types.ts";
 import { Badge, ErrorNotice, Spinner } from "../ui.tsx";
@@ -15,15 +17,16 @@ import { ReportThreadView } from "./ReportThread.tsx";
 
 export const REPORT_PAGE_SIZE = 30;
 
-export const INBOX_FILTERS = ["open", "unread", "resolved", "ignored", "all"] as const;
+// 第一格就是現在輪到管理者的（#683）；待回覆、等開發由伺服器從等最久的排起
+export const INBOX_FILTERS = ["pending", "waiting_member", "processing", "closed", "unread", "all"] as const;
 export type InboxFilter = typeof INBOX_FILTERS[number];
 
-// open＝待處理＋處理中；不叫「待處理」，免得和狀態標籤的「待處理」（pending）混在一起
 const FILTER_LABEL: Record<InboxFilter, string> = {
-  open: "未結案",
+  pending: "待回覆",
+  waiting_member: "等會友",
+  processing: "等開發",
+  closed: "已結案",
   unread: "有新訊息",
-  resolved: "已解決",
-  ignored: "已存檔",
   all: "全部"
 };
 
@@ -43,7 +46,7 @@ export type InboxState = {
   error: unknown;
 };
 
-export const INITIAL_INBOX: InboxState = { filter: "open", items: [], cursor: null, counts: null, loaded: null, loading: false, error: null };
+export const INITIAL_INBOX: InboxState = { filter: "pending", items: [], cursor: null, counts: null, loaded: null, loading: false, error: null };
 
 /** 這次打開過的回報：清單若比對話晚回來（伺服器還沒標已讀），用這裡補成已讀。 */
 export function markOpened(items: ReportListItem[], opened: ReadonlyMap<string, number>): { items: ReportListItem[]; cleared: number } {
@@ -228,6 +231,7 @@ export function ReportInbox({ api, reportId, capabilities, state, setState, doc 
 
 function InboxRow({ item, active }: { item: ReportListItem; active: boolean }) {
   const reporter = item.reporter;
+  const days = item.status === "pending" || item.status === "processing" ? waitingDays(item.sort_at, new Date()) : null;
   return (
     <li>
       <a
@@ -238,7 +242,8 @@ function InboxRow({ item, active }: { item: ReportListItem; active: boolean }) {
         <span className="adm-report-row__head">
           {item.unread && <span className="adm-dot" role="img" aria-label="會友有新訊息" />}
           <Badge>{label(REPORT_CATEGORY_LABEL, item.category)}</Badge>
-          <Badge tone={statusTone(item.status)}>{label(REPORT_STATUS_LABEL, item.status)}</Badge>
+          <Badge tone={statusTone(item.status)}>{reportStatusText(item.status, item.close_reason)}</Badge>
+          {days !== null && days > 0 && <span className="adm-small">已等 {days} 天</span>}
           <time className="adm-muted adm-small adm-report-row__time">{formatDateTime(item.last_message_at || item.created_at)}</time>
         </span>
         <span className="adm-result__name">

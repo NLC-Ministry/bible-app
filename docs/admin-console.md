@@ -31,7 +31,7 @@
 - **閒置 30 分鐘自動登出**，並結束 Logto 的登入狀態（只清記憶體的話，重新整理又會無聲登回來）。登出前 1 分鐘提醒。
 - **請求預算**：開後台＝`bootstrap`＋預設頁（首頁，#569）的 1 個 `home_summary`；打開回報收件匣＝1 個 `report_list`（第一頁順便帶各狀態筆數）；打開一張回報只打 1 個 `report_thread`，之後畫面在前景時每 20 秒自動更新（`refresh: true`，不重複記稽核）；診斷資訊展開才打 `report_diagnostics`。收件匣清單放在 App 那一層，從回報打開某人再回來不重抓。打開某人只打 1 個 `user_summary`（除錯檢查、「會友 App 現在應該顯示」、各區筆數）；各區點開才打 `user_section`（筆數 0 的不打），「載入更多」再 1 個，時間軸點開才打 `user_timeline`。記憶體快取 60 秒，同一個人 60 秒內重開不重抓。名單與查詢：打開 1 個 `directory_list`（第一頁順便帶計畫選項與預設計畫），改條件 1 個，改搜尋字停 300ms 才送、有 `plans.read` 時多 1 個 `team_search`（字沒變不重找），「載入更多」1 個；管理範圍：打開 1 個 `scope_overview`（組織名單用 `bootstrap` 帶的），點某位負責人不再打，儲存 1 個 `scope_set`、成功後就地更新。名單與管理範圍的資料放在 App 那一層，打開某人、切分頁再回來不重抓。稽核紀錄：打開 1 個 `audit_list`（第一頁順便帶總數與「動作」「操作者」選項），改條件 1 個，「載入更多」1 個；點開一筆不再打（清單已帶變更內容），只有內容太大被省略的那筆打 1 個 `audit_event`；`audit_list` 快取 60 秒，切到功能開放設定再回來不重抓（重新整理鈕不用快取）。測試：`admin/__tests__/request-budget.test.tsx`、`home.test.tsx`、`report-inbox.test.tsx`、`accounts.test.tsx`、`audit.test.tsx`。
 - **首頁**（#569，`admin/src/views/HomeArea.tsx`、`admin/src/home.ts`、`supabase/functions/admin-api/home.ts`；網址 `#/`、`#/home`；進得了後台就顯示，每一格再看能力）：打開後台就看到今天要處理什麼。**只放數字、不含任何人的名字、不記稽核**，1 個 `home_summary`（60 秒快取）。每一格點了才進那一頁，數法和那一頁相同：
-  - 未結案的回報（＋有新訊息幾則、最舊的等了幾天）：同收件匣的「未結案」「有新訊息」；點進去先把收件匣切到「未結案」。
+  - 待回覆的回報（＋等最久的等了幾天、有新訊息幾則、等開發幾則）：同收件匣的「待回覆」「有新訊息」「等開發」；點進去先把收件匣切到「待回覆」。
   - 需要關心、還沒滿的隊、本期進度：**只算預設計畫**（`plan_options` 的預設，和計畫區相同），並標出計畫名稱；admin-api 用計畫總覽同一支 `loadReport`＋`buildPlanSummary` 算。點「需要關心」先把名單篩成需要關心、點「還沒滿的隊」先把隊伍清單篩成還沒滿，再換網址。
   - 待審的經文注釋：`passage_commentary.review_status = 'pending'`（另寫審核通過、還沒發布幾則）。
   - 明天的小測驗：預設計畫明天那一格的日曆狀態（直接呼叫 `get_daily_quiz_calendar`，和「內容 → 小測驗」同一套）；小測驗功能關閉、這個計畫沒設定、明天不在計畫期間就不顯示。
@@ -51,7 +51,12 @@
   - **報名註冊**：大區／牧區的報名、註冊、3 人隊／6 人隊人數（`get_admin_registration_statistics`，順序照 DB `sort_order`），牧區列帶牧區長。匯出 CSV（欄位同舊頁）與「更新到 Google 試算表」都要另外有 `export`，都由伺服器讀數字、產生、記稽核（`export`／`sync_registration_stats_sheet`）；前端只送計畫 id。
   - **請求預算**：讀經使用率打開＝1 個 `reading_usage`，切換星期／數值、展開表格都不發請求，換區間 1 個（60 秒快取）；報名註冊打開＝1 個 `registration_stats`（順便帶計畫選單、沒選就用預設計畫），換計畫 1 個，匯出、更新試算表各 1 個。區間與選的計畫放在 `App` 那一層。
   - **Chart.js 只在這一區載入**（`admin/src/chart.ts`，第一次要畫才插入 `<script>`）；網址和 `js/modules/chart-loader.mjs` 同一個，外殼與 `/legacy` 的 CSP 只放行這個完整網址（`scripts/admin-console.test.mjs` 比對四處、並擋其他檔案 import `chart.ts`）。載不到就顯示一句說明，表格仍有同樣數字。顏色讀主題 token，換主題會重畫。測試：`admin/__tests__/stats.test.tsx`。
-- **會改資料的動作要 `support.write`**（回覆、內部備註、改狀態、刪截圖、刪回報），沒有這個能力的帳號看不到輸入框和按鈕；伺服器端在同一個交易內寫稽核。刪回報要再確認一次，可填原因（記進稽核）。
+- **回報的狀態**（#683，標籤與結案原因在 `lib/issue-report/report-status.ts`）：待回覆（`pending`）輪到管理者、等會友（`waiting_member`）輪到會友、等開發（`processing`）等修復；已結案（`resolved`／`ignored`，`close_reason` 記原因，#683 之前結案的沒有原因）。
+  - 公開回覆讓待回覆自動變等會友（有截圖的要上傳完才算）；會友留言讓等會友、已結案自動回到待回覆；內部備註不影響狀態。都在 `_issue_touch_report_on_message` 觸發器。
+  - **結案只能走 `report_close`**（App 泡泡走 `issue_admin_close`）：一定要選原因，並傳一則訊息給會友。`report_set_status` 只接受三種未結案狀態，傳已結案的狀態回 `close_requires_reason`；已結案的回報改成其他狀態就是重新打開。
+  - 自動結案只處理等會友超過 14 天（`close_reason = 'no_response'`）；等開發不會自動結案。
+  - 收件匣的待回覆、等開發從等最久的排起，其他由新到舊。
+- **會改資料的動作要 `support.write`**（回覆、內部備註、改狀態、結案、刪截圖、刪回報），沒有這個能力的帳號看不到輸入框和按鈕；伺服器端在同一個交易內寫稽核。刪回報要再確認一次，可填原因（記進稽核）。
 - **「人」區**（#567，原本的「客服 → 查詢使用者」與「帳號與權限」合一；網址 `#/people`、`#/people/user/<id>[?reason=]`、`#/people/scopes[/<id>]`，舊網址 `#/support/users`、`#/support/user/<id>[/<舊分頁>]`、`#/accounts…` 導到新頁，會友 App 舊版的連結仍然有效）：看名單、管理範圍要 `accounts.read`，個人頁要 `support.read`，改管理範圍要 `accounts.write`（沒有的話勾選框停用、沒有儲存鈕）。名單在伺服器端篩選、分頁（一次 50 人、email 遮罩；搜尋也找其他登入方式的 email），用「排序鍵＋id」游標往下接（`directory_list` 的 `cursor`＝上一頁最後一人的 `sort_key`），資料變動中翻頁也不跳過或重複；不像 App 一次把全部的人和完整 email 載進瀏覽器。**角色由會員中心同步，後台不改角色**；只改大區長／區長／小組長的管理範圍（`set_profile_managed_scopes`，名稱要在組織名單裡），可填修改原因，稽核記前後差異。
 - **匯出一律由伺服器產生**（`report_export` 需要 `support.read`＋`export`；含完整 email 的 `directory_export` 需要 `accounts.read`＋`export`＋`support.pii`；`org_export` 需要 `accounts.read`＋`export`；`audit_export` 需要 `audit.read`＋`export`、最多 5000 筆；都記 `export` 稽核，欄位和 App 的匯出相同）；前端只存檔，不自己組 CSV。照搬區塊的匯出是例外（舊程式在瀏覽器組檔），但下載前一定先成功呼叫 `legacy_export_audit` 記稽核，記不到就不下載（見下面）。
 - **截圖**：回覆可附 1 張（瀏覽器先壓到約 300 KB，伺服器上限 500 KB，PNG／JPEG／WebP）。顯示用 5 分鐘有效的簽名網址，存檔路徑不送到前端。

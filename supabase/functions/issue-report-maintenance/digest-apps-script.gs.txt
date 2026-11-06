@@ -1,0 +1,33 @@
+// 回報每日摘要的寄信程式（#683）。到 https://script.google.com 新增一個獨立專案，貼上這份，
+// 再部署成 Web App（設定步驟見 supabase/functions/README.md 的「回報每日摘要」）。
+// 這個 repo 不會部署它；這裡只是版本控管的副本。
+//
+// 這支只寄信給下面的收件人，內容由 issue-report-maintenance 組好（只有數字和後台連結）。
+// repo 是公開的：收件地址和密鑰只填在 Apps Script 裡，不要寫回這個檔案。
+
+// 和 Supabase 的 ISSUE_REPORT_DIGEST_WEBHOOK_SECRET 相同的隨機字串，自己產生一組。
+var SHARED_SECRET = "REPLACE_WITH_YOUR_OWN_RANDOM_SECRET";
+
+// 收件人，例如維護者自己的信箱。
+var RECIPIENT = "REPLACE_WITH_RECIPIENT_EMAIL";
+
+function doPost(e) {
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    if (payload.secret !== SHARED_SECRET) {
+      return jsonOutput({ error: "unauthorized" });
+    }
+    if (!payload.subject || !payload.text) {
+      return jsonOutput({ error: "bad_payload" });
+    }
+    MailApp.sendEmail(RECIPIENT, String(payload.subject).slice(0, 200), String(payload.text).slice(0, 2000));
+    return jsonOutput({ ok: true });
+  } catch (err) {
+    return jsonOutput({ error: String(err) });
+  }
+}
+
+function jsonOutput(body) {
+  return ContentService.createTextOutput(JSON.stringify(body))
+    .setMimeType(ContentService.MimeType.JSON);
+}

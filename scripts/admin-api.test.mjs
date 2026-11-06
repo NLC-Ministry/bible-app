@@ -3,7 +3,7 @@
 // 以回滾交易驗過；這裡守住 migration 內容與 Edge Function 的流程。
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { currentMigrationSql, migrationFiles, readMigration } from "./migration-sql.mjs";
+import { currentMigrationSql, migrationFiles, readMigration, latestFunctionDefinition } from "./migration-sql.mjs";
 import {
   ADMIN_ACTIONS,
   CAPABILITIES,
@@ -22,7 +22,6 @@ import { handleAdminRequest } from "../supabase/functions/admin-api/handler.ts";
 const sql = currentMigrationSql("20261011110008_admin_api_support.sql");
 const migrationFile = migrationFiles().find(file => file.includes("_admin_api_support."));
 // admin-api 呼叫的函式分散在 #547 之後的幾支 *_admin_api_*.sql（#550 起每組一支）
-const allAdminSql = migrationFiles().filter(file => /_admin_api_/.test(file)).map(readMigration).join("\n");
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 const USER_ID = "22222222-2222-4222-8222-222222222222";
@@ -43,7 +42,7 @@ describe("capability table (deny by default)", () => {
       "directory_export", "directory_list", "home_summary", "legacy_export_audit", "lightning_quiz_image_upload", "org_export",
       "plan_options", "plan_quiz", "plan_roster", "plan_roster_export", "plan_summary",
       "reading_usage", "registration_export", "registration_sheet_sync", "registration_stats",
-      "report_attachment_delete", "report_delete", "report_diagnostics", "report_export", "report_list", "report_post", "report_set_status", "report_thread",
+      "report_attachment_delete", "report_close", "report_delete", "report_diagnostics", "report_export", "report_list", "report_post", "report_set_status", "report_thread",
       "reveal_pii", "scope_overview", "scope_set",
       "team_add_member", "team_detail", "team_history", "team_lineage", "team_list", "team_recompute_status", "team_remove_member", "team_search",
       "user_search", "user_section", "user_summary", "user_timeline"
@@ -53,7 +52,7 @@ describe("capability table (deny by default)", () => {
       for (const cap of spec.capabilities) expect(CAPABILITIES, name).toContain(cap);
       expect(spec.rateLimit.limit, name).toBeGreaterThan(0);
       expect(spec.rateLimit.windowSeconds, name).toBeGreaterThan(0);
-      expect(allAdminSql, name).toContain(`CREATE OR REPLACE FUNCTION public.${spec.rpc}(`);
+      expect(() => latestFunctionDefinition(spec.rpc), name).not.toThrow(); // 現在還存在，沒有被後面的 migration 刪掉
     }
     expect(ADMIN_ACTIONS.reveal_pii.capabilities).toEqual(["support.pii"]);
     expect(ADMIN_ACTIONS.user_search.rateLimit).toMatchObject({ limit: 60, windowSeconds: 60 });

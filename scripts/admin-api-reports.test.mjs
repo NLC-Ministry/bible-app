@@ -2,7 +2,7 @@
 // SQL 的實際行為（分頁、未讀、稽核同交易、刪除留內容、授權只給 service_role）已在 staging 以回滾交易驗過；
 // 這裡守住參數、能力、Storage 步驟（上傳失敗要清佔位、簽名網址不外流路徑）與 CSV。
 import { describe, expect, it, vi } from "vitest";
-import { migrationFiles, readMigration } from "./migration-sql.mjs";
+import { currentMigrationSql, latestFunctionDefinition, migrationFiles } from "./migration-sql.mjs";
 import { ADMIN_ACTIONS, CAPABILITIES } from "../supabase/functions/admin-api/policy.ts";
 import { handleAdminRequest, MAX_BODY_BYTES } from "../supabase/functions/admin-api/handler.ts";
 import { csvCell as serverCsvCell, reportsCsv, taipeiDateTime } from "../supabase/functions/admin-api/exports.ts";
@@ -74,7 +74,7 @@ describe("report actions: capabilities and parameters", () => {
     expect(build({ status: "open", unread_only: true, cursor: { at: "2026-10-12T01:00:00Z", id: REPORT_ID }, limit: 10 }, ctx)).toEqual({ ok: true, args: {
       p_status: "open", p_unread_only: true, p_cursor_at: "2026-10-12T01:00:00Z", p_cursor_id: REPORT_ID, p_limit: 10
     } });
-    expect(build({ status: "closed" }, ctx)).toEqual({ ok: false, error: "invalid_status" });
+    expect(build({ status: "nope" }, ctx)).toEqual({ ok: false, error: "invalid_status" });
     expect(build({ cursor: { at: "2026-10-12T01:00:00Z", id: "not-a-uuid" } }, ctx)).toEqual({ ok: false, error: "invalid_cursor" });
   });
 
@@ -87,10 +87,31 @@ describe("report actions: capabilities and parameters", () => {
     expect(build({ report_id: "x" }, ctx)).toEqual({ ok: false, error: "invalid_report_id" });
   });
 
-  it("only allows the four real statuses when changing one", () => {
+  it("only allows open statuses when changing one; closing needs report_close", () => {
     const build = ADMIN_ACTIONS.report_set_status.buildArgs;
-    for (const status of ["pending", "processing", "resolved", "ignored"]) expect(build({ report_id: REPORT_ID, status }, ctx).ok, status).toBe(true);
+    for (const status of ["pending", "waiting_member", "processing"]) expect(build({ report_id: REPORT_ID, status }, ctx).ok, status).toBe(true);
+    for (const status of ["resolved", "ignored"]) expect(build({ report_id: REPORT_ID, status }, ctx), status).toEqual({ ok: false, error: "close_requires_reason" });
     for (const status of ["open", "closed", "", undefined]) expect(build({ report_id: REPORT_ID, status }, ctx), String(status)).toEqual({ ok: false, error: "invalid_status" });
+  });
+
+  it("closing needs a manual reason and a message", () => {
+    const build = ADMIN_ACTIONS.report_close.buildArgs;
+    expect(ADMIN_ACTIONS.report_close.capabilities).toEqual(["support.write"]);
+    expect(build({ report_id: REPORT_ID, close_reason: "fixed", body: "修好了" }, ctx)).toEqual({ ok: true, args: {
+      p_actor_id: ADMIN_ID, p_actor_role: "admin", p_report_id: REPORT_ID, p_close_reason: "fixed", p_body: "修好了", p_request_id: "req-12345678"
+    } });
+    expect(build({ report_id: "x", close_reason: "fixed", body: "a" }, ctx)).toEqual({ ok: false, error: "invalid_report_id" });
+    for (const close_reason of ["no_response", "", undefined, 1]) {
+      expect(build({ report_id: REPORT_ID, close_reason, body: "a" }, ctx), String(close_reason)).toEqual({ ok: false, error: "invalid_close_reason" });
+    }
+    expect(build({ report_id: REPORT_ID, close_reason: "fixed", body: "   " }, ctx)).toEqual({ ok: false, error: "empty_message" });
+    expect(build({ report_id: REPORT_ID, close_reason: "fixed", body: "字".repeat(501) }, ctx)).toEqual({ ok: false, error: "body_too_long" });
+  });
+
+  it("the list and export accept the new filters", () => {
+    const build = ADMIN_ACTIONS.report_list.buildArgs;
+    for (const status of ["closed", "waiting_member", "open", "resolved", "ignored"]) expect(build({ status }, ctx).args.p_status, status).toBe(status);
+    expect(build({ status: "nope" }, ctx)).toEqual({ ok: false, error: "invalid_status" });
   });
 
   it("checks reply length, emptiness and the screenshot before touching the database", () => {
@@ -135,7 +156,7 @@ describe("report actions through the handler", () => {
     } });
     expect(await json(await handleAdminRequest(post({ action: "report_thread", params: { report_id: REPORT_ID } }), deps)))
       .toMatchObject({ status: 404, body: { error: "report_not_found" } });
-    expect(await json(await handleAdminRequest(post({ action: "report_set_status", params: { report_id: REPORT_ID, status: "resolved" } }), deps)))
+    expect(await json(await handleAdminRequest(post({ action: "report_set_status", params: { report_id: REPORT_ID, status: "processing" } }), deps)))
       .toMatchObject({ status: 404, body: { error: "report_not_found" } });
   });
 
@@ -196,7 +217,7 @@ describe("report actions through the handler", () => {
     expect(res.body.data.filename).toMatch(/^回報匯出_\d{4}-\d{2}-\d{2}\.csv$/);
     const [header, line] = res.body.data.csv.split("\r\n");
     expect(header).toBe('"ID","建立時間","分類","處理狀況","訊息數","最後訊息時間","問題描述","頁面網址","回報者姓名","回報者牧區","回報者小組"');
-    expect(line).toBe(`"${REPORT_ID}","2026-10-12 09:05","Bug 錯誤","待處理","3","","'=HYPERLINK(""http://evil"")","/#/plan","'+王小明","信義",""`);
+    expect(line).toBe(`"${REPORT_ID}","2026-10-12 09:05","Bug 錯誤","待回覆","3","","'=HYPERLINK(""http://evil"")","/#/plan","'+王小明","信義",""`);
     expect(sqlCalls(calls)[0].args).toEqual({ p_actor_id: ADMIN_ID, p_actor_role: "admin", p_status: "open", p_request_id: "req-from-client-1" });
   });
 
@@ -232,8 +253,8 @@ describe("server CSV cells match the member app's rule (#553)", () => {
 });
 
 describe("report migration", () => {
-  const file = migrationFiles().find((name) => name.endsWith("_admin_api_reports.sql"));
-  const sql = readMigration(file);
+  // 檔案裡的函式換成現在的版本（#683 改寫了其中幾支），GRANT 仍是這支 migration 的
+  const sql = currentMigrationSql("20261012045233_admin_api_reports.sql");
   const functions = [...sql.matchAll(/CREATE OR REPLACE FUNCTION (public\.\w+)\(/g)].map((match) => match[1]);
   const body = (name) => sql.slice(sql.indexOf(`FUNCTION public.${name}(`), sql.indexOf(`$${name}$;`));
 
@@ -248,6 +269,7 @@ describe("report migration", () => {
 
   it("audits every change inside the same function as the change", () => {
     expect(body("admin_api_report_set_status")).toContain("PERFORM audit.record('admin-api', 'report.set_status'");
+    expect(latestFunctionDefinition("admin_api_report_close").text).toContain("PERFORM audit.record('admin-api', 'report.close'");
     expect(body("admin_api_report_post")).toMatch(/PERFORM audit\.record\('admin-api', CASE WHEN COALESCE\(p_is_internal, FALSE\) THEN 'report\.note' ELSE 'report\.reply' END/);
     expect(body("admin_api_report_drop_attachment")).toContain("PERFORM audit.record('admin-api', 'report.attachment_delete'");
     expect(body("admin_api_report_delete")).toContain("PERFORM audit.record('admin-api', 'report.delete'");
@@ -262,6 +284,7 @@ describe("report migration", () => {
   it("runs after the audit schema and the first admin-api migration", () => {
     const audit = migrationFiles().find((name) => name.endsWith("_admin_audit_events.sql"));
     const support = migrationFiles().find((name) => name.endsWith("_admin_api_support.sql"));
+    const file = latestFunctionDefinition("admin_api_report_post").file;
     expect(audit < file && support < file).toBe(true);
   });
 });

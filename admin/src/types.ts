@@ -121,6 +121,7 @@ export type ReportListItem = {
   id: string;
   category: string;
   status: string;
+  close_reason: string | null;
   description: string;
   created_at: string;
   last_message_at: string | null;
@@ -130,7 +131,7 @@ export type ReportListItem = {
   reporter: ReportReporter | null;
 };
 
-export type ReportCounts = Record<"all" | "open" | "pending" | "processing" | "resolved" | "ignored" | "unread", number>;
+export type ReportCounts = Record<"all" | "open" | "pending" | "waiting_member" | "processing" | "closed" | "resolved" | "ignored" | "unread", number>;
 
 export type ReportPage = { items: ReportListItem[]; next_cursor: Cursor | null; counts: ReportCounts | null };
 
@@ -157,6 +158,7 @@ export type ReportThread = {
     created_at: string;
     last_message_at: string | null;
     closed_at: string | null;
+    close_reason: string | null;
     admin_last_read_at: string | null;
     member_last_read_at: string | null;
     has_diagnostics: boolean;

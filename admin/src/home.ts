@@ -9,7 +9,7 @@ export type QuizDayStatus = "open" | "ended" | "outside_plan" | "skipped" | "not
 export type HomeSummary = {
   /** 預設計畫（和計畫區同一個預設）；沒有任何計畫是 null */
   plan: HomePlan | null;
-  reports: { open: number; unread: number; oldest_open_at: string | null } | null;
+  reports: { pending: number; processing: number; unread: number; oldest_pending_at: string | null } | null;
   commentary: { pending: number; approved: number } | null;
   /** 預設計畫明天的小測驗；沒有計畫是 null */
   quiz: { enabled: boolean; configured: boolean; date: string; status: QuizDayStatus | null; needs_attention: boolean } | null;
@@ -19,7 +19,7 @@ export type HomeSummary = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** 最舊的未結案回報等了幾天（未滿一天是 0）；沒有就 null */
+/** 等最久的回報等了幾天（未滿一天是 0）；沒有就 null */
 export function waitingDays(oldest: string | null | undefined, now: Date): number | null {
   if (!oldest) return null;
   const at = Date.parse(oldest);

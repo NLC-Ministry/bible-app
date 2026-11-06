@@ -170,7 +170,7 @@ export function AdminApp({ auth, api, environment, win }: AdminAppProps) {
   };
 
   // 首頁點進去之前先把那一頁的篩選設好（#569），點進去的人數才會和首頁一樣
-  const openInboxFromHome = () => setInbox((prev) => (prev.filter === "open" ? prev : { ...prev, filter: "open" }));
+  const openInboxFromHome = () => setInbox((prev) => (prev.filter === "pending" ? prev : { ...prev, filter: "pending" }));
   const openPlanFromHome = (planId: string, drill: HomeDrill) => setPlanUi((prev) => {
     if (drill === "care") return { ...prev, planId, filters: drillFilters("care"), shown: ROSTER_PAGE_SIZE, openRows: [] };
     if (drill === "unfilled_teams") return { ...prev, planId, teamFilter: "unfilled", teamQuery: "" };

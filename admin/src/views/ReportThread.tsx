@@ -9,8 +9,17 @@ import { useCallback, useEffect, useRef, useState, type SyntheticEvent } from "r
 import { ChevronLeft, ImagePlus, Send, Shield, Trash2, UserRound, X } from "lucide-react";
 import { compressScreenshot } from "../../../lib/issue-report/compress-screenshot.ts";
 import { diagnosticsSummaryRows } from "../../../lib/issue-report/report-diagnostics-summary.ts";
+import {
+  REPORT_CLOSE_REASONS,
+  REPORT_CLOSE_REASON_LABEL,
+  REPORT_OPEN_STATUSES,
+  REPORT_STATUS_LABEL,
+  closeMessageForReason,
+  isClosedStatus,
+  reportStatusText
+} from "../../../lib/issue-report/report-status.ts";
 import { describeAdminError, type AdminApi } from "../api.ts";
-import { REPORT_CATEGORY_LABEL, REPORT_STATUS_LABEL, formatDate, formatDateTime, label, text } from "../format.ts";
+import { REPORT_CATEGORY_LABEL, formatDate, formatDateTime, label, text } from "../format.ts";
 import { formatRoute } from "../route.ts";
 import type { ReportMessage, ReportThread } from "../types.ts";
 import { Badge, ErrorNotice, Spinner } from "../ui.tsx";
@@ -18,7 +27,6 @@ import { statusTone } from "./ReportInbox.tsx";
 
 export const THREAD_REFRESH_MS = 20_000;
 export const MAX_REPLY_CHARS = 500;
-const STATUSES = ["pending", "processing", "resolved", "ignored"] as const;
 
 type PickedImage = { base64: string; mime: string; w: number; h: number };
 
@@ -40,6 +48,7 @@ export function ReportThreadView({ api, reportId, capabilities, onChanged, onOpe
   const [actionError, setActionError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [confirmAttachment, setConfirmAttachment] = useState<string | null>(null);
   const canWrite = capabilities.includes("support.write");
 
@@ -95,7 +104,14 @@ export function ReportThreadView({ api, reportId, capabilities, onChanged, onOpe
 
   const setStatus = (status: string) => run(async () => {
     const result = await api.call<{ status: string; closed_at: string | null }>("report_set_status", { report_id: reportId, status });
-    setThread((prev) => prev ? { ...prev, report: { ...prev.report, status: result.status, closed_at: result.closed_at } } : prev);
+    setThread((prev) => prev ? { ...prev, report: { ...prev.report, status: result.status, closed_at: result.closed_at, close_reason: null } } : prev);
+    onChanged();
+  });
+
+  const closeReport = (reason: string, body: string) => run(async () => {
+    await api.call("report_close", { report_id: reportId, close_reason: reason, body });
+    setClosing(false);
+    await refresh();
     onChanged();
   });
 
@@ -132,6 +148,7 @@ export function ReportThreadView({ api, reportId, capabilities, onChanged, onOpe
   const { report, messages } = thread;
   const reporter = report.reporter;
   const lastSeenByMember = lastAdminMessageSeen(messages, report.member_last_read_at);
+  const closed = isClosedStatus(report.status);
 
   return (
     <div className="adm-detail adm-thread">
@@ -139,7 +156,7 @@ export function ReportThreadView({ api, reportId, capabilities, onChanged, onOpe
       <header className="adm-thread__header">
         <div className="adm-badges">
           <Badge>{label(REPORT_CATEGORY_LABEL, report.category)}</Badge>
-          <Badge tone={statusTone(report.status)}>{label(REPORT_STATUS_LABEL, report.status)}</Badge>
+          <Badge tone={statusTone(report.status)}>{reportStatusText(report.status, report.close_reason)}</Badge>
         </div>
         <div className="adm-thread__reporter">
           <span>{reporter ? text(reporter.name, "（未填姓名）") : "訪客／離線"}</span>
@@ -167,12 +184,20 @@ export function ReportThreadView({ api, reportId, capabilities, onChanged, onOpe
               disabled={busy}
               onChange={(event) => { void setStatus(event.target.value); }}
             >
-              {STATUSES.map((status) => <option key={status} value={status}>{REPORT_STATUS_LABEL[status]}</option>)}
+              {/* 已結案不能從這裡選，要走「結案」；已結案的回報選其他狀態就是重新打開 */}
+              {closed && <option value={report.status} disabled>{reportStatusText(report.status, report.close_reason)}</option>}
+              {REPORT_OPEN_STATUSES.map((status) => <option key={status} value={status}>{REPORT_STATUS_LABEL[status]}</option>)}
             </select>
+            {!closed && (
+              <button type="button" className="adm-button" onClick={() => setClosing(true)} disabled={busy || closing}>結案</button>
+            )}
             <button type="button" className="adm-button adm-button--ghost adm-button--danger" onClick={() => setConfirmDelete(true)} disabled={busy}>
               <Trash2 className="adm-icon" aria-hidden="true" />刪除回報
             </button>
           </div>
+        )}
+        {closing && !closed && (
+          <CloseReportForm busy={busy} onCancel={() => setClosing(false)} onConfirm={(reason, body) => { void closeReport(reason, body); }} />
         )}
         {confirmDelete && (
           <DeleteReportConfirm busy={busy} onCancel={() => setConfirmDelete(false)} onConfirm={(reason) => { void deleteReport(reason); }} />
@@ -310,6 +335,44 @@ function MessageItem({ message, dayLabel, seenByMember, canWrite, confirming, bu
         {formatDateTime(message.created_at)}{seenByMember ? "・會友已讀" : ""}
       </p>
     </li>
+  );
+}
+
+function CloseReportForm({ busy, onCancel, onConfirm }: { busy: boolean; onCancel: () => void; onConfirm: (reason: string, body: string) => void }) {
+  const [reason, setReason] = useState("");
+  const [body, setBody] = useState("");
+  return (
+    <div className="adm-notice" role="group" aria-label="結案">
+      <div className="adm-notice__body">
+        <p>這段訊息會傳給會友。會友之後回覆，回報會自動重新打開。</p>
+        <label className="adm-label" htmlFor="adm-close-reason">結案原因</label>
+        <select
+          id="adm-close-reason"
+          className="adm-select"
+          value={reason}
+          onChange={(event) => {
+            setBody(closeMessageForReason(body, reason, event.target.value));
+            setReason(event.target.value);
+          }}
+        >
+          <option value="" disabled>請選擇</option>
+          {REPORT_CLOSE_REASONS.map((value) => <option key={value} value={value}>{REPORT_CLOSE_REASON_LABEL[value]}</option>)}
+        </select>
+        <label className="adm-label" htmlFor="adm-close-body">給會友的訊息</label>
+        <textarea
+          id="adm-close-body"
+          className="adm-input"
+          rows={3}
+          value={body}
+          maxLength={MAX_REPLY_CHARS}
+          onChange={(event) => setBody(event.target.value)}
+        />
+        <div className="adm-row">
+          <button type="button" className="adm-button adm-button--primary" onClick={() => onConfirm(reason, body)} disabled={busy || !reason || !body.trim()}>確定結案</button>
+          <button type="button" className="adm-button" onClick={onCancel} disabled={busy}>取消</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
