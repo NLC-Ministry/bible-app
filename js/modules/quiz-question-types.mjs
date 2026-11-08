@@ -269,13 +269,21 @@ export function isAnswerCorrect(type, answerKey, response) {
   return false;
 }
 
+/**
+ * 單選／多選要不要打亂選項（#687）：payload.shuffleOptions === false 才照出題順序，
+ * 沒有這個欄位＝打亂（既有題目行為不變）。排序、連連看、選單題不看這個設定。
+ */
+export function shouldShuffleOptions(payload) {
+  return !(payload && payload.shuffleOptions === false);
+}
+
 // 顯示順序打亂，但 value 仍是原本的選項索引——作答格式、判分、檢討畫面都不受影響。
-function renderOptionsList(id, options, multiple, random) {
+function renderOptionsList(id, options, multiple, random, shuffle = true) {
   const inputType = multiple ? "checkbox" : "radio";
   const name = multiple ? `q-${id}[]` : `q-${id}`;
   const indexed = (options || []).map((option, optionIndex) => ({ option, optionIndex }));
   return `<div class="daily-quiz-options">
-    ${shuffleItems(indexed, random).map(({ option, optionIndex }) => `
+    ${(shuffle ? shuffleItems(indexed, random) : indexed).map(({ option, optionIndex }) => `
       <label><input type="${inputType}" name="${escapeHtml(name)}" value="${optionIndex}"><span>${escapeHtml(option)}</span></label>
     `).join("")}
   </div>`;
@@ -337,9 +345,9 @@ export function renderQuestionFieldsetHtml(question, index, { shuffleSeed } = {}
           <label><input type="radio" name="q-${escapeHtml(id)}" value="false"><span>錯</span></label>
         </div>`;
       case "single":
-        return renderOptionsList(id, payload.options, false, random);
+        return renderOptionsList(id, payload.options, false, random, shouldShuffleOptions(payload));
       case "multiple":
-        return renderOptionsList(id, payload.options, true, random);
+        return renderOptionsList(id, payload.options, true, random, shouldShuffleOptions(payload));
       case "matching": {
         // 連線用的 SVG 不寫死在樣板裡，改由 bindQuestionFieldset 用
         // document.createElementNS 動態插入（跟 exam.js 連連看同一招）——

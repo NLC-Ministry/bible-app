@@ -28,7 +28,7 @@ import { csvCell } from "./csv-cell.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
 import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-managed-scope-options.mjs";
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
-import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS, MENU_MAX_QUANTITY } from "./quiz-question-types.mjs";
+import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS, MENU_MAX_QUANTITY, shouldShuffleOptions } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { answerCorrectionNote, canCorrectAnswer, readCorrectionAnswerKey, renderAnswerCorrectionHtml } from "./quiz-answer-correction.mjs";
 import {
@@ -1581,6 +1581,26 @@ function bindAdminLightningQuizImageSection(fieldset) {
   });
 }
 
+// #687：單選／多選可以關掉「打亂選項順序」（例如有「以上皆是」、選項有先後順序）。
+// 勾選框放在題型內容區外面，切換題型時才不會被重畫洗掉；其他題型一律打亂，所以隱藏。
+const isAdminLightningQuizShuffleType = type => type === 'single' || type === 'multiple';
+
+function renderAdminLightningQuizShuffleToggleHtml(type, payload) {
+  return `<div class="admin-lq-shuffle" data-lq-shuffle ${isAdminLightningQuizShuffleType(type) ? '' : 'hidden'}>
+    <label class="checkbox-label-block"><input type="checkbox" data-field="shuffleOptions" ${shouldShuffleOptions(payload) ? 'checked' : ''}>打亂選項順序</label>
+    <p class="admin-daily-quiz-note">選項有「以上皆是」或本身有先後順序時取消勾選，會友會照上面的順序看到選項。</p>
+  </div>`;
+}
+
+function bindAdminLightningQuizShuffleToggle(fieldset) {
+  const typeSelect = fieldset?.querySelector('[data-field="type"]');
+  const toggle = fieldset?.querySelector('[data-lq-shuffle]');
+  if (!typeSelect || !toggle) return;
+  typeSelect.addEventListener('change', () => {
+    toggle.hidden = !isAdminLightningQuizShuffleType(typeSelect.value);
+  });
+}
+
 function renderAdminLightningQuizQuestionFieldsetHtml(question) {
   const normalized = question && question.type ? question : adminQuizCustomDefaultQuestion('single');
   const type = normalized.type || 'single';
@@ -1592,6 +1612,7 @@ function renderAdminLightningQuizQuestionFieldsetHtml(question) {
     <label>題目<textarea class="form-control" data-field="stem" rows="2" placeholder="請輸入題目內容">${adminQuizEscape(normalized.payload?.stem || '')}</textarea></label>
     ${renderAdminLightningQuizImageSectionHtml(image)}
     <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized)}</div>
+    ${renderAdminLightningQuizShuffleToggleHtml(type, normalized.payload)}
     <label>詳解（作答結束後才顯示，可留白）<textarea class="form-control" data-field="explanation" rows="2" placeholder="例如：步驟名稱、經文出處">${adminQuizEscape(normalized.explanation || '')}</textarea></label>
   </fieldset>`;
 }
@@ -1607,6 +1628,11 @@ function collectAdminLightningQuizQuestion(fieldset) {
     if (altInput && question.payload.image && typeof question.payload.image === 'object') {
       question.payload.image = { ...question.payload.image, alt: altInput.value.trim() || '題目附圖' };
     }
+  }
+  // 勾著（預設）就不寫欄位，跟既有題目一樣；只有取消勾選才存 false（#687）
+  const shuffleInput = fieldset.querySelector('[data-field="shuffleOptions"]');
+  if (isAdminLightningQuizShuffleType(question.type) && shuffleInput && !shuffleInput.checked) {
+    question.payload.shuffleOptions = false;
   }
   question.explanation = fieldset.querySelector('[data-field="explanation"]')?.value.trim() || '';
   return question;
@@ -1897,6 +1923,7 @@ function openAdminLightningQuizEditor(question = null, { copy = false, prefill =
   } : null);
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
   bindAdminLightningQuizImageSection(body.querySelector('fieldset'));
+  bindAdminLightningQuizShuffleToggle(body.querySelector('fieldset'));
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
   if (heading) heading.textContent = copy ? '複製成新題（請選新的日期）' : question ? '編輯題目' : '新增題目';
   const snapshot = adminLightningQuizEditorSnapshot();
