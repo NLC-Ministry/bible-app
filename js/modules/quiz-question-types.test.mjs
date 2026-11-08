@@ -218,6 +218,30 @@ describe("render + read + bind round-trip (jsdom)", () => {
     expect(orders.size).toBeGreaterThan(1);
   });
 
+  // #687：出題者可以逐題關掉打亂（例如「以上皆是」、有時間順序的選項）
+  it("single / multiple: payload.shuffleOptions === false keeps the authored order", () => {
+    const options = ["摩西", "約書亞", "大衛", "所羅門", "以上皆是"];
+    ["single", "multiple"].forEach(type => {
+      const question = normalizeQuestion({ id: `n-${type}`, type, payload: { stem: "?", options, shuffleOptions: false }, answerKey: type === "single" ? 4 : [4] });
+      for (let seed = 0; seed < 20; seed += 1) {
+        const fieldset = mount(renderQuestionFieldsetHtml(question, 0, { shuffleSeed: `member-${seed}` }));
+        const values = Array.from(fieldset.querySelectorAll("input")).map(input => input.value);
+        expect(values).toEqual(["0", "1", "2", "3", "4"]);
+      }
+    });
+  });
+
+  it("shuffleOptions: false does not stop ordering / matching from shuffling", () => {
+    const ordering = normalizeQuestion({ id: "o-n", type: "ordering", payload: { stem: "?", shuffleOptions: false, items: [{ id: "I1", text: "1" }, { id: "I2", text: "2" }, { id: "I3", text: "3" }, { id: "I4", text: "4" }] } });
+    const orders = new Set();
+    for (let seed = 0; seed < 20; seed += 1) {
+      const fieldset = mount(renderQuestionFieldsetHtml(ordering, 0, { shuffleSeed: `member-${seed}` }));
+      orders.add(Array.from(fieldset.querySelectorAll("[data-item-id]")).map(chip => chip.dataset.itemId).join(","));
+    }
+    expect(orders.size).toBeGreaterThan(1);
+    expect(orders.has("I1,I2,I3,I4")).toBe(false);
+  });
+
   it("the same shuffleSeed re-renders every type in the same order", () => {
     const questions = [
       { id: "a", type: "single", payload: { stem: "?", options: ["1", "2", "3", "4", "5"] } },

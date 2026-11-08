@@ -4112,7 +4112,7 @@ const db = {
       quiz_date_passed: "已經過去的日子不能再修改。",
       quiz_rest_day: "這一天是補讀日，沒有排讀經章節，不出題。",
       quiz_not_ready: "這一天的題目還沒準備好，請先請 AI 出題或改成自訂題目。",
-      quiz_makeup_not_past: "今天以後的日子會自動發佈，不需要補發。",
+      quiz_publish_not_yet: "還沒到的日子不能提前發佈。",
       quiz_makeup_plan_ended: "這個計畫已經結束，不能再補發。",
       quiz_day_skipped: "這一天設成不發，不能補發。",
       quiz_generating: "AI 正在出這一天的題目，請稍等一下再試。",
@@ -4238,7 +4238,7 @@ const db = {
     });
   },
 
-  // #643：補發過去沒發出去的日子（發給全部小組，作答到今天 23:59）
+  // #643：補發過去沒發出去的日子；#688：今天也用這支「立即發佈」（發給全部小組，作答到今天 23:59）
   async publishDailyQuizMakeup(plan, quizDate) {
     const planId = this._quizPlanId(plan);
     if (!planId) return { success: false, message: "找不到小測驗對應的計畫。" };

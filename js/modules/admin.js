@@ -28,7 +28,7 @@ import { csvCell } from "./csv-cell.mjs";
 import { renderAdminCommentary } from "./admin-commentary.mjs";
 import { buildManagedScopeChoices, managedScopeErrorMessage } from "./admin-managed-scope-options.mjs";
 import { renderAdminReadingActivity } from "./admin-reading-activity.mjs";
-import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS, MENU_MAX_QUANTITY } from "./quiz-question-types.mjs";
+import { formatResponseForDisplay, normalizeQuestion, QUESTION_TYPE_LABELS, MENU_MAX_QUANTITY, shouldShuffleOptions } from "./quiz-question-types.mjs";
 import { renderQuizEvidenceHtml } from "./quiz-evidence.mjs";
 import { answerCorrectionNote, canCorrectAnswer, readCorrectionAnswerKey, renderAnswerCorrectionHtml } from "./quiz-answer-correction.mjs";
 import {
@@ -1581,6 +1581,26 @@ function bindAdminLightningQuizImageSection(fieldset) {
   });
 }
 
+// #687：單選／多選可以關掉「打亂選項順序」（例如有「以上皆是」、選項有先後順序）。
+// 勾選框放在題型內容區外面，切換題型時才不會被重畫洗掉；其他題型一律打亂，所以隱藏。
+const isAdminLightningQuizShuffleType = type => type === 'single' || type === 'multiple';
+
+function renderAdminLightningQuizShuffleToggleHtml(type, payload) {
+  return `<div class="admin-lq-shuffle" data-lq-shuffle ${isAdminLightningQuizShuffleType(type) ? '' : 'hidden'}>
+    <label class="checkbox-label-block"><input type="checkbox" data-field="shuffleOptions" ${shouldShuffleOptions(payload) ? 'checked' : ''}>打亂選項順序</label>
+    <p class="admin-daily-quiz-note">選項有「以上皆是」或本身有先後順序時取消勾選，會友會照上面的順序看到選項。</p>
+  </div>`;
+}
+
+function bindAdminLightningQuizShuffleToggle(fieldset) {
+  const typeSelect = fieldset?.querySelector('[data-field="type"]');
+  const toggle = fieldset?.querySelector('[data-lq-shuffle]');
+  if (!typeSelect || !toggle) return;
+  typeSelect.addEventListener('change', () => {
+    toggle.hidden = !isAdminLightningQuizShuffleType(typeSelect.value);
+  });
+}
+
 function renderAdminLightningQuizQuestionFieldsetHtml(question) {
   const normalized = question && question.type ? question : adminQuizCustomDefaultQuestion('single');
   const type = normalized.type || 'single';
@@ -1592,6 +1612,7 @@ function renderAdminLightningQuizQuestionFieldsetHtml(question) {
     <label>題目<textarea class="form-control" data-field="stem" rows="2" placeholder="請輸入題目內容">${adminQuizEscape(normalized.payload?.stem || '')}</textarea></label>
     ${renderAdminLightningQuizImageSectionHtml(image)}
     <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized)}</div>
+    ${renderAdminLightningQuizShuffleToggleHtml(type, normalized.payload)}
     <label>詳解（作答結束後才顯示，可留白）<textarea class="form-control" data-field="explanation" rows="2" placeholder="例如：步驟名稱、經文出處">${adminQuizEscape(normalized.explanation || '')}</textarea></label>
   </fieldset>`;
 }
@@ -1607,6 +1628,11 @@ function collectAdminLightningQuizQuestion(fieldset) {
     if (altInput && question.payload.image && typeof question.payload.image === 'object') {
       question.payload.image = { ...question.payload.image, alt: altInput.value.trim() || '題目附圖' };
     }
+  }
+  // 勾著（預設）就不寫欄位，跟既有題目一樣；只有取消勾選才存 false（#687）
+  const shuffleInput = fieldset.querySelector('[data-field="shuffleOptions"]');
+  if (isAdminLightningQuizShuffleType(question.type) && shuffleInput && !shuffleInput.checked) {
+    question.payload.shuffleOptions = false;
   }
   question.explanation = fieldset.querySelector('[data-field="explanation"]')?.value.trim() || '';
   return question;
@@ -1897,6 +1923,7 @@ function openAdminLightningQuizEditor(question = null, { copy = false, prefill =
   } : null);
   bindAdminQuizCustomQuestionBlock(body.querySelector('fieldset'), () => {});
   bindAdminLightningQuizImageSection(body.querySelector('fieldset'));
+  bindAdminLightningQuizShuffleToggle(body.querySelector('fieldset'));
   if (typeof hydrateIcons === 'function') hydrateIcons(body);
   if (heading) heading.textContent = copy ? '複製成新題（請選新的日期）' : question ? '編輯題目' : '新增題目';
   const snapshot = adminLightningQuizEditorSnapshot();
@@ -4512,11 +4539,18 @@ function adminQuizDaySummary(day, today) {
   return '';
 }
 
-// 過去可補發的日子不會自動發佈：「已排程」改叫「可以補發」，「等待出題」改叫「沒發出去」
-function adminQuizDayStatus(day) {
+// 過去可補發的日子不會自動發佈：「已排程」改叫「可以補發」，「等待出題」改叫「沒發出去」。
+// #688：自動發佈關著時，今天以後題目備妥的日子不叫「已排程」（不會自己發），改叫「不會自動發佈」
+function adminQuizDayStatus(day, { autoPublishEnabled = true } = {}) {
   if (day.canMakeup === true && day.status === 'scheduled') return { label: '可以補發', kind: 'brand' };
   if (day.canMakeup === true && day.status === 'waiting') return { label: '沒發出去', kind: 'neutral' };
+  if (!autoPublishEnabled && day.status === 'scheduled') return { label: '不會自動發佈', kind: 'neutral' };
   return ADMIN_QUIZ_DAY_STATUS[day.status] || { label: day.status, kind: 'neutral' };
+}
+
+// #688：今天題目備妥、還沒發（伺服器的 scheduled 已經排除已發佈、補讀日、這天不發）就能立即發佈
+function adminQuizCanPublishNow(day, today) {
+  return day.date === today && day.status === 'scheduled' && Number(day.publishedGroups || 0) === 0;
 }
 
 // #643：過去沒發出去、還能補發的日子（伺服器算 canMakeup）也可以出題、改自訂題目
@@ -4535,7 +4569,7 @@ function renderAdminQuizCalendarHtml(calendar, selectedDate) {
   const days = Array.isArray(calendar.days) ? calendar.days : [];
   const showingPast = days.length > 0 && days[0].date < today;
   return `${calendar.autoPublishEnabled ? '' : `<div class="admin-quiz-calendar-notice" role="status">
-      每天自動發佈還沒開啟，下面這些天都不會自動發給小組。
+      每天自動發佈還沒開啟，下面這些天都不會自動發給小組；今天的題目可以在今天按「立即發佈」。
       <button type="button" class="exam-admin__link" data-quiz-goto-rules>到「規則設定」開啟</button>
     </div>`}
     <div class="admin-quiz-day-actions">
@@ -4544,7 +4578,7 @@ function renderAdminQuizCalendarHtml(calendar, selectedDate) {
     </div>
     <div class="admin-quiz-calendar" role="list">
       ${days.map(day => {
-        const status = adminQuizDayStatus(day);
+        const status = adminQuizDayStatus(day, { autoPublishEnabled: calendar.autoPublishEnabled !== false });
         const classes = ['admin-quiz-calendar__day',
           day.date === selectedDate ? 'is-selected' : '',
           day.needsAttention ? 'is-alert' : '',
@@ -4608,10 +4642,11 @@ function renderAdminQuizKeptQuestionsHtml(day, editable) {
   </div>`;
 }
 
-function renderAdminQuizDayDetailHtml(day, today) {
-  const status = adminQuizDayStatus(day);
+function renderAdminQuizDayDetailHtml(day, today, { autoPublishEnabled = true } = {}) {
+  const status = adminQuizDayStatus(day, { autoPublishEnabled });
   const editable = adminQuizIsEditableDay(day, today);
   const canMakeup = day.canMakeup === true;
+  const canPublishNow = adminQuizCanPublishNow(day, today);
   const hasQuestions = Array.isArray(day.questions) && day.questions.length > 0;
   const actions = [];
   if (hasQuestions) actions.push('<button type="button" class="secondary-btn" data-quiz-day-act="trial">試作</button>');
@@ -4623,6 +4658,7 @@ function renderAdminQuizDayDetailHtml(day, today) {
     actions.push(`<button type="button" class="secondary-btn" data-quiz-day-act="custom">${day.source === 'custom' ? '修改自訂題目' : '改成自訂題目'}</button>`);
     if (day.source === 'custom') actions.push('<button type="button" class="secondary-btn" data-quiz-day-act="use-ai">改回 AI 題目</button>');
     if (canMakeup && day.status === 'scheduled') actions.push('<button type="button" class="primary-btn" data-quiz-day-act="makeup">補發</button>');
+    if (canPublishNow) actions.push('<button type="button" class="primary-btn" data-quiz-day-act="publish-now">立即發佈</button>');
     // 過去的日子不會自動發佈，設「這天不發」沒有意義（伺服器也會擋）
     if (day.date >= today) actions.push(day.skip
       ? '<button type="button" class="secondary-btn" data-quiz-day-act="unskip">恢復發佈</button>'
@@ -4643,6 +4679,9 @@ function renderAdminQuizDayDetailHtml(day, today) {
     ${day.status === 'waiting' && day.needsAttention ? '<p class="admin-daily-quiz-note admin-quiz-day-alert">這一天還沒有題目。可以按「請 AI 出題」，或改成自訂題目。</p>' : ''}
     ${day.status === 'skipped' ? '<p class="admin-daily-quiz-note">這一天設成不發，00:00 不會自動發佈。</p>' : ''}
     ${day.status === 'outside_plan' ? '<p class="admin-daily-quiz-note">這一天不在這個計畫的期間，不會出題也不會發佈。</p>' : ''}
+    ${canPublishNow ? `<p class="admin-daily-quiz-note">${autoPublishEnabled
+      ? '今天的題目還沒發出去，排程會在 5 分鐘內自動發佈。'
+      : '每天自動發佈沒有開，今天的題目不會自己發出去。'}按「立即發佈」可以馬上發給全部小組，作答到今天 23:59。</p>` : ''}
     ${canMakeup ? '<p class="admin-daily-quiz-note">這一天沒有發出去。題目準備好後按「補發」，會發給全部小組，作答到今天 23:59，成績算在這一天。</p>' : ''}
     ${day.status === 'rest_day' ? '<p class="admin-daily-quiz-note">這一天是補讀日，沒有排讀經章節，不出題也不發佈。</p>' : ''}
     ${actions.length ? `<div class="admin-quiz-day-actions">${actions.join('')}</div>` : ''}
@@ -4699,7 +4738,7 @@ async function renderAdminQuizCalendar(root, selectedDate = null) {
       button.classList.toggle('is-selected', on);
       button.setAttribute('aria-pressed', String(on));
     });
-    host.innerHTML = renderAdminQuizDayDetailHtml(day, calendar.today);
+    host.innerHTML = renderAdminQuizDayDetailHtml(day, calendar.today, { autoPublishEnabled: calendar.autoPublishEnabled !== false });
     bindAdminQuizDayDetail(root, host, day);
     if (day.status === 'generating') watchAdminQuizGeneration(root, host, day);
   };
@@ -4794,6 +4833,11 @@ function bindAdminQuizDayDetail(root, host, day) {
     if (act === 'makeup') {
       if (!await confirmDialog('補發這一天的小測驗？', `${adminQuizDayLabel(day.date)} 的小測驗會發給全部小組，作答到今天 23:59，成績算在 ${adminQuizDayLabel(day.date)}。會友在今天的計畫頁會看到「補發」。`, '補發')) return;
       await run(button, () => db.publishDailyQuizMakeup(plan, day.date), '已補發，會友今天就看得到。');
+      return;
+    }
+    if (act === 'publish-now') {
+      if (!await confirmDialog('立即發佈今天的小測驗？', '今天的小測驗會馬上發給全部小組，作答到今天 23:59。發佈後就不能換題目。', '立即發佈')) return;
+      await run(button, () => db.publishDailyQuizMakeup(plan, day.date), '已發佈，會友現在就看得到。');
       return;
     }
     if (act === 'unskip') {
