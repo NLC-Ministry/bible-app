@@ -200,6 +200,27 @@ describe("make-up publishing (#643)", () => {
   it("db and nlc-data expose the make-up RPC", () => {
     expect(db).toContain('this._callQuizRpc("publish_daily_quiz_makeup", { p_global_plan_id: planId, p_quiz_date: quizDate })');
     expect(nlcData).toContain('"publish_daily_quiz_makeup"');
-    for (const code of ["quiz_makeup_not_past:", "quiz_makeup_plan_ended:", "quiz_day_skipped:", "quiz_not_ready:"]) expect(db).toContain(code);
+    for (const code of ["quiz_publish_not_yet:", "quiz_makeup_plan_ended:", "quiz_day_skipped:", "quiz_not_ready:"]) expect(db).toContain(code);
+  });
+});
+
+// #688：今天題目備妥、還沒發就能立即發佈（自動發佈關著也可以）；SQL 行為在 db-behavior.test.mjs
+describe("publish today now (#688)", () => {
+  it("offers 立即發佈 only for today's scheduled, unpublished day and calls the same RPC", () => {
+    expect(admin).toContain("return day.date === today && day.status === 'scheduled' && Number(day.publishedGroups || 0) === 0;");
+    expect(admin).toContain("if (canPublishNow) actions.push('<button type=\"button\" class=\"primary-btn\" data-quiz-day-act=\"publish-now\">立即發佈</button>');");
+    expect(admin).toMatch(/act === 'publish-now'[\s\S]{0,300}db\.publishDailyQuizMakeup\(plan, day\.date\)/);
+  });
+
+  it("labels scheduled days 不會自動發佈 while auto-publish is off, in the grid and the detail", () => {
+    expect(admin).toContain("if (!autoPublishEnabled && day.status === 'scheduled') return { label: '不會自動發佈', kind: 'neutral' };");
+    expect(admin).toContain("adminQuizDayStatus(day, { autoPublishEnabled: calendar.autoPublishEnabled !== false })");
+    expect(admin).toContain("renderAdminQuizDayDetailHtml(day, calendar.today, { autoPublishEnabled: calendar.autoPublishEnabled !== false })");
+  });
+
+  it("the latest publish_daily_quiz_makeup accepts today and rejects only future days", () => {
+    const body = latestFunctionDefinition("publish_daily_quiz_makeup").text;
+    expect(body).toContain("p_quiz_date > today THEN RAISE EXCEPTION 'quiz_publish_not_yet'");
+    expect(body).not.toContain("quiz_makeup_not_past");
   });
 });
