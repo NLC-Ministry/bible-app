@@ -12758,6 +12758,13 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+/* #687 單選／多選「打亂選項順序」 */
+.admin-lq-shuffle {
+  margin: 0.5rem 0 0.75rem;
+}
+.admin-lq-shuffle .admin-daily-quiz-note {
+  margin: 0;
+}
 .lightning-quiz-result.is-correct [data-icon] { color: var(--color-success-foreground); }
 .lightning-quiz-result.is-wrong [data-icon] { color: var(--color-danger-foreground); }
 .lightning-quiz-result__time {
