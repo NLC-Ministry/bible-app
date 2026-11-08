@@ -948,6 +948,8 @@ describe("小測驗補發過去沒發出去的日子（publish_daily_quiz_makeup
     );
     await readyQuiz(LIVE_PLAN, PAST);
     await readyQuiz(LIVE_PLAN, SKIPPED);
+    await readyQuiz(LIVE_PLAN, TODAY);
+    await readyQuiz(LIVE_PLAN, shift(TODAY, 1));
     await readyQuiz(ENDED_PLAN, shift(TODAY, -3));
     await tx.query(`INSERT INTO public.quiz_daily_overrides (global_plan_id, quiz_date, skip) VALUES ($1, $2, TRUE)`, [LIVE_PLAN, SKIPPED]);
     return fn(tx);
@@ -997,7 +999,7 @@ describe("小測驗補發過去沒發出去的日子（publish_daily_quiz_makeup
 
   it("只有系統管理員能補發，而且只限符合條件的過去日子", async () => {
     await expect(withPlans(tx => makeup(tx, LIVE_PLAN, PAST, ids.member))).rejects.toThrow(/quiz_publish_admin_only/);
-    await expect(withPlans(tx => makeup(tx, LIVE_PLAN, TODAY))).rejects.toThrow(/quiz_makeup_not_past/);
+    await expect(withPlans(tx => makeup(tx, LIVE_PLAN, shift(TODAY, 1)))).rejects.toThrow(/quiz_publish_not_yet/);
     await expect(withPlans(tx => makeup(tx, LIVE_PLAN, SKIPPED))).rejects.toThrow(/quiz_day_skipped/);
     await expect(withPlans(tx => makeup(tx, LIVE_PLAN, NO_QUIZ))).rejects.toThrow(/quiz_not_ready/);
     await expect(withPlans(tx => makeup(tx, ENDED_PLAN, shift(TODAY, -3)))).rejects.toThrow(/quiz_makeup_plan_ended/);
@@ -1024,6 +1026,61 @@ describe("小測驗補發過去沒發出去的日子（publish_daily_quiz_makeup
       return makeup(tx, LIVE_PLAN, NO_QUIZ);
     });
     expect(result).toMatchObject({ source: "custom" });
+  });
+
+  // #688：自動發佈關著（或還沒掃到）時，今天的題目可以立即發佈；之後的自動發佈不會重複發
+  it("今天可以立即發佈：發給全部小組、作答到今天 23:59，會友今天的小測驗就是這份", async () => {
+    const outcome = await withPlans(async tx => {
+      const before = await calendarDay(tx, TODAY);
+      const result = await makeup(tx, LIVE_PLAN, TODAY);
+      const { rows: pubs } = await tx.query(
+        `SELECT answer_close_at = ((((now() AT TIME ZONE 'Asia/Taipei')::date) + TIME '23:59:59') AT TIME ZONE 'Asia/Taipei') AS closes_tonight
+         FROM public.quiz_publications WHERE global_plan_id = $1 AND quiz_date = $2`, [LIVE_PLAN, TODAY]
+      );
+      const groups = (await tx.query(`SELECT count(*)::int AS n FROM public.small_groups`)).rows[0].n;
+      const { rows: [{ dashboard }] } = await tx.query(
+        `SELECT public.get_daily_quiz_dashboard($1, $2::date, $3) AS dashboard`, [LIVE_PLAN, TODAY, ids.member]
+      );
+      // 自動發佈規則打開後掃一次：已經發過就跳過
+      await tx.query(
+        `INSERT INTO public.app_feature_settings (key, enabled) VALUES ('daily_quiz', TRUE)
+         ON CONFLICT (key) DO UPDATE SET enabled = TRUE`
+      );
+      await tx.query(
+        `INSERT INTO public.quiz_auto_publish_rules (global_plan_id, enabled, enabled_by) VALUES ($1, TRUE, $2)`, [LIVE_PLAN, ids.admin]
+      );
+      const sweep = (await tx.query(`SELECT public.run_daily_quiz_auto_publish() AS r`)).rows[0].r;
+      const pubsAfterSweep = (await tx.query(
+        `SELECT count(*)::int AS n FROM public.quiz_publications WHERE global_plan_id = $1 AND quiz_date = $2`, [LIVE_PLAN, TODAY]
+      )).rows[0].n;
+      const after = await calendarDay(tx, TODAY);
+      return { before, result, pubs, groups, dashboard, sweep, pubsAfterSweep, after };
+    });
+    expect(outcome.before).toMatchObject({ status: "scheduled", canMakeup: false });
+    expect(outcome.result).toMatchObject({ quizDate: TODAY, source: "ai", publishedCount: outcome.groups });
+    expect(outcome.pubs).toHaveLength(outcome.groups);
+    expect(outcome.pubs.every(pub => pub.closes_tonight)).toBe(true);
+    expect(outcome.dashboard.myQuiz).toMatchObject({ quizDate: TODAY, attempt: null });
+    expect(outcome.dashboard.makeupQuizzes).toEqual([]);
+    expect(outcome.sweep.plans.find(plan => plan.planId === LIVE_PLAN)).toMatchObject({ status: "already_published" });
+    expect(outcome.pubsAfterSweep).toBe(outcome.groups);
+    expect(outcome.after).toMatchObject({ status: "open" });
+  });
+
+  it("今天立即發佈照樣擋：已發過、這天不發、題目沒備妥、非管理員", async () => {
+    await expect(withPlans(tx => makeup(tx, LIVE_PLAN, TODAY, ids.member))).rejects.toThrow(/quiz_publish_admin_only/);
+    await expect(withPlans(async tx => {
+      await makeup(tx, LIVE_PLAN, TODAY);
+      return makeup(tx, LIVE_PLAN, TODAY);
+    })).rejects.toThrow(/quiz_already_published/);
+    await expect(withPlans(async tx => {
+      await tx.query(`INSERT INTO public.quiz_daily_overrides (global_plan_id, quiz_date, skip) VALUES ($1, $2, TRUE)`, [LIVE_PLAN, TODAY]);
+      return makeup(tx, LIVE_PLAN, TODAY);
+    })).rejects.toThrow(/quiz_day_skipped/);
+    await expect(withPlans(async tx => {
+      await tx.query(`DELETE FROM public.daily_quizzes WHERE global_plan_id = $1 AND quiz_date = $2`, [LIVE_PLAN, TODAY]);
+      return makeup(tx, LIVE_PLAN, TODAY);
+    })).rejects.toThrow(/quiz_not_ready/);
   });
 });
 
