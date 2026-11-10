@@ -33,8 +33,14 @@ export function keptOrgFields(existingProfile) {
 /**
  * 把 upsert 的內容改回帳號原本的會員資料：member_context_* 從 payload 拿掉就不會被覆寫。
  * member_context_sync_* 記的是這次同步的嘗試，照常更新。
+ *
+ * #685：姓名、Email、電話也用帳號原本的，否則牧區是原本會員的、聯絡資料卻是這次會員的。
+ * 帳號原本是空值就維持空值，不拿這次會員的資料補。
  */
 export function keepAccountMemberOnPayload(profilePayload, existingProfile) {
+  profilePayload.name = existingProfile.name ?? "";
+  profilePayload.email = existingProfile.email ?? null;
+  profilePayload.phone = existingProfile.phone ?? null;
   for (const column of Object.keys(profilePayload)) {
     if (column.startsWith("member_context_") && !column.startsWith("member_context_sync_")) {
       delete profilePayload[column];
