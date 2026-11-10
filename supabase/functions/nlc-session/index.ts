@@ -1098,6 +1098,9 @@ Deno.serve(async (req: Request) => {
     } else if (existingProfile?.nlc_member_id) {
       profilePayload.nlc_member_id = existingProfile.nlc_member_id;
     }
+    // #685：identity 記這個登入方式自己的 Email 和姓名，不跟著帳號保留，之後才查得到它對應到誰。
+    const identityEmail = profilePayload.email;
+    const identityDisplayName = profilePayload.name;
     if (keepAccountMember) keepAccountMemberOnPayload(profilePayload, existingProfile);
 
     // 保留時不重建組織節點：組織名稱沒變，下面會沿用帳號原本的 ID。
@@ -1225,8 +1228,8 @@ Deno.serve(async (req: Request) => {
         profile_id: profileId,
         provider: "logto",
         provider_user_id: userinfo.sub,
-        email: profilePayload.email,
-        display_name: profilePayload.name,
+        email: identityEmail,
+        display_name: identityDisplayName,
         is_primary: true,
         metadata: identityMetadata,
         last_seen_at: nowIso,

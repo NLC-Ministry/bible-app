@@ -96,10 +96,10 @@ class Query {
   }
 }
 
-function hubContext({ memberId, membershipStatus = "訪客", placement = null, roles = [] }) {
+function hubContext({ memberId, membershipStatus = "訪客", placement = null, roles = [], displayName = "王小明", email = "someone@example.test" }) {
   return {
-    identity: { memberId, email: "someone@example.test" },
-    profile: { displayName: "王小明", membershipStatus },
+    identity: { memberId, email },
+    profile: { displayName, membershipStatus },
     roles,
     organization: placement
       ? { placementNodeName: placement.name, placementLevelName: placement.level, placementNodeId: "node-1" }
@@ -110,12 +110,12 @@ function hubContext({ memberId, membershipStatus = "訪客", placement = null, r
   };
 }
 
-function stubFetch({ sub, context, platformOrganization = null, platformFails = false }) {
+function stubFetch({ sub, context, platformOrganization = null, platformFails = false, userinfo = {} }) {
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
   vi.stubGlobal("fetch", vi.fn(async (input) => {
     const url = String(input);
     if (url.endsWith("/.well-known/openid-configuration")) return json({ userinfo_endpoint: "https://sso.test/userinfo" });
-    if (url === "https://sso.test/userinfo") return json({ sub, email: "someone@example.test" });
+    if (url === "https://sso.test/userinfo") return json({ sub, email: "someone@example.test", ...userinfo });
     if (url.endsWith("/api/me/context")) return json({ ok: true, context });
     if (url.includes("/organization")) {
       return platformFails ? json({ error: "down" }, 503) : json({ organization: platformOrganization });
@@ -371,5 +371,82 @@ describe("nlc-session：這次登入的會員不是帳號原本的會員（#665�
 
     expect(db.profile.nlc_member_id).toBe("member-email");
     expect(db.profile.pastoral_zone).toBe("");
+  });
+});
+
+// #685：保留帳號原本的會員時，姓名、Email、電話也要一起保留，不然帳號會混了兩位會員的資料。
+describe("nlc-session：保留帳號原本的會員時，姓名和聯絡資料也保留（#685）", () => {
+  const ACCOUNT_CONTACT = { name: "王小明", email: "phone-account@example.test", phone: "+886900000001" };
+  const SESSION_CONTACT = { name: "李大華", email: "email-login@example.test", phone: "+886900000002" };
+
+  function stubOtherMemberLogin({ platformOrganization = null } = {}) {
+    stubFetch({
+      sub: "sub-email",
+      context: hubContext({ memberId: "member-email", displayName: SESSION_CONTACT.name, email: SESSION_CONTACT.email }),
+      userinfo: { email: SESSION_CONTACT.email, phone_number: SESSION_CONTACT.phone },
+      platformOrganization
+    });
+  }
+
+  it("這次沒有牧區、帳號原本有：姓名、Email、電話都保留帳號原本的", async () => {
+    const db = makeFakeDb({ profile: accountProfile(ACCOUNT_CONTACT), identities: mergedIdentities() });
+    stubOtherMemberLogin();
+
+    const { body } = await login(db);
+
+    expectAccountKept(db);
+    expect(db.profile.name).toBe(ACCOUNT_CONTACT.name);
+    expect(db.profile.email).toBe(ACCOUNT_CONTACT.email);
+    expect(db.profile.phone).toBe(ACCOUNT_CONTACT.phone);
+    expect(body.profile.name).toBe(ACCOUNT_CONTACT.name);
+    expect(body.profile.email).toBe(ACCOUNT_CONTACT.email);
+  });
+
+  it("保留時，這個 identity 仍記自己的 Email 和姓名，查得到這個登入方式對應到誰", async () => {
+    const db = makeFakeDb({ profile: accountProfile(ACCOUNT_CONTACT), identities: mergedIdentities() });
+    stubOtherMemberLogin();
+
+    await login(db);
+
+    const emailIdentity = db.identities.find((row) => row.provider_user_id === "sub-email");
+    expect(emailIdentity.email).toBe(SESSION_CONTACT.email);
+    expect(emailIdentity.display_name).toBe(SESSION_CONTACT.name);
+  });
+
+  it("帳號原本沒有電話：維持空值，不混入這次會員的電話", async () => {
+    const db = makeFakeDb({ profile: accountProfile({ ...ACCOUNT_CONTACT, phone: null }), identities: mergedIdentities() });
+    stubOtherMemberLogin();
+
+    await login(db);
+
+    expect(db.profile.phone).toBeNull();
+    expect(db.profile.email).toBe(ACCOUNT_CONTACT.email);
+  });
+
+  it("這次的會員有牧區：維持現狀，姓名、Email、電話用這次的值", async () => {
+    const db = makeFakeDb({ profile: accountProfile(ACCOUNT_CONTACT), identities: mergedIdentities() });
+    stubOtherMemberLogin({ platformOrganization: CARE_CHAIN("新牧區") });
+
+    await login(db);
+
+    expect(db.profile.pastoral_zone).toBe("新牧區");
+    expect(db.profile.name).toBe(SESSION_CONTACT.name);
+    expect(db.profile.email).toBe(SESSION_CONTACT.email);
+    expect(db.profile.phone).toBe(SESSION_CONTACT.phone);
+  });
+
+  it("會員 ID 相同：維持現狀，姓名、Email、電話照會員中心與這次登入同步", async () => {
+    const db = makeFakeDb({ profile: accountProfile(ACCOUNT_CONTACT), identities: mergedIdentities() });
+    stubFetch({
+      sub: "sub-phone",
+      context: hubContext({ memberId: "member-phone", displayName: "王曉明", email: SESSION_CONTACT.email }),
+      userinfo: { email: SESSION_CONTACT.email, phone_number: SESSION_CONTACT.phone }
+    });
+
+    await login(db);
+
+    expect(db.profile.name).toBe("王曉明");
+    expect(db.profile.email).toBe(SESSION_CONTACT.email);
+    expect(db.profile.phone).toBe(SESSION_CONTACT.phone);
   });
 });
