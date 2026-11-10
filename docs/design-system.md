@@ -87,7 +87,7 @@ Member Hub uses **medium (500)** for emphasis (titles, labels, buttons, nav) and
 | `.type-body` | 1rem / 400, line-height 1.625 |
 | `.type-caption` | 0.875rem / 400, muted |
 
-Body font: Inter + Noto Sans TC.
+Body font: Inter (Latin and digits, from Google Fonts) + the system CJK font: `'Inter', 'PingFang TC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif`. Chinese is never downloaded as a web font (#670): it was 96% of the render-blocking Google Fonts CSS, and Android's built-in Noto Sans CJK TC is the same design. iPhone/Mac show PingFang TC (real 500/600 weights); Windows shows Microsoft JhengHei, which has no 500, so medium Chinese text renders as 400 there.
 
 ## Components
 

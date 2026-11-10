@@ -191,7 +191,6 @@ describe("web fonts: no unused Light (300) face downloaded (C)", () => {
       expect(link, "google fonts link").toBeTruthy();
       expect(link[0]).not.toMatch(/wght@300\b/);
       expect(link[0]).toMatch(/Inter:wght@400;500;600;700/);
-      expect(link[0]).toMatch(/Noto\+Sans\+TC:wght@400;500;700/);
       expect(link[0]).toMatch(/Outfit:wght@400;500;600;700/);
     }
   });
@@ -203,6 +202,30 @@ describe("web fonts: no unused Light (300) face downloaded (C)", () => {
   it("plan.js / plan-stats.js chart tick labels no longer request the unloaded weight 300", () => {
     expect(planModule).not.toMatch(/weight:\s*['"]300['"]/);
     expect(planStatsModule).not.toMatch(/weight:\s*['"]300['"]/);
+  });
+});
+
+// #670：中文改用系統字型。Noto Sans TC 佔 Google 字型 CSS 的 96%（擋住首次繪製），
+// 而 Android 內建的 Noto Sans CJK TC 就是同一套設計，不再從 Google 下載。
+describe("web fonts: Chinese uses system fonts, no Noto Sans TC download (#670)", () => {
+  const css = readFileSync("index.css", "utf8");
+
+  it("no entry HTML requests Noto Sans TC from Google Fonts", () => {
+    for (const html of [indexHtml, examHtml, gradeHtml]) {
+      const link = html.match(/fonts\.googleapis\.com\/css2\?[^"'\s]+/);
+      expect(link, "google fonts link").toBeTruthy();
+      expect(link[0]).not.toMatch(/Noto/);
+    }
+  });
+
+  it("every Inter body font stack falls back to system CJK fonts in order", () => {
+    const stacks = css.match(/font-family:\s*'Inter'[^;]*;/g) || [];
+    expect(stacks.length).toBeGreaterThan(0);
+    for (const stack of stacks) {
+      expect(stack).toMatch(
+        /'Inter',\s*'PingFang TC',\s*'Noto Sans CJK TC',\s*'Noto Sans TC',\s*'Microsoft JhengHei',\s*sans-serif/,
+      );
+    }
   });
 });
 
