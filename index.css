@@ -4,7 +4,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+  font-family: 'Inter', 'PingFang TC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -1403,7 +1403,7 @@ body {
   color: var(--text-primary);
   font-weight: var(--type-weight-strong);
   font-size: 0.875rem;
-  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+  font-family: 'Inter', 'PingFang TC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   transition: var(--transition-smooth);
   flex-shrink: 0;
 }
@@ -3375,7 +3375,7 @@ body:not(.dark-theme) .settings-row-btn:hover {
 }
 
 .login-title {
-  font-family: 'Inter', 'Noto Sans TC', sans-serif;
+  font-family: 'Inter', 'PingFang TC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
   font-size: 1.75rem;
   font-weight: var(--type-weight-strong);
   color: var(--text-primary);
