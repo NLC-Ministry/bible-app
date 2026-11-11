@@ -105,7 +105,6 @@ export function withExportTime(csv: string, now: Date): string {
   return `${csvCell("匯出時間（台灣時間）")},${csvCell(`​${taipeiDateTime(now.toISOString())}`)}\r\n${csv}`;
 }
 
-export type DirectoryTeam = { name?: string | null; role?: string | null };
 export type DirectoryExportRow = {
   name?: string | null;
   email?: string | null;
@@ -115,17 +114,10 @@ export type DirectoryExportRow = {
   role_code?: string | null;
   role_label?: string | null;
   is_active?: boolean | null;
-  teams?: DirectoryTeam[] | null;
 };
 
-export const DIRECTORY_EXPORT_HEADERS = ["大區", "牧區", "小組", "姓名", "電子信箱", "角色", "組隊狀態", "帳號狀態"] as const;
-
-/** 隊名（隊長加「[隊長] 」），同 App 的 formatProfilePlanTeams。 */
-export function formatTeams(teams: readonly DirectoryTeam[] | null | undefined): string {
-  return (Array.isArray(teams) ? teams : [])
-    .map((team) => `${team?.role === "captain" || team?.role === "leader" ? "[隊長] " : ""}${String(team?.name || "").trim() || "未命名隊伍"}`)
-    .join("、");
-}
+// 人區名單不綁計畫（#694），所以比 App 少一欄「組隊狀態」；其餘欄位、預設字相同。
+export const DIRECTORY_EXPORT_HEADERS = ["大區", "牧區", "小組", "姓名", "電子信箱", "角色", "帳號狀態"] as const;
 
 export function directoryCsv(rows: readonly DirectoryExportRow[]): string {
   return toCsv(DIRECTORY_EXPORT_HEADERS, rows.map((row) => [
@@ -135,7 +127,6 @@ export function directoryCsv(rows: readonly DirectoryExportRow[]): string {
     row.name || "未設定",
     row.email || "",
     row.role_label || (row.role_code && row.role_code !== "member" ? row.role_code : "一般會友"),
-    formatTeams(row.teams) || "未加入團隊 (個人速讀中)",
     row.is_active === false ? "已停用" : "啟用中"
   ]));
 }

@@ -4,28 +4,18 @@
 // 畫面上的文字。規則和 App 管理分頁的使用者名單相同（js/modules/admin-user-directory-filter.mjs）：
 // · 大區／牧區／小組可複選，「未設定」＝那一欄空白；
 // · 選了大區，牧區只列那些大區底下的；選了牧區（或大區），小組只列底下的；上一層改了，下一層選不到的自動拿掉；
-// · 計畫參與、組隊狀態跟著選的計畫；沒有計畫可選時這兩個條件停用。
+// · 不篩計畫（#694）：這裡是查人用的；某計畫的參加者、組隊狀況看計畫區的名單。
 // 和 App 不同：組織選項來自組織名單（bootstrap），不是從名單裡的人收集——歸屬寫錯字的人用搜尋框找。
-import type { DirectoryTeam, OrgTreeNode } from "./types.ts";
+import type { OrgTreeNode } from "./types.ts";
 
 export const ORG_UNASSIGNED = "__unassigned__";
 export const ORG_UNASSIGNED_LABEL = "未設定";
 export const DIRECTORY_PAGE_SIZE = 50;
 
-export const PARTICIPATION_FILTERS = ["all", "joined", "not_joined"] as const;
-export type PlanFilter = typeof PARTICIPATION_FILTERS[number];
-
-export const PARTICIPATION_LABEL: Record<PlanFilter, string> = { all: "全部", joined: "已加入此計畫", not_joined: "未加入此計畫" };
-export const TEAM_LABEL: Record<PlanFilter, string> = { all: "全部", joined: "已組隊", not_joined: "未組隊（個人速讀中）" };
-
 export type OrgFilter = { regions: string[]; zones: string[]; groups: string[] };
 
 export type DirectoryFilters = OrgFilter & {
   q: string;
-  /** null＝讓伺服器挑預設計畫（第一頁回來後填入） */
-  planId: string | null;
-  participation: PlanFilter;
-  team: PlanFilter;
   incomplete: boolean;
 };
 
@@ -34,9 +24,6 @@ export const EMPTY_FILTERS: DirectoryFilters = {
   regions: [],
   zones: [],
   groups: [],
-  planId: null,
-  participation: "all",
-  team: "all",
   incomplete: false
 };
 
@@ -46,20 +33,16 @@ export function directoryParams(filters: DirectoryFilters): Record<string, unkno
     regions: filters.regions,
     zones: filters.zones,
     groups: filters.groups,
-    participation: filters.participation,
-    team: filters.team,
     incomplete: filters.incomplete
   };
   const q = filters.q.trim();
   if (q) params.q = q.slice(0, 100);
-  if (filters.planId) params.plan_id = filters.planId;
   return params;
 }
 
-/** 套用了幾項條件（不算搜尋字與計畫本身）。 */
+/** 套用了幾項條件（不算搜尋字）。 */
 export function activeFilterCount(filters: DirectoryFilters): number {
-  return [filters.regions.length > 0, filters.zones.length > 0, filters.groups.length > 0,
-    filters.participation !== "all", filters.team !== "all", filters.incomplete].filter(Boolean).length;
+  return [filters.regions.length > 0, filters.zones.length > 0, filters.groups.length > 0, filters.incomplete].filter(Boolean).length;
 }
 
 export function isFiltered(filters: DirectoryFilters): boolean {
@@ -124,13 +107,6 @@ export function orgPickerSummary(values: readonly string[], unit: string): strin
 }
 
 // ── 顯示 ────────────────────────────────────────────────────────────────────
-
-/** 隊名（隊長加「[隊長] 」），同 App 的 formatProfilePlanTeams 與 admin-api 匯出。 */
-export function teamsText(teams: readonly DirectoryTeam[] | null | undefined): string {
-  return (Array.isArray(teams) ? teams : [])
-    .map((team) => `${team?.role === "captain" || team?.role === "leader" ? "[隊長] " : ""}${String(team?.name || "").trim() || "未命名隊伍"}`)
-    .join("、");
-}
 
 /** 會員中心同步狀態，同 App 使用者名單。 */
 export function syncLabel(status: string | null | undefined): string {

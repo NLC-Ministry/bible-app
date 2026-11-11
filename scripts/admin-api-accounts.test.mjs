@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { currentMigrationSql } from "./migration-sql.mjs";
 import { ADMIN_ACTIONS } from "../supabase/functions/admin-api/policy.ts";
 import { handleAdminRequest } from "../supabase/functions/admin-api/handler.ts";
-import { directoryCsv, formatTeams, orgCsv, withExportTime } from "../supabase/functions/admin-api/exports.ts";
+import { directoryCsv, orgCsv, withExportTime } from "../supabase/functions/admin-api/exports.ts";
 import { directoryFilters } from "../supabase/functions/admin-api/accounts.ts";
 import { convertUserDirectoryToCSV } from "../js/modules/admin.js";
 
@@ -78,13 +78,20 @@ describe("directory filters", () => {
       p_participation: "all", p_team: "all", p_incomplete: false, p_cursor: null, p_limit: 50
     } });
     const args = build("directory_list", {
-      q: "  王 ", regions: [" 大區 A ", "大區 A", "__unassigned__", ""], plan_id: PLAN_ID,
-      participation: "not_joined", team: "joined", incomplete: true, cursor: CURSOR, limit: 20
+      q: "  王 ", regions: [" 大區 A ", "大區 A", "__unassigned__", ""], incomplete: true, cursor: CURSOR, limit: 20
     });
     expect(args).toMatchObject({ ok: true, args: {
-      p_q: "王", p_regions: ["大區 A", "__unassigned__"], p_plan_id: PLAN_ID,
-      p_participation: "not_joined", p_team: "joined", p_incomplete: true, p_cursor: CURSOR, p_limit: 20
+      p_q: "王", p_regions: ["大區 A", "__unassigned__"], p_plan_id: null,
+      p_participation: "all", p_team: "all", p_incomplete: true, p_cursor: CURSOR, p_limit: 20
     } });
+  });
+
+  it("ignores plan filters (#694: the people list doesn't filter by plan; older console builds may still send them)", () => {
+    const args = build("directory_list", { plan_id: PLAN_ID, participation: "not_joined", team: "joined" });
+    expect(args).toMatchObject({ ok: true, args: { p_plan_id: null, p_participation: "all", p_team: "all" } });
+    expect(directoryFilters({ plan_id: "plan-1", participation: "maybe" })).toMatchObject({ ok: true });
+    const exported = build("directory_export", { plan_id: PLAN_ID, team: "joined" });
+    expect(exported).toMatchObject({ ok: true, args: { p_plan_id: null, p_participation: "all", p_team: "all" } });
   });
 
   it("rejects malformed filters", () => {
@@ -93,8 +100,6 @@ describe("directory filters", () => {
     expect(directoryFilters({ regions: "大區 A" })).toEqual({ ok: false, error: "invalid_org_filter" });
     expect(directoryFilters({ zones: [1] })).toEqual({ ok: false, error: "invalid_org_filter" });
     expect(directoryFilters({ groups: Array.from({ length: 201 }, (_, i) => `g${i}`) })).toEqual({ ok: false, error: "invalid_org_filter" });
-    expect(directoryFilters({ plan_id: "plan-1" })).toEqual({ ok: false, error: "invalid_plan_id" });
-    expect(directoryFilters({ participation: "maybe" })).toEqual({ ok: false, error: "invalid_plan_filter" });
     expect(directoryFilters({ incomplete: "yes" })).toEqual({ ok: false, error: "invalid_incomplete" });
     // 游標＝上一頁最後一人的排序鍵（#567）
     for (const cursor of [5, [1, "大區"], [1, "大區", 2, "牧區", "王", "not-a-uuid"], ["1", "大區", 2, "牧區", "王", PLAN_ID], [1, "大區", 2.5, "牧區", "王", PLAN_ID]]) {
@@ -105,10 +110,10 @@ describe("directory filters", () => {
   });
 
   it("sends the export the same filters plus the actor, never a page", () => {
-    const args = build("directory_export", { regions: ["大區 A"], plan_id: PLAN_ID, offset: 100 });
+    const args = build("directory_export", { regions: ["大區 A"], offset: 100 });
     expect(args.ok && args.args).toEqual({
       p_actor_id: ADMIN_ID, p_actor_role: "admin", p_q: null, p_regions: ["大區 A"], p_zones: [], p_groups: [],
-      p_plan_id: PLAN_ID, p_participation: "all", p_team: "all", p_incomplete: false, p_request_id: "req-12345678"
+      p_plan_id: null, p_participation: "all", p_team: "all", p_incomplete: false, p_request_id: "req-12345678"
     });
   });
 });
@@ -136,26 +141,25 @@ describe("scope_set", () => {
 describe("exports", () => {
   const rows = [
     { name: "=HYPERLINK(\"x\")", email: "a@example.com", great_region: "大區 A", pastoral_zone: "一牧區", small_group: null,
-      role_code: "group_leader", role_label: "小組長", is_active: true, teams: [{ name: "火箭隊", role: "captain" }, { name: "六人隊", role: "member" }] },
-    { name: null, email: null, great_region: null, pastoral_zone: null, small_group: null, role_code: "member", role_label: null, is_active: false, teams: [] }
+      role_code: "group_leader", role_label: "小組長", is_active: true },
+    { name: null, email: null, great_region: null, pastoral_zone: null, small_group: null, role_code: "member", role_label: null, is_active: false }
   ];
 
-  it("builds the directory CSV like the App does (same columns, defaults, formula protection)", () => {
+  it("builds the directory CSV without plan columns (#694), same defaults and formula protection as the App", () => {
     const csv = directoryCsv(rows);
     const lines = csv.split("\r\n");
-    expect(lines[0]).toBe('"大區","牧區","小組","姓名","電子信箱","角色","組隊狀態","帳號狀態"');
-    expect(lines[1]).toBe('"大區 A","一牧區","未設定","\'=HYPERLINK(""x"")","a@example.com","小組長","[隊長] 火箭隊、六人隊","啟用中"');
-    expect(lines[2]).toBe('"未設定","未設定牧區","未設定","未設定","","一般會友","未加入團隊 (個人速讀中)","已停用"');
-    expect(formatTeams([{ name: "", role: "leader" }])).toBe("[隊長] 未命名隊伍");
+    expect(lines[0]).toBe('"大區","牧區","小組","姓名","電子信箱","角色","帳號狀態"');
+    expect(lines[1]).toBe('"大區 A","一牧區","未設定","\'=HYPERLINK(""x"")","a@example.com","小組長","啟用中"');
+    expect(lines[2]).toBe('"未設定","未設定牧區","未設定","未設定","","一般會友","已停用"');
 
-    // 和 App 的 convertUserDirectoryToCSV 同一份資料比對（去掉匯出時間那列與換行差異）
+    // 其餘欄位和 App 的 convertUserDirectoryToCSV 相同（App 多一欄「組隊狀態」；去掉匯出時間那列與換行差異）
     const app = convertUserDirectoryToCSV(rows.map((row) => ({
-      ...row, role_definition: row.role_label ? { label: row.role_label, code: row.role_code } : null,
-      team_name: formatTeams(row.teams) || null, member_role: null
+      ...row, role_definition: row.role_label ? { label: row.role_label, code: row.role_code } : null, team_name: null, member_role: null
     }))).split("\n").slice(1);
-    const appSorted = [...app.slice(1)].sort();
-    expect(lines[0].replace(/"/g, "")).toBe(app[0]); // App 的標題列沒加引號，解析結果相同
-    expect([...lines.slice(1)].sort()).toEqual(appSorted);
+    const TEAM_COLUMN = 6;
+    const withoutTeam = (line) => line.split(",").filter((_, index) => index !== TEAM_COLUMN).join(",");
+    expect(lines[0].replace(/"/g, "")).toBe(withoutTeam(app[0])); // App 的標題列沒加引號，解析結果相同
+    expect([...lines.slice(1)].sort()).toEqual(app.slice(1).map(withoutTeam).sort());
   });
 
   it("prefixes the export time the way the App does", () => {
@@ -169,10 +173,11 @@ describe("exports", () => {
   });
 
   it("returns a named CSV file with counts", async () => {
-    const { deps, calls } = setup({ results: { admin_api_directory_export: { data: { rows, total: 2, truncated: false, plan_name: "第四季" }, error: null } } });
-    const res = await json(await handleAdminRequest(post({ action: "directory_export", params: { plan_id: PLAN_ID } }), deps));
+    const { deps, calls } = setup({ results: { admin_api_directory_export: { data: { rows, total: 2, truncated: false }, error: null } } });
+    const res = await json(await handleAdminRequest(post({ action: "directory_export", params: {} }), deps));
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ rows: 2, total: 2, truncated: false, plan_name: "第四季" });
+    expect(res.body.data).toMatchObject({ rows: 2, total: 2, truncated: false });
+    expect(res.body.data).not.toHaveProperty("plan_name");
     expect(res.body.data.filename).toMatch(/^使用者名單_\d{4}-\d{2}-\d{2}\.csv$/);
     expect(res.body.data.csv).toContain('"大區","牧區","小組","姓名"');
     expect(sqlCalls(calls).map((call) => call.fn)).toEqual(["admin_api_directory_export"]);
