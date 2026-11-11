@@ -199,6 +199,135 @@ describe("管理分頁（#551、#570、#584）", () => {
     expect(calls("plan_roster")).toHaveLength(0);
   });
 
+  // #699：比較卡往下鑽之後要回得去——共用麵包屑（含選下一層）＋返回鍵一次退一層
+  describe("麵包屑與往下鑽（#699）", () => {
+    const TWO_REGIONS = [
+      ...PEOPLE,
+      row("w1", "王西一", { chapters: 9 }, { greatRegion: "西區", pastoralZone: "三牧區", smallGroup: "丙組" }),
+      row("w2", "王西二", { chapters: 9 }, { greatRegion: "西區", pastoralZone: "四牧區", smallGroup: "丁組" }),
+      row("w3", "王西三", { chapters: 9 }, { greatRegion: "西區", pastoralZone: "三牧區", smallGroup: "戊組" })
+    ];
+    const crumbs = () => document.getElementById("pastoral-crumbs");
+    const crumbLabels = () => [...crumbs().querySelectorAll(".pastoral-crumbs__item")].map((el) => el.textContent.trim());
+    const crumb = (label) => [...crumbs().querySelectorAll(".pastoral-crumbs__item")].find((el) => el.textContent.trim() === label);
+    const nextCrumb = () => crumbs().querySelector('[data-pastoral-action="crumb-next"]');
+    const status = () => document.getElementById("pastoral-status").textContent;
+    const drilled = () => document.body.classList.contains("pastoral-scope-drilled");
+
+    beforeEach(() => setup({ role: "admin", people: TWO_REGIONS }));
+
+    it("comparison card: 大區 → 牧區, then the breadcrumb jumps back to 各大區比較", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      const overview = panel("overview");
+      expect(overview.textContent).toContain("各大區比較");
+      expect(crumbLabels()).toEqual(["全部大區"]);
+      expect(nextCrumb().textContent.trim()).toBe("選大區");
+      unitRow(overview, "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各牧區比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區"]);
+      expect(nextCrumb().textContent.trim()).toBe("選牧區");
+      unitRow(overview, "三牧區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各小組比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區", "三牧區"]);
+      expect(crumbs().querySelector('[aria-current="page"]').textContent.trim()).toBe("三牧區");
+      expect(nextCrumb().textContent.trim()).toBe("選小組");
+      expect(drilled()).toBe(true);
+      crumb("全部大區").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各大區比較"));
+      expect(status()).toContain("範圍內 7 人");
+      expect(document.getElementById("pastoral-scope-label").textContent).toBe("2026 第四季 · 全部大區");
+      expect(crumbLabels()).toEqual(["全部大區"]);
+      // 最上層的數字還在 5 分鐘快取內，不重問
+      expect(calls("plan_summary")).toHaveLength(3);
+      // 點麵包屑往上跳是直接跳，不留返回紀錄
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("the back key steps up one level at a time after drilling from the comparison card", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      const overview = panel("overview");
+      unitRow(overview, "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各牧區比較"));
+      unitRow(overview, "三牧區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各小組比較"));
+      expect(mod.stepBackPastoralScope()).toBe(true);
+      await vi.waitFor(() => expect(overview.textContent).toContain("各牧區比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區"]);
+      expect(status()).toContain("範圍內 3 人");
+      expect(drilled()).toBe(true);
+      expect(mod.stepBackPastoralScope()).toBe(true);
+      await vi.waitFor(() => expect(overview.textContent).toContain("各大區比較"));
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("roster: the breadcrumb's next level opens the picker at that level; picks are steps the back key undoes", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      tabButton("roster").click();
+      const roster = panel("roster");
+      await vi.waitFor(() => expect(roster.querySelectorAll(".pastoral-row")).toHaveLength(6));
+      nextCrumb().click();
+      const sheet = document.getElementById("pastoral-scope-sheet");
+      const title = () => document.getElementById("pastoral-scope-sheet-title").textContent;
+      expect(sheet.classList.contains("hidden")).toBe(false);
+      expect(title()).toBe("選擇大區");
+      pick(sheet, "西區").click();
+      await vi.waitFor(() => expect(title()).toBe("選擇牧區"));
+      // 四牧區只有一個小組 → 沒有下一層可選，選完就關
+      pick(sheet, "四牧區").click();
+      await vi.waitFor(() => expect(sheet.classList.contains("hidden")).toBe(true));
+      expect(rowNames(roster)).toEqual(["王西二"]);
+      expect(crumbLabels()).toEqual(["全部大區", "西區", "四牧區"]);
+      expect(nextCrumb()).toBeNull();
+      expect(calls("plan_roster")).toHaveLength(1);
+      expect(mod.stepBackPastoralScope()).toBe(true);
+      await vi.waitFor(() => expect(crumbLabels()).toEqual(["全部大區", "西區"]));
+      expect(rowNames(roster).sort()).toEqual(["王西一", "王西三", "王西二"].sort());
+      crumb("全部大區").click();
+      await vi.waitFor(() => expect(roster.querySelectorAll(".pastoral-row")).toHaveLength(6));
+      expect(calls("plan_roster")).toHaveLength(1);
+    });
+
+    it("picking from the scope bar is a jump: no back-key history", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      unitRow(panel("overview"), "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(panel("overview").textContent).toContain("各牧區比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區"]);
+      expect(drilled()).toBe(true);
+      document.getElementById("pastoral-scope-button").click();
+      const sheet = document.getElementById("pastoral-scope-sheet");
+      pick(sheet, "東區").click();
+      await vi.waitFor(() => expect(document.getElementById("pastoral-scope-sheet-title").textContent).toBe("選擇牧區"));
+      mod.closePastoralLayer();
+      mod.closePastoralLayer();
+      expect(crumbLabels()).toEqual(["全部大區", "東區"]);
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("leaving the tab clears the drill history", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      unitRow(panel("overview"), "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(drilled()).toBe(true));
+      mod.closePastoralLayers();
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("someone with a single unit sees no breadcrumb", async () => {
+      setup({ role: "group_leader", people: [PEOPLE[0]] });
+      const mod = await load();
+      await mod.renderPastoralView();
+      expect(crumbs().classList.contains("hidden")).toBe(true);
+    });
+  });
+
   it("roster: fetched once when opened; one row per person sorted by days behind; a row pushes the person page without a request", async () => {
     const mod = await load();
     await mod.renderPastoralView();
