@@ -50,7 +50,7 @@ const report = (meta?: Record<string, number>) => preparePlanReport({
 type Quiz = Record<string, unknown>;
 const QUIZ: Quiz = {
   today: "2026-11-11", enrolled: 6,
-  daily: { enabled: true, configured: true, participants: 3, days: [{ date: "2026-11-10", eligible: 5, submitted: 2 }, { date: "2026-11-11", eligible: 5, submitted: 4 }] },
+  daily: { enabled: true, configured: true, participants: 3, unreached: 1, days: [{ date: "2026-11-10", eligible: 5, submitted: 2 }, { date: "2026-11-11", eligible: 5, submitted: 4 }] },
   exam: { enabled: false, papers: [{ id: "e1", title: "期末考", status: "open", open_at: null, close_at: null, started: 1, submitted: 1, graded: 0, pending: 1, enrolled_takers: 1, average: null }] },
   lightning: null
 };
@@ -362,6 +362,9 @@ describe("teams and quiz tabs", () => {
     expect([...el.querySelectorAll(".adm-tabs a")].map((a) => a.textContent)).toEqual(["總覽", "小測驗", "大測驗", "雲柱測驗"]);
     expect(el.textContent).toContain("每日小測驗作答率");
     expect(el.textContent).toContain("11/11：4／5 人交卷（80%）");
+    // #700：統一排程，母體＝報名者；收不到題（沒有小組）的另外說
+    expect(el.textContent).toContain("母體＝報名者（沒有小組、收不到題的 1 人不算）");
+    expect(el.textContent).not.toContain("那天發給的小組");
     expect(el.textContent).not.toContain("大測驗・期末考");
     expect(el.textContent).toContain("大測驗：功能開放設定目前關閉");
     expect(el.textContent).not.toContain("雲柱測驗（本期期間）");

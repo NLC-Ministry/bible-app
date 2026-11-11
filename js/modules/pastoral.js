@@ -24,6 +24,7 @@ import {
   UNSET_UNIT_LABEL,
   careReasonText,
   clearRosterCondition,
+  compareLightningUnits,
   compareQuizUnits,
   countRosterConditions,
   defaultRosterFilters,
@@ -37,6 +38,7 @@ import {
   rosterConditionChips,
   rosterPerson,
   sortPlanRoster,
+  summarizeLightning,
   summarizeQuiz,
   summarizeTeams,
   teamLabel
@@ -491,6 +493,9 @@ async function ensureRoster({ force = false } = {}) {
     }
     rosters.set(planKey, {
       people: result.data.people.map(rosterPerson),
+      // #700：小測驗已截止天數、雲柱期間與每週題數（舊伺服器沒有＝null）
+      quiz: result.data.quiz || null,
+      lightning: result.data.lightning || null,
       loadedAt: Date.now(),
       inconsistent: result.inconsistent
     });
@@ -1029,6 +1034,9 @@ function renderPersonSheet() {
     if (quizFeatureEnabled !== false && person.quiz.published > 0) facts.push(["小測驗", `作答 ${person.quiz.submitted}／${person.quiz.published} 次`]);
     if (person.care) facts.push(["需要關心", person.careReasons.map(careReasonText).join("、")]);
   }
+  // 雲柱不屬於計畫，沒報名的人也看；只放題數，不放答對幾題（#700）
+  const lightningQuestions = summarizeLightning([], currentRoster()?.lightning).questions;
+  if (lightningQuestions > 0) facts.push(["雲柱", `計畫期間答 ${person.lightning.answered}／${lightningQuestions} 題`]);
   const invited = view.invited.has(person.id);
   const late = lateText(person);
   const action = person.enrolled
@@ -1045,7 +1053,8 @@ function renderPersonSheet() {
           ${late ? `<span class="pastoral-row__late">${esc(late)}</span>` : ""}
         </span>
       </div>
-      ${facts.length ? `<dl class="pastoral-person__facts">${facts.map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("")}</dl>` : '<p class="pastoral-card__hint">還沒報名這個計畫。</p>'}
+      ${person.enrolled ? "" : '<p class="pastoral-card__hint">還沒報名這個計畫。</p>'}
+      ${facts.length ? `<dl class="pastoral-person__facts">${facts.map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("")}</dl>` : ""}
       <div class="pastoral-person__actions">${action}</div>
     </section>`;
   hydrate(host);
@@ -1187,11 +1196,22 @@ async function ensureQuizFeature() {
   return quizFeatureEnabled;
 }
 
+// 日期鍵（YYYY-MM-DD）→ 「11/3」
+function shortDay(key) {
+  const text = String(key || "");
+  return text.length >= 10 ? `${Number(text.slice(5, 7))}/${Number(text.slice(8, 10))}` : text;
+}
+
+// 分頁順序：雲柱 → 小測驗 → 大測驗（#700）
 async function renderQuizzes() {
   const el = panel("quizzes");
   if (!el || !currentRoster()) return;
   if (!el.querySelector("[data-pastoral-quiz]")) {
     el.innerHTML = `
+      <section class="pastoral-card" aria-labelledby="pastoral-lightning-title">
+        <div class="pastoral-card__head"><h3 class="pastoral-card__title" id="pastoral-lightning-title">雲柱測驗</h3></div>
+        <div class="pastoral-stack" data-pastoral-lightning-body><p class="pastoral-empty">載入中…</p></div>
+      </section>
       <section class="pastoral-card" data-pastoral-quiz aria-labelledby="pastoral-quiz-title">
         <div class="pastoral-card__head"><h3 class="pastoral-card__title" id="pastoral-quiz-title">小測驗</h3></div>
         <div class="pastoral-stack" data-pastoral-quiz-body><p class="pastoral-empty">載入中…</p></div>
@@ -1202,6 +1222,7 @@ async function renderQuizzes() {
       </section>`;
     void renderExamStats(el.querySelector("[data-pastoral-exam]"));
   }
+  renderLightningStats(el.querySelector("[data-pastoral-lightning-body]"));
   const enabled = await ensureQuizFeature();
   const body = el.querySelector("[data-pastoral-quiz-body]");
   if (!body || view.tab !== "quizzes") return;
@@ -1209,33 +1230,99 @@ async function renderQuizzes() {
     body.innerHTML = '<p class="pastoral-empty">小測驗目前沒有開放。</p>';
     return;
   }
+  renderDailyQuizStats(body);
+}
+
+// 雲柱：母體＝範圍內全部會友（不限報名）；答對率只看整體與單位，不看個人、不排名
+function renderLightningStats(body) {
+  if (!body) return;
+  const roster = currentRoster();
+  const info = roster && roster.lightning;
+  if (!info) {
+    body.innerHTML = '<p class="pastoral-empty">雲柱統計暫時看不到，請稍後再試。</p>';
+    return;
+  }
   const people = scopedRoster();
-  const summary = summarizeQuiz(people);
-  if (!summary.eligible) {
-    body.innerHTML = '<p class="pastoral-empty">這個計畫在範圍內還沒有發過小測驗。</p>';
+  const summary = summarizeLightning(people, info);
+  if (!summary.questions) {
+    body.innerHTML = '<p class="pastoral-empty">這個計畫期間還沒有雲柱題目。</p>';
+    return;
+  }
+  if (!summary.members) {
+    body.innerHTML = '<p class="pastoral-empty">這個範圍內沒有會友。</p>';
     return;
   }
   const level = pickUnitLevel(people);
-  const units = compareQuizUnits(people, level, { compare: orgComparator });
+  const units = compareLightningUnits(people, level, info, { compare: orgComparator });
+  const latest = summary.latestWeek;
+  const correctText = summary.correctRate === null ? "—" : `${summary.correctRate}%`;
   body.innerHTML = `
-    <p class="pastoral-card__hint">只算已報名、有發題給他的小組；不看分數、不排名。</p>
+    <p class="pastoral-card__hint">全教會活動，算 ${esc(shortDay(info.from))}–${esc(shortDay(info.to))} 出的 ${summary.questions} 題；母體是範圍內所有會友（不限報名）。答對率只看整體，不看個人、不排名。</p>
     <div class="pastoral-tiles">
-      ${tile("有發題的人", summary.eligible)}
+      ${tile(`${shortDay(latest.weekStart)} 那週參加`, `${latest.participants} 人（${latest.rate}%）`)}
+      ${tile("期間參加過", `${summary.participants}／${summary.members} 人`)}
+      ${tile("答對率", correctText)}
+      ${tile("從沒參加", summary.never.length)}
+    </div>
+    <div class="pastoral-stack">
+      <p class="pastoral-filters__label">每週參與率（近 ${summary.weeks.length} 週）</p>
+      <ul class="pastoral-units">${summary.weeks.slice().reverse().map((week) => unitItem({
+        name: `${shortDay(week.weekStart)} 那週`,
+        size: `${week.questions} 題`,
+        pct: week.rate,
+        note: `${week.participants} 人參加`
+      })).join("")}</ul>
+    </div>
+    ${units.length ? `<div class="pastoral-stack">
+      <p class="pastoral-filters__label">各${SCOPE_LEVEL_LABEL[level]}參與率</p>
+      <ul class="pastoral-units">${units.map((unit) => unitItem({
+        name: unit.name,
+        size: `${unit.members} 人`,
+        pct: unit.rate,
+        note: `答對率 ${unit.correctRate === null ? "—" : `${unit.correctRate}%`}・從沒參加 ${unit.never.length} 人`,
+        alert: unit.never.length > 0
+      })).join("")}</ul>
+    </div>` : ""}
+    ${summary.never.length ? `<p class="pastoral-names">從沒參加：${namesLine(summary.never)}</p>` : ""}`;
+  paintBars(body);
+}
+
+// 小測驗：統一排程、每天發給全部小組；母體＝報名者，作答截止後才算；不看分數、不排名
+function renderDailyQuizStats(body) {
+  const roster = currentRoster();
+  const days = roster && roster.quiz && Number.isFinite(Number(roster.quiz.days)) ? Number(roster.quiz.days) : null;
+  const people = scopedRoster();
+  const summary = summarizeQuiz(people, { days });
+  if (!summary.enrolled) {
+    body.innerHTML = '<p class="pastoral-empty">這個範圍內還沒有人報名。</p>';
+    return;
+  }
+  if (!summary.published && !(days > 0)) {
+    body.innerHTML = '<p class="pastoral-empty">這個計畫還沒有作答截止的小測驗。</p>';
+    return;
+  }
+  const level = pickUnitLevel(people);
+  const units = compareQuizUnits(people, level, { compare: orgComparator, days });
+  body.innerHTML = `
+    <p class="pastoral-card__hint">母體是範圍內的報名者；當天的題作答截止後才算。不看分數、不排名。</p>
+    <div class="pastoral-tiles">
+      ${days === null ? "" : tile("已發", `${days} 天`)}
       ${tile("作答率", `${summary.rate}%`)}
-      ${tile("作答過", summary.answeredAny)}
+      ${tile("作答過", `${summary.answeredAny}／${summary.enrolled} 人`)}
       ${tile("從沒作答", summary.neverAnswered.length)}
     </div>
     ${units.length ? `<div class="pastoral-stack">
       <p class="pastoral-filters__label">各${SCOPE_LEVEL_LABEL[level]}作答率</p>
       <ul class="pastoral-units">${units.map((unit) => unitItem({
         name: unit.name,
-        size: `有發題 ${unit.eligible} 人`,
+        size: `報名 ${unit.enrolled} 人`,
         pct: unit.rate,
-        note: `從沒作答 ${unit.neverAnswered.length} 人`,
+        note: `從沒作答 ${unit.neverAnswered.length} 人${unit.unreached.length ? `・收不到題 ${unit.unreached.length} 人` : ""}`,
         alert: unit.neverAnswered.length > 0
       })).join("")}</ul>
     </div>` : ""}
-    ${summary.neverAnswered.length ? `<p class="pastoral-names">從沒作答：${namesLine(summary.neverAnswered)}</p>` : ""}`;
+    ${summary.neverAnswered.length ? `<p class="pastoral-names">從沒作答：${namesLine(summary.neverAnswered)}</p>` : ""}
+    ${summary.unreached.length ? `<p class="pastoral-names">沒有小組、收不到題（不算進作答率）：${namesLine(summary.unreached)}</p>` : ""}`;
   paintBars(body);
 }
 

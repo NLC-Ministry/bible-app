@@ -141,6 +141,11 @@ export function rosterPerson(row) {
     quiz: {
       published: Math.max(0, Number(row && row.quiz && row.quiz.published) || 0),
       submitted: Math.max(0, Number(row && row.quiz && row.quiz.submitted) || 0)
+    },
+    lightning: {
+      answered: Math.max(0, Number(row && row.lightning && row.lightning.answered) || 0),
+      correct: Math.max(0, Number(row && row.lightning && row.lightning.correct) || 0),
+      weeks: Array.isArray(row && row.lightning && row.lightning.weeks) ? row.lightning.weeks.map(String) : []
     }
   };
 }
@@ -176,22 +181,27 @@ export function summarizeTeams(people) {
   };
 }
 
-// 小測驗：只看已報名、而且有發給他的人；不排名、不看分數
-export function summarizeQuiz(people) {
-  const eligible = (Array.isArray(people) ? people : []).filter((person) => person.enrolled && person.quiz.published > 0);
-  const published = eligible.reduce((sum, person) => sum + person.quiz.published, 0);
-  const submitted = eligible.reduce((sum, person) => sum + Math.min(person.quiz.submitted, person.quiz.published), 0);
+// 小測驗（#700）：統一排程後每天發給全部小組，母體＝報名者；不排名、不看分數。
+// 「已發」只算作答已截止的（伺服器算）。報名了卻一題都沒收到的（沒有小組）分開列 unreached，不算進作答率。
+// days：這期已截止的發題天數（名單的 quiz.days）；舊伺服器沒給時，用「有人收到過」判斷有沒有發過
+export function summarizeQuiz(people, { days = null } = {}) {
+  const enrolled = (Array.isArray(people) ? people : []).filter((person) => person.enrolled);
+  const reached = enrolled.filter((person) => person.quiz.published > 0);
+  const published = reached.reduce((sum, person) => sum + person.quiz.published, 0);
+  const submitted = reached.reduce((sum, person) => sum + Math.min(person.quiz.submitted, person.quiz.published), 0);
   return {
-    eligible: eligible.length,
-    answeredAny: eligible.filter((person) => person.quiz.submitted > 0).length,
-    neverAnswered: eligible.filter((person) => person.quiz.submitted === 0),
+    enrolled: enrolled.length,
+    reached: reached.length,
+    unreached: (Number.isFinite(days) ? days > 0 : published > 0) ? enrolled.filter((person) => person.quiz.published === 0) : [],
+    answeredAny: reached.filter((person) => person.quiz.submitted > 0).length,
+    neverAnswered: reached.filter((person) => person.quiz.submitted === 0),
     published,
     submitted,
     rate: ratio(submitted, published)
   };
 }
 
-export function compareQuizUnits(people, level, { compare = null } = {}) {
+export function compareQuizUnits(people, level, { compare = null, days = null } = {}) {
   if (!level) return [];
   const groups = new Map();
   for (const person of Array.isArray(people) ? people : []) {
@@ -201,8 +211,57 @@ export function compareQuizUnits(people, level, { compare = null } = {}) {
   }
   const comparator = typeof compare === "function" ? compare(level) : null;
   return Array.from(groups.entries())
-    .map(([name, members]) => ({ name, ...summarizeQuiz(members) }))
-    .filter((row) => row.eligible > 0)
+    .map(([name, members]) => ({ name, ...summarizeQuiz(members, { days }) }))
+    .filter((row) => row.enrolled > 0)
+    .sort((a, b) => {
+      if (a.name === UNSET_UNIT_LABEL || b.name === UNSET_UNIT_LABEL) return a.name === UNSET_UNIT_LABEL ? 1 : -1;
+      return comparator ? comparator(a.name, b.name) : a.name.localeCompare(b.name, "zh-Hant");
+    });
+}
+
+// 雲柱（#700）：全教會活動、不屬於計畫，母體＝範圍內全部啟用中的會友（不限報名者，同後台週統計的應答人數）。
+// 期間＝計畫開始～今天（計畫結束就到結束日），info 是伺服器給的 { from, to, weeks: [{ weekStart, questions }] }。
+// 答對率只算整體與單位（答對題數 ÷ 送出題數），不顯示個人的；不排名。
+export const LIGHTNING_RECENT_WEEKS = 8;
+
+export function summarizeLightning(people, info) {
+  const list = Array.isArray(people) ? people : [];
+  const weeks = Array.isArray(info && info.weeks) ? info.weeks : [];
+  const questions = weeks.reduce((sum, week) => sum + (Number(week.questions) || 0), 0);
+  const participants = list.filter((person) => person.lightning.answered > 0);
+  const answered = list.reduce((sum, person) => sum + person.lightning.answered, 0);
+  const correct = list.reduce((sum, person) => sum + Math.min(person.lightning.correct, person.lightning.answered), 0);
+  const weekRows = weeks.map((week) => {
+    const joined = list.filter((person) => person.lightning.weeks.includes(week.weekStart)).length;
+    return { weekStart: week.weekStart, questions: Number(week.questions) || 0, participants: joined, rate: ratio(joined, list.length) };
+  });
+  return {
+    members: list.length,
+    questions,
+    participants: participants.length,
+    rate: ratio(participants.length, list.length),
+    never: list.filter((person) => person.lightning.answered === 0),
+    answered,
+    correctRate: answered > 0 ? ratio(correct, answered) : null,
+    latestWeek: weekRows.length ? weekRows[weekRows.length - 1] : null,
+    weeks: weekRows.slice(-LIGHTNING_RECENT_WEEKS)
+  };
+}
+
+export function compareLightningUnits(people, level, info, { compare = null } = {}) {
+  if (!level) return [];
+  const groups = new Map();
+  for (const person of Array.isArray(people) ? people : []) {
+    const name = unitName(person[level]);
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(person);
+  }
+  const comparator = typeof compare === "function" ? compare(level) : null;
+  return Array.from(groups.entries())
+    .map(([name, members]) => {
+      const summary = summarizeLightning(members, info);
+      return { name, members: summary.members, participants: summary.participants, rate: summary.rate, correctRate: summary.correctRate, never: summary.never };
+    })
     .sort((a, b) => {
       if (a.name === UNSET_UNIT_LABEL || b.name === UNSET_UNIT_LABEL) return a.name === UNSET_UNIT_LABEL ? 1 : -1;
       return comparator ? comparator(a.name, b.name) : a.name.localeCompare(b.name, "zh-Hant");

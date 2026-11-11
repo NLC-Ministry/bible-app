@@ -123,6 +123,13 @@ export function describePerson(raw, ctx) {
     published: Math.max(0, Number(person.quiz && person.quiz.published) || 0),
     submitted: Math.max(0, Number(person.quiz && person.quiz.submitted) || 0)
   };
+  // #700：雲柱（計畫期間）答了幾題、答對幾題、參加過哪幾週（週一，YYYY-MM-DD）。答對題數只給單位加總，畫面不顯示個人的
+  const lightningRaw = person.lightning && typeof person.lightning === "object" ? person.lightning : {};
+  const lightning = {
+    answered: Math.max(0, Number(lightningRaw.answered) || 0),
+    correct: Math.max(0, Number(lightningRaw.correct) || 0),
+    weeks: (Array.isArray(lightningRaw.weeks) ? lightningRaw.weeks : []).map((week) => String(week).slice(0, 10)).filter(Boolean)
+  };
   const base = {
     id: String(person.id || ""),
     name: String(person.name || ""),
@@ -132,7 +139,8 @@ export function describePerson(raw, ctx) {
     teams,
     team3: teams.find((team) => team.division === 3) || null,
     team6: teams.find((team) => team.division === 6) || null,
-    quiz
+    quiz,
+    lightning
   };
   if (!enrollment) {
     return {

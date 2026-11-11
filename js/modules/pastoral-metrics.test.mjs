@@ -8,6 +8,7 @@ import {
   buildPlanContext,
   buildScopeOptions,
   careReasonText,
+  compareLightningUnits,
   compareQuizUnits,
   compareUnits,
   countRosterConditions,
@@ -24,6 +25,7 @@ import {
   rosterPerson,
   selectCareList,
   summarizeFunnel,
+  summarizeLightning,
   summarizeQuiz,
   summarizeTeams,
   taipeiDateKey,
@@ -286,17 +288,56 @@ describe("quizzes: participation only, no ranking", () => {
     person("e", null, { quiz: { published: 4, submitted: 1 } })
   ], ctx);
 
-  it("counts enrolled people who were sent quizzes; submissions never exceed what was sent", () => {
-    const summary = summarizeQuiz(people);
-    expect(summary).toMatchObject({ eligible: 3, answeredAny: 2, published: 10, submitted: 6, rate: 60 });
+  it("the base is everyone enrolled; people who got nothing (no small group) are listed apart; submissions never exceed what was sent (#700)", () => {
+    const summary = summarizeQuiz(people, { days: 4 });
+    expect(summary).toMatchObject({ enrolled: 4, reached: 3, answeredAny: 2, published: 10, submitted: 6, rate: 60 });
     expect(summary.neverAnswered.map((item) => item.id)).toEqual(["b"]);
+    expect(summary.unreached.map((item) => item.id)).toEqual(["d"]);
     expect(Object.keys(summary)).not.toContain("ranking");
+    expect(Object.keys(summary)).not.toContain("eligible");
   });
 
-  it("compares units that had quizzes", () => {
-    const rows = { 東區: [2, 50], 西區: [1, 100] };
-    expect(compareQuizUnits(people, "greatRegion").map((row) => [row.name, row.eligible, row.rate]))
+  it("nothing closed yet → nobody is listed as unreached", () => {
+    expect(summarizeQuiz(people, { days: 0 }).unreached).toEqual([]);
+    // 舊伺服器沒給 days：看有沒有人收到過
+    expect(summarizeQuiz(people).unreached.map((item) => item.id)).toEqual(["d"]);
+  });
+
+  it("compares units with enrolled people, keeping a unit whose members got nothing", () => {
+    const rows = { 東區: [3, 50, 1], 西區: [1, 100, 0] };
+    expect(compareQuizUnits(people, "greatRegion", { days: 4 }).map((row) => [row.name, row.enrolled, row.rate, row.unreached.length]))
       .toEqual(zhSorted(["東區", "西區"]).map((name) => [name, ...rows[name]]));
+  });
+});
+
+describe("lightning: everyone in scope, overall and unit accuracy only (#700)", () => {
+  const info = { from: "2026-10-01", to: "2026-10-12", weeks: [{ weekStart: "2026-09-29", questions: 2 }, { weekStart: "2026-10-06", questions: 3 }] };
+  const people = describePeople([
+    person("a", { chapters: 36 }, { lightning: { answered: 5, correct: 4, weeks: ["2026-09-29", "2026-10-06"] } }),
+    person("b", null, { lightning: { answered: 2, correct: 1, weeks: ["2026-09-29"] } }),
+    person("c", { chapters: 36 }, { greatRegion: "西區", lightning: { answered: 1, correct: 3, weeks: ["2026-10-06"] } }),
+    person("d", null, { greatRegion: "西區" })
+  ], ctx).map(metrics.rosterPerson);
+
+  it("counts everyone, enrolled or not; accuracy is answered-weighted and capped", () => {
+    const summary = summarizeLightning(people, info);
+    expect(summary).toMatchObject({ members: 4, questions: 5, participants: 3, rate: 75, answered: 8, correctRate: 75 });
+    expect(summary.never.map((item) => item.id)).toEqual(["d"]);
+    expect(summary.latestWeek).toEqual({ weekStart: "2026-10-06", questions: 3, participants: 2, rate: 50 });
+    expect(summary.weeks.map((week) => [week.weekStart, week.participants])).toEqual([["2026-09-29", 2], ["2026-10-06", 2]]);
+  });
+
+  it("never exposes a per-person accuracy", () => {
+    const summary = summarizeLightning(people, info);
+    expect(JSON.stringify(summary.never)).not.toMatch(/correctRate/);
+    const units = compareLightningUnits(people, "greatRegion", info);
+    expect(units.map((unit) => [unit.name, unit.members, unit.rate, unit.correctRate, unit.never.length]))
+      .toEqual(zhSorted(["東區", "西區"]).map((name) => ({ 東區: [name, 2, 100, 71, 0], 西區: [name, 2, 50, 100, 1] })[name]));
+  });
+
+  it("no answers → no accuracy; no info → no questions", () => {
+    expect(summarizeLightning([people[3]], info).correctRate).toBeNull();
+    expect(summarizeLightning(people, null)).toMatchObject({ questions: 0, latestWeek: null, weeks: [] });
   });
 });
 
