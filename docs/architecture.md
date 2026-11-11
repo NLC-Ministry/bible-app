@@ -63,6 +63,23 @@ Logto OIDC + PKCE client for NLC SSO. Does discovery on `issuer`, handles the re
 
 Because `offline_access` is not granted, the refresh request must **not** send `scope` (omitted = the scopes granted at sign-in). Asking for the configured scopes again gets `400 invalid_scope` ("refresh token missing requested scope"), which the client treats as a rejected session and signs the user out every hour (#627, `scripts/auth-refresh-scope.test.mjs`). Sign-in still requests `offline_access`. Keep the staging application's refresh-token settings identical.
 
+**Logto Custom JWT** (Admin Console → Custom JWT → *User access token*, also Logto-only — recreate it with the application). It adds one claim to the member app's access tokens so the login card can say which button to press (#693): about three in four Logto accounts signed up with LINE/Google and never set a password, yet were asked for a phone number at sign-up, so they later try phone + password and fail.
+
+```js
+const getCustomJwtClaims = async ({ token, context }) => {
+  try {
+    if (!token || token.clientId !== '<member app client ID>') return {};
+    const user = context && context.user;
+    if (!user) return {};
+    return { nlc_login: { pw: user.hasPassword === true, social: Object.keys(user.identities || {}).sort() } };
+  } catch (error) {
+    return {};
+  }
+};
+```
+
+`social` holds connector names only (`line`, `google`), never the social account IDs; other apps' tokens get nothing. `js/login-method-memory.mjs` reads it from `nlc_access_token` when it records the device's last login method, and the login card falls back to the older phone/Email wording whenever the claim is missing (opaque token, a token issued before the script existed, the script removed). Staging's Logto has no such script, so staging always shows the fallback wording.
+
 ### Bible text (`js/data/bible_data.js`)
 
 Chapter text is fetched live from public Bible APIs (bible-api.com, bolls.life) with `assertCompleteEnough()` validation (must be Chinese, not truncated to 10 verses) and a small hardcoded `BIBLE_FALLBACK` for offline/failure. `bible_verse_counts.js` holds per-chapter verse counts. `CHURCH_PLAN_PRESETS` book names are Traditional Chinese; `BOLLS_BOOK_CODES` maps English names to API codes.
