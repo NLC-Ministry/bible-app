@@ -168,13 +168,11 @@ export type ReportThread = {
 };
 
 /** admin-api 產生的 CSV（伺服器端已記稽核；前端只負責下載）。 */
-export type CsvExport = { filename: string; csv: string; rows: number; total: number; truncated: boolean; plan_name?: string | null };
+export type CsvExport = { filename: string; csv: string; rows: number; total: number; truncated: boolean };
 export type ReportExport = CsvExport;
 
 // ── 帳號與權限（#550）──────────────────────────────────────────────────────
-// supabase/migrations/20261012053123_admin_api_accounts.sql
-export type DirectoryTeam = { name: string | null; role: string | null };
-
+// supabase/migrations/20261012053123_admin_api_accounts.sql；名單不綁計畫（#694，20261111011057_admin_directory_no_plan.sql）
 export type DirectoryItem = {
   id: string;
   name: string | null;
@@ -191,8 +189,6 @@ export type DirectoryItem = {
   managed_regions: string;
   managed_zones: string;
   managed_groups: string;
-  joined: boolean;
-  teams: DirectoryTeam[];
   /** 排序鍵（大區順序、大區、牧區順序、牧區、姓名、id）；下一頁從最後一人的排序鍵之後接（#567） */
   sort_key: DirectoryCursor;
 };
@@ -206,10 +202,7 @@ export type DirectoryPage = {
   total: number;
   /** 沒有下一頁是 null（#567 改成游標：資料變動中翻頁也不跳過或重複） */
   next_cursor: DirectoryCursor | null;
-  /** 這頁用的計畫（沒指定時伺服器挑的預設計畫） */
-  plan_id: string | null;
   /** 只有第一頁有 */
-  plans: PlanOption[] | null;
   all_count: number | null;
 };
 

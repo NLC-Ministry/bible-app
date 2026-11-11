@@ -5,7 +5,8 @@
 // 匯出（含完整 email）由 admin-api 產生並記稽核。
 // 搜尋框也找 email（含其他登入方式的 email）；有計畫權限（plans.read）時同一個字也找隊伍（隊名或邀請碼，#566），
 // 符合的隊伍列在名單上面、點了打開隊伍頁。
-// 請求預算：打開名單 1 個 directory_list（第一頁順便帶計畫選項）；改條件 1 個；改搜尋字停 300ms 才送，
+// 名單是查人用的，不篩計畫、也沒有計畫欄（#694）：某人參加哪些計畫看個人頁；某計畫的參加者看計畫區的名單。
+// 請求預算：打開名單 1 個 directory_list；改條件 1 個；改搜尋字停 300ms 才送，
 // 有 plans.read 時多 1 個 team_search（同一個字不重找）。
 // 名單狀態放在「人」區那一層（App），打開某人、切到「管理範圍」再回來不重抓。
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
@@ -15,9 +16,6 @@ import { isAbortError, type AdminApi } from "../api.ts";
 import {
   DIRECTORY_PAGE_SIZE,
   EMPTY_FILTERS,
-  PARTICIPATION_FILTERS,
-  PARTICIPATION_LABEL,
-  TEAM_LABEL,
   activeFilterCount,
   directoryParams,
   isFiltered,
@@ -26,19 +24,17 @@ import {
   orgValueLabel,
   pruneOrgFilter,
   syncLabel,
-  teamsText,
   type DirectoryFilters,
   type OrgFilter,
-  type OrgOptionSection,
-  type PlanFilter
+  type OrgOptionSection
 } from "../directory.ts";
 import { downloadCsv } from "../download.ts";
 import { formatDateTime, text } from "../format.ts";
 import { formatRoute } from "../route.ts";
 import { isWholeChurch, scopeLevel, scopeText } from "../scopes.ts";
 import type { TeamSearchResult } from "../teams.ts";
-import type { CsvExport, DirectoryCursor, DirectoryItem, DirectoryPage, OrgTreeNode, PlanOption } from "../types.ts";
-import { Badge, ErrorNotice, Segmented, Spinner } from "../ui.tsx";
+import type { CsvExport, DirectoryCursor, DirectoryItem, DirectoryPage, OrgTreeNode } from "../types.ts";
+import { Badge, ErrorNotice, Spinner } from "../ui.tsx";
 
 export const SEARCH_DEBOUNCE_MS = 300;
 
@@ -48,7 +44,6 @@ export type DirectoryState = {
   total: number | null;
   allCount: number | null;
   nextCursor: DirectoryCursor | null;
-  plans: PlanOption[] | null;
   /** 符合搜尋字的隊伍（teamsQuery 是找的那個字；沒找＝null） */
   teams: TeamSearchResult[] | null;
   teamsQuery: string;
@@ -63,7 +58,6 @@ export const INITIAL_DIRECTORY: DirectoryState = {
   total: null,
   allCount: null,
   nextCursor: null,
-  plans: null,
   teams: null,
   teamsQuery: "",
   loaded: false,
@@ -79,8 +73,6 @@ type Props = {
   setState: Dispatch<SetStateAction<DirectoryState>>;
   doc: Document;
 };
-
-const PLAN_FILTER_OPTIONS = (labels: Record<PlanFilter, string>) => PARTICIPATION_FILTERS.map((value) => ({ value, label: labels[value] }));
 
 export function UserDirectory({ api, org, capabilities, state, setState, doc }: Props) {
   const abortRef = useRef<AbortController | null>(null);
@@ -147,13 +139,10 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
         const items = Array.isArray(page?.items) ? page.items : [];
         setState((prev) => ({
           ...prev,
-          // 沒指定計畫時記下伺服器挑的預設計畫，之後的條件與匯出都用同一個
-          filters: prev.filters.planId || !page?.plan_id ? prev.filters : { ...prev.filters, planId: page.plan_id },
           items: cursor ? [...prev.items, ...items] : items,
           total: typeof page?.total === "number" ? page.total : prev.total,
           allCount: typeof page?.all_count === "number" ? page.all_count : prev.allCount,
           nextCursor: Array.isArray(page?.next_cursor) && page.next_cursor.length === 6 ? page.next_cursor : null,
-          plans: Array.isArray(page?.plans) ? page.plans : prev.plans,
           loaded: true,
           loading: false,
           error: null
@@ -190,12 +179,10 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
     apply(pruned);
   };
 
-  const clearFilters = () => load({ ...EMPTY_FILTERS, planId: state.filters.planId }, null);
+  const clearFilters = () => load(EMPTY_FILTERS, null);
   const refresh = () => load(state.filters, null, true);
 
   const options = orgFilterOptions(org, state.filters);
-  const plans = state.plans || [];
-  const planName = plans.find((plan) => plan.id === state.filters.planId)?.name || "所選計畫";
   const canExport = capabilities.includes("export") && capabilities.includes("support.pii");
   const canOpenUser = capabilities.includes("support.read");
   const filterCount = activeFilterCount(state.filters);
@@ -230,7 +217,7 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
             type="search"
             autoComplete="off"
             spellCheck={false}
-            placeholder={canTeams ? "姓名、email、角色、牧區、小組、隊名或邀請碼" : "姓名、email、角色、牧區、小組、隊名"}
+            placeholder={canTeams ? "姓名、email、角色、牧區、小組；隊名或邀請碼找隊伍" : "姓名、email、角色、牧區、小組"}
             value={state.filters.q}
             maxLength={100}
             onChange={(event) => onQueryChange(event.target.value)}
@@ -261,31 +248,6 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
             <OrgPicker id="groups" unit="小組" sections={options.groups} values={state.filters.groups} onChange={(values) => onOrgChange("groups", values)}
               open={openPicker === "groups"} onOpenChange={(open) => setOpenPicker((current) => (open ? "groups" : current === "groups" ? null : current))} />
           </fieldset>
-          <fieldset className="adm-filters__group">
-            <legend>計畫</legend>
-            <label className="adm-filters__field">
-              <span className="adm-small adm-muted">讀經計畫</span>
-              <select
-                className="adm-select"
-                value={state.filters.planId || ""}
-                disabled={plans.length === 0}
-                onChange={(event) => apply({ planId: event.target.value || null })}
-              >
-                {plans.length === 0 && <option value="">沒有可選的計畫</option>}
-                {plans.map((plan) => <option key={plan.id} value={plan.id}>{text(plan.name, "未命名計畫")}</option>)}
-              </select>
-            </label>
-            <div className="adm-filters__field">
-              <span className="adm-small adm-muted">計畫參與</span>
-              <Segmented label="計畫參與" options={PLAN_FILTER_OPTIONS(PARTICIPATION_LABEL)} value={state.filters.participation}
-                disabled={plans.length === 0} onChange={(participation) => apply({ participation })} />
-            </div>
-            <div className="adm-filters__field">
-              <span className="adm-small adm-muted">團隊</span>
-              <Segmented label="團隊" options={PLAN_FILTER_OPTIONS(TEAM_LABEL)} value={state.filters.team}
-                disabled={plans.length === 0} onChange={(team) => apply({ team })} />
-            </div>
-          </fieldset>
           <div className="adm-filters__footer">
             <label className="adm-checkbox">
               <input type="checkbox" checked={state.filters.incomplete} onChange={(event) => apply({ incomplete: event.target.checked })} />
@@ -314,10 +276,10 @@ export function UserDirectory({ api, org, capabilities, state, setState, doc }: 
       {state.items.length > 0 && (
         <div className="adm-dir">
           <div className="adm-dir__head" aria-hidden="true">
-            <span>姓名</span><span>牧養歸屬</span><span>{planName}</span><span>管理範圍・會員中心</span>
+            <span>姓名</span><span>牧養歸屬</span><span>角色・管理範圍</span><span>會員中心同步</span>
           </div>
           <ul className="adm-dir__list">
-            {state.items.map((item) => <DirectoryRow key={item.id} item={item} canOpenUser={canOpenUser} hasPlan={!!state.filters.planId} />)}
+            {state.items.map((item) => <DirectoryRow key={item.id} item={item} canOpenUser={canOpenUser} />)}
           </ul>
         </div>
       )}
@@ -390,12 +352,12 @@ function OrgPicker({ id, unit, sections, values, onChange, open, onOpenChange }:
   );
 }
 
-function DirectoryRow({ item, canOpenUser, hasPlan }: { item: DirectoryItem; canOpenUser: boolean; hasPlan: boolean }) {
+function DirectoryRow({ item, canOpenUser }: { item: DirectoryItem; canOpenUser: boolean }) {
   const name = text(item.name, "（未填姓名）");
   const placement = [item.great_region, item.pastoral_zone, item.small_group].filter(Boolean).join("・");
   const incomplete = !String(item.name || "").trim() || !item.pastoral_zone;
   const leader = isWholeChurch(item.role_code) || scopeLevel(item.role_code) !== null;
-  const teams = teamsText(item.teams);
+  const role = item.role_code === "member" ? "一般會友" : text(item.role_label, item.role_code);
   return (
     <li className="adm-dir__row">
       <div className="adm-dir__cell adm-dir__who">
@@ -403,24 +365,14 @@ function DirectoryRow({ item, canOpenUser, hasPlan }: { item: DirectoryItem; can
           {canOpenUser
             ? <a className="adm-link" href={formatRoute({ view: "user", userId: item.id, reason: "從名單查看" })}>{name}</a>
             : name}
-          {item.role_code !== "member" && <Badge tone="brand">{text(item.role_label, item.role_code)}</Badge>}
           {item.is_active === false && <Badge tone="warning">已停用</Badge>}
           {incomplete && <Badge tone="warning">未填會員資料</Badge>}
         </span>
         <span className="adm-result__meta">{text(item.email_masked, "沒有 email")}</span>
       </div>
       <div className="adm-dir__cell">{placement || <span className="adm-muted">未設定</span>}</div>
-      <div className="adm-dir__cell">
-        {hasPlan
-          ? (
-            <>
-              <Badge tone={item.joined ? "brand" : "neutral"}>{item.joined ? "已加入" : "未加入"}</Badge>
-              <span className="adm-small">{teams || (item.joined ? "未組隊（個人速讀中）" : "")}</span>
-            </>
-          )
-          : <span className="adm-muted">—</span>}
-      </div>
       <div className="adm-dir__cell adm-small">
+        {item.role_code === "member" ? <span className="adm-muted">{role}</span> : <Badge tone="brand">{role}</Badge>}
         {leader && (
           <span>
             管理範圍：
@@ -429,7 +381,11 @@ function DirectoryRow({ item, canOpenUser, hasPlan }: { item: DirectoryItem; can
               : scopeText(item)}
           </span>
         )}
-        <span className="adm-muted">{syncLabel(item.sync_status)}・{formatDateTime(item.synced_at)}</span>
+      </div>
+      <div className="adm-dir__cell adm-small">
+        {/* 手機沒有表頭，要自己說是哪個系統的同步 */}
+        <span><span className="adm-dir__label">會員中心</span>{syncLabel(item.sync_status)}</span>
+        <span className="adm-muted">{formatDateTime(item.synced_at)}</span>
       </div>
     </li>
   );

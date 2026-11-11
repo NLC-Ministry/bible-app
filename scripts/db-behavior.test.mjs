@@ -4779,3 +4779,26 @@ describe("回報狀態與結案流程（#683）", () => {
     });
   });
 });
+
+describe("人區名單不綁計畫（admin_api_directory_list，#694）", () => {
+  const list = () => asService(async tx => {
+    const { rows: [{ result }] } = await tx.query(`SELECT public.admin_api_directory_list($1) AS result`, [ids.admin]);
+    return result;
+  });
+
+  it("有進行中的計畫也不自己挑：不回計畫清單、每列不帶計畫參與", async () => {
+    const result = await list();
+    expect(Object.keys(result).sort()).toEqual(["all_count", "items", "next_cursor", "total"]);
+    expect(result.items.map(item => item.id).sort()).toEqual([ids.admin, ids.member, ids.other].sort());
+    for (const item of result.items) {
+      expect(item).not.toHaveProperty("joined");
+      expect(item).not.toHaveProperty("teams");
+    }
+  });
+
+  it("client 不能直接呼叫（只給 service_role）", async () => {
+    await expect(as("authenticated", { sub: ids.adminAuth }, tx => tx.query(
+      `SELECT public.admin_api_directory_list($1)`, [ids.admin]
+    ))).rejects.toThrow(/permission denied/);
+  });
+});

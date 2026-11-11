@@ -128,7 +128,7 @@ async function mount(initialHash: string, caps = CAPS, responses: Record<string,
       case "team_detail": data = (DETAILS[params.team_id] || DETAILS[TEAM_OK])(); break;
       case "team_history": data = HISTORY; break;
       case "team_lineage": data = LINEAGE; break;
-      case "directory_list": data = { items: [], total: 0, next_cursor: null, plan_id: null, plans: [], all_count: 0 }; break;
+      case "directory_list": data = { items: [], total: 0, next_cursor: null, all_count: 0 }; break;
       case "team_search":
         data = [{ id: TEAM_STUCK, name: "南風隊", division: 3, status: "ready", member_count: 2, captain_name: "丙", matched_code: true,
           plan: { id: PLAN, name: PLAN_ROW.name, plan_kind: PLAN_ROW.plan_kind, start_date: PLAN_ROW.start_date, end_date: PLAN_ROW.end_date } }];

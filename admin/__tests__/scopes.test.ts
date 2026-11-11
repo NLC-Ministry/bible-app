@@ -2,8 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { buildManagedScopeChoices } from "../../js/modules/admin-managed-scope-options.mjs";
 import { ADMIN_ORG_UNASSIGNED } from "../../js/modules/admin-user-directory-filter.mjs";
-import { ORG_UNASSIGNED as SERVER_UNASSIGNED, PLAN_FILTERS, directoryFilters } from "../../supabase/functions/admin-api/accounts.ts";
-import { formatTeams } from "../../supabase/functions/admin-api/exports.ts";
+import { ORG_UNASSIGNED as SERVER_UNASSIGNED, directoryFilters } from "../../supabase/functions/admin-api/accounts.ts";
 import {
   assignLeaders,
   effectiveScopes,
@@ -17,14 +16,12 @@ import {
 import {
   EMPTY_FILTERS,
   ORG_UNASSIGNED,
-  PARTICIPATION_FILTERS,
   activeFilterCount,
   directoryParams,
   orgFilterOptions,
   orgPickerSummary,
   pruneOrgFilter,
-  syncLabel,
-  teamsText
+  syncLabel
 } from "../src/directory.ts";
 import type { OrgTreeNode } from "../src/types.ts";
 
@@ -102,21 +99,17 @@ describe("管理範圍規則（同 App 管理分頁）", () => {
 });
 
 describe("使用者名單篩選", () => {
-  it("shares the unassigned value and plan filters with App and admin-api", () => {
+  it("shares the unassigned value with App and admin-api", () => {
     expect(ORG_UNASSIGNED).toBe(ADMIN_ORG_UNASSIGNED);
     expect(ORG_UNASSIGNED).toBe(SERVER_UNASSIGNED);
-    expect([...PARTICIPATION_FILTERS]).toEqual([...PLAN_FILTERS]);
   });
 
   it("sends params admin-api accepts", () => {
-    const filters = { ...EMPTY_FILTERS, q: "  王 ", regions: ["北區", ORG_UNASSIGNED], planId: "00000000-0000-0000-c026-000000000004", team: "joined" as const };
-    expect(directoryParams(filters)).toEqual({
-      q: "王", regions: ["北區", ORG_UNASSIGNED], zones: [], groups: [],
-      plan_id: "00000000-0000-0000-c026-000000000004", participation: "all", team: "joined", incomplete: false
-    });
+    const filters = { ...EMPTY_FILTERS, q: "  王 ", regions: ["北區", ORG_UNASSIGNED], incomplete: true };
+    // 查人不用選計畫（#694）：不送計畫條件
+    expect(directoryParams(filters)).toEqual({ q: "王", regions: ["北區", ORG_UNASSIGNED], zones: [], groups: [], incomplete: true });
     const server = directoryFilters(directoryParams(filters));
-    expect(server.ok && server.filters).toMatchObject({ p_q: "王", p_regions: ["北區", ORG_UNASSIGNED], p_team: "joined" });
-    expect(directoryParams(EMPTY_FILTERS)).not.toHaveProperty("plan_id");
+    expect(server.ok && server.filters).toMatchObject({ p_q: "王", p_regions: ["北區", ORG_UNASSIGNED], p_incomplete: true, p_plan_id: null });
     expect(directoryFilters(directoryParams(EMPTY_FILTERS)).ok).toBe(true);
     expect(activeFilterCount(filters)).toBe(2);
   });
@@ -142,9 +135,6 @@ describe("使用者名單篩選", () => {
     expect(orgPickerSummary([], "大區")).toBe("全部大區");
     expect(orgPickerSummary([ORG_UNASSIGNED], "大區")).toBe("未設定");
     expect(orgPickerSummary(["北區", "南區"], "大區")).toBe("2 個大區");
-    const teams = [{ name: "晨光隊", role: "captain" }, { name: null, role: "member" }, { name: "六人組", role: "leader" }];
-    expect(teamsText(teams)).toBe("[隊長] 晨光隊、未命名隊伍、[隊長] 六人組");
-    expect(teamsText(teams)).toBe(formatTeams(teams));
     expect(syncLabel("success")).toBe("已同步");
     expect(syncLabel("failed")).toBe("同步異常");
     expect(syncLabel(null)).toBe("尚未同步");

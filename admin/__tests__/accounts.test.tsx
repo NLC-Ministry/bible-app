@@ -17,8 +17,6 @@ const D = "11111111-2222-4333-8444-555555555554";
 const L2 = "21111111-2222-4333-8444-555555555552";
 const L3 = "21111111-2222-4333-8444-555555555553";
 const L4 = "21111111-2222-4333-8444-555555555554";
-const PLAN1 = "00000000-0000-0000-c026-000000000004";
-const PLAN2 = "00000000-0000-0000-c026-000000000005";
 
 const ORG = [
   { id: "r1", name: "北區", zones: [
@@ -34,13 +32,13 @@ function dirItem(id: string, extra: Record<string, unknown> = {}) {
   const item = {
     id, name: "王小明", email_masked: "wa***@example.com", great_region: "北區", pastoral_zone: "一牧區", small_group: "喜樂小組",
     is_active: true, sync_status: "success", synced_at: "2026-10-10T02:00:00Z", role_code: "member", role_label: null,
-    managed_regions: "", managed_zones: "", managed_groups: "", joined: false, teams: [], ...extra
+    managed_regions: "", managed_zones: "", managed_groups: "", ...extra
   } as Record<string, any>;
   return { ...item, sort_key: [1, item.great_region, 1, item.pastoral_zone, item.name, id] };
 }
 
 const PAGE1 = [
-  dirItem(A, { joined: true, teams: [{ name: "<b>晨光隊</b>", role: "captain" }] }),
+  dirItem(A, { name: "<b>王小明</b>" }),
   dirItem(B, { name: "李區長", role_code: "zone_leader", role_label: "區長" }),
   dirItem(C, { name: null, pastoral_zone: null, small_group: null, sync_status: null, synced_at: null })
 ];
@@ -72,14 +70,11 @@ function makeRespond(capabilities = ALL_CAPS, overrides: Partial<Record<string, 
           items: first ? PAGE1 : [dirItem(D, { name: "趙會友" })],
           total: 4,
           next_cursor: first ? PAGE1[2].sort_key : null,
-          plan_id: params.plan_id || PLAN1,
-          plans: first ? [{ id: PLAN1, name: "第四季速讀", start_date: "2026-10-01", end_date: "2026-12-31", plan_kind: "standard" },
-            { id: PLAN2, name: "第五季速讀", start_date: "2027-01-01", end_date: null, plan_kind: "standard" }] : null,
           all_count: first ? 312 : null
         } };
       }
       case "directory_export":
-        return { data: { filename: "使用者名單_2026-10-12.csv", csv: "大區\r\n北區\r\n", rows: 4, total: 4, truncated: false, plan_name: "第四季速讀" } };
+        return { data: { filename: "使用者名單_2026-10-12.csv", csv: "大區\r\n北區\r\n", rows: 4, total: 4, truncated: false } };
       case "scope_overview":
         return { data: { leaders: LEADERS } };
       case "scope_set":
@@ -168,35 +163,47 @@ async function setValue(input: HTMLSelectElement | HTMLInputElement, value: stri
 }
 
 describe("名單與查詢", () => {
-  it("opens with one directory_list, keeps the server's default plan, and keeps its state across tabs", async () => {
+  it("opens with one directory_list, has no plan filter (#694), and keeps its state across tabs", async () => {
     const { requests, el } = await mount("#/people");
     expect(actions(requests)).toEqual(["bootstrap", "directory_list"]);
-    expect(requests[1].params).toEqual({ regions: [], zones: [], groups: [], participation: "all", team: "all", incomplete: false, limit: 50 });
+    expect(requests[1].params).toEqual({ regions: [], zones: [], groups: [], incomplete: false, limit: 50 });
 
     expect(el.querySelector(".adm-directory__count")?.textContent).toBe("4 人");
-    expect(el.querySelector<HTMLSelectElement>(".adm-filters select")!.value).toBe(PLAN1);
+    // 查人不用選計畫：沒有計畫下拉、計畫參與、團隊，也沒有計畫欄
+    expect(el.querySelector(".adm-filters select")).toBeNull();
+    expect([...el.querySelectorAll(".adm-filters legend")].map((l) => l.textContent)).toEqual(["牧養歸屬"]);
+    expect(el.querySelector(".adm-directory")!.textContent).not.toContain("計畫");
+    expect([...el.querySelectorAll(".adm-dir__head span")].map((s) => s.textContent)).toEqual(["姓名", "牧養歸屬", "角色・管理範圍", "會員中心同步"]);
     const rows = el.querySelectorAll(".adm-dir__row");
     expect(rows).toHaveLength(3);
-    // 名字連到個人頁；會友寫的隊名當文字
+    expect([...rows].map((row) => row.querySelectorAll(".adm-dir__cell").length)).toEqual([4, 4, 4]);
+    // 名字連到個人頁；會友填的名字當文字
     expect(rows[0].querySelector("a")!.getAttribute("href")).toBe(`#/people/user/${A}?${new URLSearchParams({ reason: "從名單查看" })}`);
-    expect(rows[0].textContent).toContain("[隊長] <b>晨光隊</b>");
+    expect(rows[0].textContent).toContain("<b>王小明</b>");
     expect(rows[0].querySelector("b")).toBeNull();
-    // 區長沒另外設定 → 沿用本人牧區，連到管理範圍
-    const scopeLink = [...rows[1].querySelectorAll("a")].find((a) => a.textContent === "一牧區")!;
+    // 一般會友：角色欄寫「一般會友」，同步欄只有同步狀態
+    const cells0 = rows[0].querySelectorAll(".adm-dir__cell");
+    expect(cells0[2].textContent).toBe("一般會友");
+    expect(cells0[3].textContent).toContain("已同步");
+    // 區長沒另外設定 → 沿用本人牧區，連到管理範圍；角色和同步分在兩欄
+    const cells1 = rows[1].querySelectorAll(".adm-dir__cell");
+    expect(cells1[2].textContent).toContain("區長");
+    const scopeLink = [...cells1[2].querySelectorAll("a")].find((a) => a.textContent === "一牧區")!;
     expect(scopeLink.getAttribute("href")).toBe(`#/people/scopes/${B}`);
+    expect(cells1[3].textContent).not.toContain("一牧區");
     expect(rows[2].textContent).toContain("未填會員資料");
+    expect(rows[2].querySelectorAll(".adm-dir__cell")[3].textContent).toContain("尚未同步");
 
-    await click(button(el, "已加入此計畫"));
+    await click(checkbox(el, "未填會員資料（沒有牧區或沒有名稱）"));
     expect(actions(requests)).toEqual(["bootstrap", "directory_list", "directory_list"]);
-    expect(requests[2].params).toMatchObject({ plan_id: PLAN1, participation: "joined" });
-    expect(requests[2].params).not.toHaveProperty("cursor");
+    expect(requests[2].params).toEqual({ regions: [], zones: [], groups: [], incomplete: true, limit: 50 });
     expect(el.querySelector(".adm-directory__count")?.textContent).toBe("4 / 312 人");
 
     await go("#/people/scopes");
     expect(actions(requests).slice(3)).toEqual(["scope_overview"]);
     await go("#/people");
     expect(requests).toHaveLength(4);
-    expect(button(el, "已加入此計畫").getAttribute("aria-pressed")).toBe("true");
+    expect(checkbox(el, "未填會員資料（沒有牧區或沒有名稱）").checked).toBe(true);
   });
 
   it("waits until typing stops and sends only the last text", async () => {
@@ -209,7 +216,7 @@ describe("名單與查詢", () => {
     expect(requests).toHaveLength(2);
     await flush(350);
     expect(requests).toHaveLength(3);
-    expect(requests[2].params).toMatchObject({ q: "王小", plan_id: PLAN1 });
+    expect(requests[2].params).toEqual({ regions: [], zones: [], groups: [], incomplete: false, q: "王小", limit: 50 });
   });
 
   it("cascades org filters and drops choices the new parents no longer offer", async () => {
@@ -233,16 +240,20 @@ describe("名單與查詢", () => {
     await click(checkbox(el.querySelector("#adm-picker-zones")!, "未設定"));
     expect(requests.at(-1)!.params).toMatchObject({ zones: [ORG_UNASSIGNED] });
 
+    // 清除後和剛打開時是同一組條件 → 用 60 秒快取，不再發請求
     const before = requests.length;
     await click(button(el, "清除全部條件"));
-    expect(requests).toHaveLength(before + 1);
-    expect(requests.at(-1)!.params).toEqual({ regions: [], zones: [], groups: [], participation: "all", team: "all", incomplete: false, plan_id: PLAN1, limit: 50 });
+    expect(requests).toHaveLength(before);
+    expect(requests[1].params).toEqual({ regions: [], zones: [], groups: [], incomplete: false, limit: 50 });
+    expect(el.querySelector(".adm-filters__summary")?.textContent).toContain("未套用");
+    expect(el.querySelectorAll(".adm-dir__row")).toHaveLength(3);
   });
 
   it("loads the next page after the last person's sort key (#567: no OFFSET, nobody skipped or repeated)", async () => {
     const { requests, el } = await mount("#/people");
     await click(button(el, "載入更多（還有 1 人）"));
-    expect(requests.at(-1)!.params).toMatchObject({ cursor: [1, "北區", 1, null, null, C], plan_id: PLAN1, limit: 50 });
+    expect(requests.at(-1)!.params).toMatchObject({ cursor: [1, "北區", 1, null, null, C], limit: 50 });
+    expect(requests.at(-1)!.params).not.toHaveProperty("plan_id");
     expect(el.querySelectorAll(".adm-dir__row")).toHaveLength(4);
     expect(button(el, "載入更多")).toBeUndefined();
   });
@@ -257,7 +268,7 @@ describe("名單與查詢", () => {
     await click(button(el, "匯出 CSV"));
     const call = requests.at(-1)!;
     expect(call.action).toBe("directory_export");
-    expect(call.params).toEqual({ regions: [], zones: [], groups: [], participation: "all", team: "all", incomplete: true, plan_id: PLAN1 });
+    expect(call.params).toEqual({ regions: [], zones: [], groups: [], incomplete: true });
     expect(downloads).toEqual(["使用者名單_2026-10-12.csv"]);
     expect(el.textContent).toContain("已匯出 4 人。");
 
