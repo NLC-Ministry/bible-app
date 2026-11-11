@@ -12,6 +12,10 @@ const SKIP_DIRS = new Set(["node_modules", ".git", ".worktrees", ".claude", "dis
 
 // 刻意讀原始檔、而且提到的函式之後被改寫過的少數情況：檔名 → { migration: 理由 }。
 const ALLOWED_RAW_READS = {
+  // #694 改寫了 admin_api_directory_list；原檔只拿來驗那支檔案自己的授權與 DROP 舊簽名，函式內容斷言走 latestFunctionDefinition
+  "scripts/admin-api-people.test.mjs": {
+    "20261014072419_admin_api_people.sql": "只驗這支檔案自己的 REVOKE／GRANT 與 DROP 舊簽名",
+  },
   // #589：檔名常數只拿來比對 latestFunctionDefinition().file，SQL 斷言都走 currentMigrationSql／latestFunctionDefinition
   "scripts/daily-quiz-generation-progress.test.mjs": {
     "20261008064652_daily_quiz_generation_progress.sql": "檔名常數只用來比對函式最新定義所在的檔案",

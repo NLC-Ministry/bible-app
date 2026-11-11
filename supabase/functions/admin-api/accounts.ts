@@ -2,11 +2,12 @@
 //
 // 名單篩選、管理範圍修改的規則在 SQL（20261012053123_admin_api_accounts.sql）；稽核也在 SQL、
 // 和資料同一個交易。這裡只檢查前端送來的篩選條件，以及把匯出資料轉成 CSV。
+// 人區名單是查人用的，不篩計畫（#694）：計畫條件一律不限，舊版後台送來的 plan_id／participation／team 直接忽略。
+// 某計畫的參加者、組隊狀況看計畫區的名單（plan_roster）。
 import { directoryCsv, orgCsv, taipeiDate, withExportTime, type DirectoryExportRow } from "./exports.ts";
 import { sqlFailure } from "./run-helpers.ts";
 import type { ActionRunner } from "./types.ts";
 
-export const PLAN_FILTERS = ["all", "joined", "not_joined"] as const;
 export const ORG_UNASSIGNED = "__unassigned__";
 const MAX_ORG_VALUES = 200;
 const MAX_ORG_VALUE_CHARS = 100;
@@ -18,9 +19,10 @@ export type DirectoryFilters = {
   p_regions: string[];
   p_zones: string[];
   p_groups: string[];
-  p_plan_id: string | null;
-  p_participation: string;
-  p_team: string;
+  /** SQL 的參數簽名還留著計畫條件；這裡固定送「不限」（#694） */
+  p_plan_id: null;
+  p_participation: "all";
+  p_team: "all";
   p_incomplete: boolean;
 };
 
@@ -49,14 +51,6 @@ export function directoryFilters(params: Record<string, unknown>): { ok: true; f
   if (!zones.ok) return zones;
   const groups = orgValues(params.groups);
   if (!groups.ok) return groups;
-  if (params.plan_id !== undefined && params.plan_id !== null && !(typeof params.plan_id === "string" && UUID_RE.test(params.plan_id))) {
-    return { ok: false, error: "invalid_plan_id" };
-  }
-  const participation = params.participation ?? "all";
-  const team = params.team ?? "all";
-  if (!(PLAN_FILTERS as readonly unknown[]).includes(participation) || !(PLAN_FILTERS as readonly unknown[]).includes(team)) {
-    return { ok: false, error: "invalid_plan_filter" };
-  }
   if (params.incomplete !== undefined && typeof params.incomplete !== "boolean") return { ok: false, error: "invalid_incomplete" };
   return {
     ok: true,
@@ -65,9 +59,9 @@ export function directoryFilters(params: Record<string, unknown>): { ok: true; f
       p_regions: regions.values,
       p_zones: zones.values,
       p_groups: groups.values,
-      p_plan_id: typeof params.plan_id === "string" ? params.plan_id : null,
-      p_participation: participation as string,
-      p_team: team as string,
+      p_plan_id: null,
+      p_participation: "all",
+      p_team: "all",
       p_incomplete: params.incomplete === true
     }
   };
@@ -93,7 +87,7 @@ export function directoryCursor(value: unknown): { ok: true; cursor: unknown[] |
 export const runDirectoryExport: ActionRunner = async ({ args, rpc }) => {
   const result = await rpc("admin_api_directory_export", args);
   if (result.error) return sqlFailure("admin_api_directory_export", result.error);
-  const data = (result.data || {}) as { rows?: DirectoryExportRow[]; total?: number; truncated?: boolean; plan_name?: string | null };
+  const data = (result.data || {}) as { rows?: DirectoryExportRow[]; total?: number; truncated?: boolean };
   const rows = Array.isArray(data.rows) ? data.rows : [];
   const now = new Date();
   return {
@@ -103,8 +97,7 @@ export const runDirectoryExport: ActionRunner = async ({ args, rpc }) => {
       csv: withExportTime(directoryCsv(rows), now),
       rows: rows.length,
       total: typeof data.total === "number" ? data.total : rows.length,
-      truncated: data.truncated === true,
-      plan_name: typeof data.plan_name === "string" ? data.plan_name : null
+      truncated: data.truncated === true
     }
   };
 };

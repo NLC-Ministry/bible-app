@@ -250,3 +250,23 @@ describe("migration（#567）", () => {
     expect(sql).toContain("DROP FUNCTION IF EXISTS public.admin_api_directory_list(UUID, TEXT, TEXT[], TEXT[], TEXT[], UUID, TEXT, TEXT, BOOLEAN, INTEGER, INTEGER);");
   });
 });
+
+describe("人區名單不綁計畫（#694）", () => {
+  const definition = latestFunctionDefinition("admin_api_directory_list");
+
+  it("沒指定計畫就不篩計畫：不挑預設計畫、不回計畫清單，每列也不帶計畫參與", () => {
+    expect(definition.file).toMatch(/_admin_directory_no_plan\.sql$/);
+    expect(definition.text).not.toContain("global_plans");
+    for (const removed of ["'plans'", "'plan_id'", "numbered.joined", "numbered.teams"]) expect(definition.text).not.toContain(removed);
+    // 參數簽名不變：舊版 admin-api 和新版都能呼叫，部署先後不會讓名單壞掉
+    expect(definition.text).toMatch(/p_plan_id UUID DEFAULT NULL,\s+p_participation TEXT DEFAULT 'all',\s+p_team TEXT DEFAULT 'all'/);
+  });
+
+  it("新版定義也只給 service_role", () => {
+    const sql = readMigration(definition.file);
+    const signature = "public.admin_api_directory_list(UUID, TEXT, TEXT[], TEXT[], TEXT[], UUID, TEXT, TEXT, BOOLEAN, JSONB, INTEGER)";
+    expect(sql).toContain(`REVOKE ALL ON FUNCTION ${signature} FROM PUBLIC, anon, authenticated;`);
+    expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${signature} TO service_role;`);
+    expect(sql).not.toMatch(/GRANT EXECUTE[^;]*TO[^;]*authenticated/);
+  });
+});

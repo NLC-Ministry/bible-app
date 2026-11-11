@@ -440,7 +440,7 @@ textarea { font: inherit; color: inherit; }
 
 .adm-dir { border: 1px solid var(--border-card); border-radius: var(--radius-lg); background: var(--bg-card); overflow: hidden; }
 .adm-dir__head, .adm-dir__row {
-  display: grid; grid-template-columns: minmax(12rem, 1.4fr) minmax(10rem, 1.2fr) minmax(9rem, 1fr) minmax(10rem, 1.1fr);
+  display: grid; grid-template-columns: minmax(12rem, 1.4fr) minmax(10rem, 1.2fr) minmax(10rem, 1.1fr) minmax(8rem, 0.8fr);
   gap: 4px 16px; padding: 10px 14px;
 }
 .adm-dir__head { font-size: 13px; color: var(--text-muted); border-bottom: 1px solid var(--border-default); }
@@ -448,6 +448,7 @@ textarea { font: inherit; color: inherit; }
 .adm-dir__row { border-top: 1px solid var(--border-default); align-items: start; }
 .adm-dir__row:first-child { border-top: 0; }
 .adm-dir__cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.adm-dir__label { display: none; }
 
 /* ── 帳號與權限：管理範圍 ─────────────────────────────────────────────── */
 .adm-org-tree { display: flex; flex-direction: column; gap: 6px; }
@@ -766,6 +767,8 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
   .adm-composer { padding: 10px; }
   .adm-dir__head { display: none; }
   .adm-dir__row { grid-template-columns: minmax(0, 1fr); }
+  .adm-dir__label { display: inline; }
+  .adm-dir__label::after { content: "："; }
   .adm-filters__group { flex-direction: column; align-items: stretch; }
   .adm-picker__summary, .adm-filters__field .adm-select { width: 100%; }
   .adm-segmented { display: flex; }
