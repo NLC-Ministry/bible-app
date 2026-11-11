@@ -5,8 +5,10 @@ import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ACCESS_TOKEN_KEY,
   LAST_LOGIN_METHOD_KEY,
   loginMethodHintText,
+  readLoginClaim,
   readLastLoginMethod,
   rememberLoginMethod
 } from "../js/login-method-memory.mjs";
@@ -20,6 +22,12 @@ const daysAgo = days => new Date(NOW - days * DAY).toISOString();
 const PHONE_ACCOUNT = { phone: "886912345678", email: "" };
 const EMAIL_ACCOUNT = { phone: "", email: "abcdef@gmail.com" };
 const GENERIC_HINT = "請用跟上次相同的方式（手機、Email、Google 或 LINE）登入，才看得到你的計畫。";
+
+// #693：Logto Custom JWT 只在速讀 App 的 access token 加 nlc_login（有沒有密碼、綁了哪些社群登入）。
+function accessToken(payload) {
+  const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${part({ alg: "ES384", typ: "at+jwt" })}.${part({ sub: "sub-a", ...payload })}.signature`;
+}
 
 function memoryStorage(entries = {}) {
   const store = new Map(Object.entries(entries));
@@ -93,6 +101,47 @@ describe("rememberLoginMethod", () => {
     storage.setItem = () => { throw new Error("QuotaExceeded"); };
     expect(() => remember(storage)).not.toThrow();
   });
+
+  it("#693: also stores whether the account has a password and which social sign-ins it has, from the access token", () => {
+    const storage = memoryStorage({
+      [ACCESS_TOKEN_KEY]: accessToken({ nlc_login: { pw: false, social: ["line"] } })
+    });
+    remember(storage);
+    expect(JSON.parse(storage.store.get(LAST_LOGIN_METHOD_KEY)))
+      .toEqual({ method: "phone", masked: "0912-***-678", pw: false, social: ["line"] });
+  });
+
+  it("#693: a token without the claim (old token, other client, opaque) keeps the old record shape", () => {
+    for (const token of [accessToken({}), "opaque-token", "a.%%%.b", ""]) {
+      const storage = memoryStorage({ [ACCESS_TOKEN_KEY]: token });
+      remember(storage);
+      expect(JSON.parse(storage.store.get(LAST_LOGIN_METHOD_KEY))).toEqual({ method: "phone", masked: "0912-***-678" });
+    }
+  });
+});
+
+describe("readLoginClaim", () => {
+  const claim = nlc_login => readLoginClaim(memoryStorage({ [ACCESS_TOKEN_KEY]: accessToken({ nlc_login }) }));
+
+  it("reads pw and the social connector names", () => {
+    expect(claim({ pw: true, social: ["google", "line"] })).toEqual({ pw: true, social: ["google", "line"] });
+    expect(claim({ pw: false, social: [] })).toEqual({ pw: false, social: [] });
+  });
+
+  it("rejects a malformed claim instead of guessing", () => {
+    expect(claim(undefined)).toBeNull();
+    expect(claim({ pw: "yes", social: ["line"] })).toBeNull();
+    expect(claim({ pw: false, social: "line" })).toBeNull();
+    expect(readLoginClaim(memoryStorage())).toBeNull();
+  });
+
+  it("keeps only connector-name-shaped strings", () => {
+    expect(claim({ pw: false, social: ["line", "<img>", 42, "x".repeat(40)] })).toEqual({ pw: false, social: ["line"] });
+  });
+
+  it("uses the same storage key as auth.js", () => {
+    expect(readFileSync("js/auth.js", "utf8")).toContain(`accessToken: "${ACCESS_TOKEN_KEY}"`);
+  });
 });
 
 describe("readLastLoginMethod", () => {
@@ -129,6 +178,24 @@ describe("readLastLoginMethod", () => {
     expect(readLastLoginMethod({ storage: withPlan, now: NOW }).method).toBe("email");
   });
 
+  it("#693: seeding from the snapshot does not read the token claim (the token may belong to another login)", () => {
+    const storage = memoryStorage({
+      [OFFLINE_IDENTITY_KEY]: snapshot({ ...PHONE_ACCOUNT, created_at: daysAgo(200) }),
+      [ACCESS_TOKEN_KEY]: accessToken({ nlc_login: { pw: false, social: ["line"] } })
+    });
+    expect(readLastLoginMethod({ storage, now: NOW })).toEqual({ method: "phone", masked: "0912-***-678", profileId: "p1" });
+  });
+
+  it("#693: reads pw and social back from the record, dropping anything malformed", () => {
+    const read = record => readLastLoginMethod({ storage: memoryStorage({ [LAST_LOGIN_METHOD_KEY]: JSON.stringify(record) }), now: NOW });
+    expect(read({ method: "phone", masked: "0912-***-678", pw: false, social: ["line"] }))
+      .toEqual({ method: "phone", masked: "0912-***-678", pw: false, social: ["line"] });
+    expect(read({ method: "", masked: "", pw: false, social: ["google"] }))
+      .toEqual({ method: "", masked: "", pw: false, social: ["google"] });
+    expect(read({ method: "phone", masked: "0912-***-678", pw: "no", social: ["line"] }))
+      .toEqual({ method: "phone", masked: "0912-***-678" });
+  });
+
   it("an existing record wins over the snapshot", () => {
     const storage = memoryStorage({
       [LAST_LOGIN_METHOD_KEY]: JSON.stringify({ method: "phone", masked: "0912-***-678" }),
@@ -157,6 +224,36 @@ describe("loginMethodHintText", () => {
       .toBe("上次在這台裝置登入的帳號是 0912-***-678。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。");
   });
 
+  // #693：token 帶了「有沒有密碼、綁了哪些社群登入」，就直接說該按哪個，不再讓沒密碼的人去輸入密碼。
+  it("#693: an account with no password is told exactly which button to press", () => {
+    expect(loginMethodHintText({ method: "phone", masked: "0912-***-678", pw: false, social: ["line"] }))
+      .toBe("上次在這台裝置登入的帳號是 0912-***-678，沒有設密碼。請按 LINE 登入，才看得到你的計畫。");
+    expect(loginMethodHintText({ method: "email", masked: "ab***@gmail.com", pw: false, social: ["google", "line"] }))
+      .toBe("上次在這台裝置登入的帳號是 ab***@gmail.com，沒有設密碼。請按 LINE 或 Google 登入，才看得到你的計畫。");
+  });
+
+  it("#693: with no account to show (both phone and Email), still names the button", () => {
+    expect(loginMethodHintText({ method: "", masked: "", pw: false, social: ["google"] }))
+      .toBe("上次在這台裝置登入的帳號沒有設密碼。請按 Google 登入，才看得到你的計畫。");
+  });
+
+  it("#693: an account with a password lists its social sign-ins and the password", () => {
+    expect(loginMethodHintText({ method: "phone", masked: "0912-***-678", pw: true, social: ["line"] }))
+      .toBe("上次在這台裝置登入的帳號是 0912-***-678。請按 LINE 登入，或輸入手機和密碼，才看得到你的計畫。");
+    expect(loginMethodHintText({ method: "email", masked: "ab***@church.org", pw: true, social: [] }))
+      .toBe("上次在這台裝置登入的帳號是 ab***@church.org。請輸入 Email 和密碼登入，才看得到你的計畫。");
+  });
+
+  it("#693: falls back to the old lines when the claim can't say anything useful", () => {
+    // 沒密碼也沒有認得的社群登入（例如只用驗證碼登入）：不知道該叫他按什麼。
+    expect(loginMethodHintText({ method: "phone", masked: "0912-***-678", pw: false, social: [] }))
+      .toBe("上次在這台裝置登入的帳號是 0912-***-678。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。");
+    expect(loginMethodHintText({ method: "phone", masked: "0912-***-678", pw: false, social: ["facebook"] }))
+      .toContain("請用當時的方式");
+    // 有密碼但不知道帳號是手機還是 Email：不知道要他輸入哪一個。
+    expect(loginMethodHintText({ method: "", masked: "", pw: true, social: [] })).toBe(GENERIC_HINT);
+  });
+
   it("zh-Hant has the same lines as the defaults here", () => {
     const copy = readFileSync("js/copy/zh-Hant.js", "utf8");
     const source = readFileSync("js/login-method-memory.mjs", "utf8");
@@ -164,6 +261,10 @@ describe("loginMethodHintText", () => {
       "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。",
       "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。",
       "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。",
+      "上次在這台裝置登入的帳號是 {account}，沒有設密碼。請按 {social} 登入，才看得到你的計畫。",
+      "上次在這台裝置登入的帳號沒有設密碼。請按 {social} 登入，才看得到你的計畫。",
+      "上次在這台裝置登入的帳號是 {account}。請按 {social} 登入，或輸入{credential}和密碼，才看得到你的計畫。",
+      "上次在這台裝置登入的帳號是 {account}。請輸入{credential}和密碼登入，才看得到你的計畫。",
       GENERIC_HINT
     ]) {
       expect(copy).toContain(line);
@@ -228,6 +329,12 @@ describe("db records the method after the plan list loads", () => {
     expect(JSON.parse(stored())).toEqual({ method: "phone", masked: "0912-***-678", profileId: "profile-a" });
   });
 
+  it("#693: records the claim from the access token the login just stored", async () => {
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken({ nlc_login: { pw: false, social: ["line"] } }));
+    await load(ok([]));
+    expect(JSON.parse(stored())).toEqual({ method: "phone", masked: "0912-***-678", profileId: "profile-a", pw: false, social: ["line"] });
+  });
+
   it("a new empty account is not recorded", async () => {
     state.currentUser.account_created_at = new Date(Date.now() - DAY).toISOString();
     await load(ok([]));
@@ -271,6 +378,14 @@ describe("login card shows the reminder", () => {
     applyLoginGateView({ block: null, hasTokens: false, ...view });
     expect(hint.classList.contains("hidden")).toBe(false);
     expect(hint.textContent).toContain("0912-***-678");
+  });
+
+  it("#693: the sign-in screen tells a no-password account which button to press", () => {
+    const { hint, view } = gate(memoryStorage({
+      [LAST_LOGIN_METHOD_KEY]: JSON.stringify({ method: "phone", masked: "0912-***-678", pw: false, social: ["line"] })
+    }));
+    applyLoginGateView({ block: null, hasTokens: false, ...view });
+    expect(hint.textContent).toBe("上次在這台裝置登入的帳號是 0912-***-678，沒有設密碼。請按 LINE 登入，才看得到你的計畫。");
   });
 
   it("a stored value can't inject markup into the card", () => {

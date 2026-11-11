@@ -89,6 +89,11 @@ window.APP_COPY = {
     email: "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。",
     phone: "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。",
     unknown: "請用跟上次相同的方式（手機、Email、Google 或 LINE）登入，才看得到你的計畫。",
+    // #693：access token 帶了「有沒有密碼、綁了哪些社群登入」時用這幾句；{social} 例如「LINE 或 Google」，{credential} 是「手機」或「 Email 」（自帶空格）。
+    socialOnly: "上次在這台裝置登入的帳號是 {account}，沒有設密碼。請按 {social} 登入，才看得到你的計畫。",
+    socialOnlyNoAccount: "上次在這台裝置登入的帳號沒有設密碼。請按 {social} 登入，才看得到你的計畫。",
+    socialAndPassword: "上次在這台裝置登入的帳號是 {account}。請按 {social} 登入，或輸入{credential}和密碼，才看得到你的計畫。",
+    passwordOnly: "上次在這台裝置登入的帳號是 {account}。請輸入{credential}和密碼登入，才看得到你的計畫。",
   },
   memberHub: {
     cardTitle: "新生命會員中心",
