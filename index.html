@@ -1717,6 +1717,8 @@
             </button>
             <button type="button" class="pastoral__updated" id="pastoral-refresh" data-pastoral-action="refresh"></button>
           </div>
+          <!-- 麵包屑（#699）：四個分頁共用；每段點了回到那一層，尾端「選○○」往下選 -->
+          <nav class="pastoral-crumbs hidden" id="pastoral-crumbs" aria-label="範圍層級"></nav>
           <div class="segment-track pastoral__tabs" role="tablist" aria-label="管理">
             <button type="button" class="segment-toggle-btn active" role="tab" aria-selected="true" data-pastoral-tab="overview">總覽</button>
             <button type="button" class="segment-toggle-btn" role="tab" aria-selected="false" data-pastoral-tab="roster">名單</button>

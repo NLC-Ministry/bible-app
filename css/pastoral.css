@@ -109,6 +109,92 @@
   box-shadow: var(--shadow-focus-ring);
 }
 
+/* 麵包屑（#699）：四個分頁共用；太長就換行，手機不左右捲 */
+.pastoral-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  min-width: 0;
+  margin-top: -0.25rem;
+  font-size: 0.875rem;
+}
+
+.pastoral-crumbs.hidden {
+  display: none;
+}
+
+.pastoral-crumbs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pastoral-crumbs__list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.pastoral-crumbs__sep {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.pastoral-crumbs__item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+button.pastoral-crumbs__item {
+  border: 0;
+  background: none;
+  color: var(--color-brand);
+  font: inherit;
+  cursor: pointer;
+}
+
+button.pastoral-crumbs__item:hover {
+  text-decoration: underline;
+}
+
+.pastoral-crumbs__item[aria-current="page"] {
+  color: var(--text-primary);
+  font-weight: var(--type-weight-strong);
+}
+
+.pastoral-crumbs__next {
+  min-height: 32px;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--color-brand-border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--color-brand);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+button.pastoral-crumbs__item:focus-visible,
+.pastoral-crumbs__next:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.pastoral-crumbs__next:focus-visible {
+  border-radius: 999px;
+}
+
 .pastoral__tabs .segment-toggle-btn {
   padding: 0.5rem 0.25rem;
   border-radius: calc(var(--radius-md) - 2px);
