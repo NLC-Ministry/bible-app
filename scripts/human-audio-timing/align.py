@@ -25,6 +25,7 @@ import re
 import sys
 import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
 import urllib.request
 from pathlib import Path
 
@@ -53,7 +54,12 @@ PAREN_RE = re.compile(r"（[^（）]*）|\([^()]*\)")
 TRANSLATOR_NOTE_RE = re.compile(r"或譯|或作|原文|有古卷|下同|^（在.+是|就是.+的意思")
 
 
-def load_books() -> dict[int, dict]:
+def load_books(path: Path | None = None) -> dict[int, dict]:
+    if path:
+        books = {int(b["id"]): b for b in json.loads(path.read_text(encoding="utf-8"))}
+        if len(books) != 66:
+            raise SystemExit(f"讀到 {len(books)} 卷書，預期 66 卷：{path}")
+        return books
     text = BOOKS_FILE.read_text(encoding="utf-8")
     pattern = re.compile(r'\{\s*id:\s*(\d+),\s*name:\s*"([^"]+)",\s*abbrev:\s*"([^"]+)",[^}]*?chapters:\s*(\d+)')
     books = {int(m[1]): {"id": int(m[1]), "name": m[2], "abbrev": m[3], "chapters": int(m[4])} for m in pattern.finditer(text)}
@@ -132,14 +138,17 @@ def romanize_verse(text: str) -> list[str]:
 
 
 class Aligner:
-    def __init__(self) -> None:
+    def __init__(self, device: str = "auto") -> None:
         import torch
         import torchaudio
 
         self.torch = torch
         self.torchaudio = torchaudio
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = device
         self.bundle = torchaudio.pipelines.MMS_FA
-        self.model = self.bundle.get_model(with_star=True)
+        self.model = self.bundle.get_model(with_star=True).to(device)
         self.model.eval()
         self.dictionary = self.bundle.get_dict(star="*")
         torch.set_num_threads(max(1, torch.get_num_threads()))
@@ -171,10 +180,11 @@ class Aligner:
                 end = min(total, start + chunk)
                 left = max(0, start - context)
                 right = min(total, end + context)
-                out, _ = self.model(waveform[:, left:right])
+                out, _ = self.model(waveform[:, left:right].to(self.device))
                 a = (start - left) // FRAME_SAMPLES
                 b = a + -(-(end - start) // FRAME_SAMPLES)
-                pieces.append(out[:, a:min(b, out.size(1))])
+                # forced_align 在 CPU 上做，emission 先搬回來。
+                pieces.append(out[:, a:min(b, out.size(1))].float().cpu())
         emission = torch.cat(pieces, dim=1)
         total_frames = emission.size(1)
         expected = total // FRAME_SAMPLES
@@ -256,38 +266,63 @@ def parse_chapters(args, books: dict[int, dict]) -> list[tuple[int, int]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--work", required=True, type=Path, help="音檔、模型輸出與中間檔的資料夾（不要放進 repo）")
+    parser.add_argument("--work", required=True, type=Path, help="音檔與中間檔的資料夾（不要放進 repo）")
+    parser.add_argument("--out", type=Path, help="時間表輸出資料夾，預設 <work>/out")
+    parser.add_argument("--books", type=Path, help="書卷清單 JSON（雲端執行時沒有 repo 用）；預設讀 js/data/bible_data.js")
+    parser.add_argument("--dump-books", type=Path, help="把書卷清單寫成 JSON 後結束")
     parser.add_argument("--chapters", nargs="*", help="書卷編號:章，例如 19:117")
     parser.add_argument("--all", action="store_true", help="全部 1,189 章")
     parser.add_argument("--force", action="store_true", help="已有輸出也重算")
+    parser.add_argument("--prefetch", type=int, default=0, help="同時預先下載幾章（0＝邊算邊下載）；信望愛是事工網站，不要超過 4")
+    parser.add_argument("--device", default="auto", help="auto／cpu／cuda")
     args = parser.parse_args()
 
+    books = load_books(args.books)
+    if args.dump_books:
+        args.dump_books.write_text(json.dumps(list(books.values()), ensure_ascii=False), encoding="utf-8")
+        return 0
     work = args.work.resolve()
     if REPO_ROOT in work.parents or work == REPO_ROOT:
         raise SystemExit("--work 不能放在 repo 裡面")
-    books = load_books()
     chapters = parse_chapters(args, books)
     if not chapters:
         raise SystemExit("沒有指定章節：用 --chapters 或 --all")
+    if args.prefetch > 4:
+        raise SystemExit("--prefetch 最多 4")
 
-    aligner = Aligner()
-    out_dir = work / "out"
+    out_dir = (args.out or work / "out").resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    pending = [(bid, chap) for bid, chap in chapters if args.force or not (out_dir / f"{bid}_{chap}.json").exists()]
+
+    def download(bid: int, chap: int) -> None:
+        fetch_verses(work, books[bid], chap)
+        fetch_audio(work, bid, chap)
+
+    # 下載和對齊分開：背景先抓後面幾章，GPU 不用等網路。
+    executor = ThreadPoolExecutor(max_workers=args.prefetch) if args.prefetch else None
+    downloads = {key: executor.submit(download, *key) for key in pending} if executor else {}
+
+    aligner = Aligner(args.device)
+    print(f"裝置：{aligner.device}，要算 {len(pending)} 章", flush=True)
     failures = []
-    for index, (bid, chap) in enumerate(chapters, 1):
-        target = out_dir / f"{bid}_{chap}.json"
-        if target.exists() and not args.force:
-            continue
+    began_all = time.time()
+    for index, (bid, chap) in enumerate(pending, 1):
         began = time.time()
         try:
+            if executor:
+                downloads.pop((bid, chap)).result()
             data = align_chapter(aligner, work, books[bid], chap)
         except Exception as error:  # noqa: BLE001 — 單章失敗不擋其他章，最後列出
             failures.append((bid, chap, str(error)))
-            print(f"[{index}/{len(chapters)}] {bid}:{chap} 失敗：{error}", file=sys.stderr, flush=True)
+            print(f"[{index}/{len(pending)}] {bid}:{chap} 失敗：{error}", file=sys.stderr, flush=True)
             continue
-        target.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        print(f"[{index}/{len(chapters)}] {bid}:{chap} {data['duration']:.0f}s 音檔，用了 {time.time() - began:.0f}s", flush=True)
+        (out_dir / f"{bid}_{chap}.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        print(f"[{index}/{len(pending)}] {bid}:{chap} {data['duration']:.0f}s 音檔，用了 {time.time() - began:.0f}s"
+              f"（累計 {(time.time() - began_all) / 60:.0f} 分）", flush=True)
+    if executor:
+        executor.shutdown(wait=False, cancel_futures=True)
     if failures:
+        (out_dir / "failures.json").write_text(json.dumps(failures, ensure_ascii=False), encoding="utf-8")
         print(f"{len(failures)} 章失敗：", ", ".join(f"{b}:{c}" for b, c, _ in failures), file=sys.stderr)
         return 1
     return 0

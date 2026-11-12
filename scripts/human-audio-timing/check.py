@@ -88,7 +88,7 @@ def check_chapter(data: dict, audio: Path) -> dict:
     return {"verses": len(data["verses"]), "suspects": suspects, "medianRate": median_rate}
 
 
-def write_review(work: Path, items: list[tuple[dict, Path, dict]]) -> Path:
+def write_review(target: Path, items: list[tuple[dict, Path, dict]]) -> Path:
     parts = [
         "<!doctype html><meta charset='utf-8'><title>逐節時間抽聽</title>",
         "<style>body{font:16px/1.6 system-ui;margin:16px;max-width:860px}"
@@ -99,7 +99,7 @@ def write_review(work: Path, items: list[tuple[dict, Path, dict]]) -> Path:
         bad = {n for n, _ in report["suspects"]}
         key = f"a{data['book']}_{data['chapter']}"
         parts.append(f"<h2>{data['book']}:{data['chapter']}（{data['duration']:.0f} 秒，章首開場到 {data.get('introEnd')} 秒）</h2>")
-        parts.append(f"<audio id='{key}' controls preload='none' src='{html.escape(audio.as_uri())}'></audio><div>")
+        parts.append(f"<audio id='{key}' controls preload='none' src='{html.escape(audio_src(audio, data))}'></audio><div>")
         for num, start, score in data["verses"]:
             if start is None:
                 continue
@@ -109,20 +109,35 @@ def write_review(work: Path, items: list[tuple[dict, Path, dict]]) -> Path:
                 f"a.currentTime={start};a.play()\">{num}</button>"
             )
         parts.append("</div>")
-    target = work / "review.html"
     target.write_text("".join(parts), encoding="utf-8")
     return target
+
+
+def audio_src(audio: Path, data: dict) -> str:
+    """抽聽頁直接播信望愛站上的音檔，手機打開也能聽；查不到網址才用本機檔。"""
+    info = audio.parent.parent / "audio-info" / f"{data['book']}_{data['chapter']}.json"
+    try:
+        url = json.loads(info.read_text(encoding="utf-8")).get("mp3")
+        if isinstance(url, str) and url.startswith("https://media.fhl.net/"):
+            return url
+    except (OSError, ValueError):
+        pass
+    return audio.as_uri()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--work", required=True, type=Path)
-    parser.add_argument("--review", action="store_true")
+    parser.add_argument("--out", type=Path, help="時間表資料夾，預設 <work>/out")
+    parser.add_argument("--review", type=Path, help="抽聽頁要寫到哪裡")
+    parser.add_argument("--review-all", action="store_true", help="抽聽頁放全部章節（預設只放有可疑節的章）")
+    parser.add_argument("--report", type=Path, help="可疑節清單 JSON 要寫到哪裡")
     args = parser.parse_args()
     work = args.work.resolve()
+    out_dir = (args.out or work / "out").resolve()
     total = flagged = 0
     items = []
-    for path in sorted((work / "out").glob("*.json"), key=lambda p: tuple(int(x) for x in p.stem.split("_"))):
+    for path in sorted(out_dir.glob("*_*.json"), key=lambda p: tuple(int(x) for x in p.stem.split("_"))):
         data = json.loads(path.read_text(encoding="utf-8"))
         audio = work / "audio" / f"{data['book']}_{data['chapter']:03d}.mp3"
         report = check_chapter(data, audio)
@@ -133,8 +148,16 @@ def main() -> int:
         more = f"…等 {len(report['suspects'])} 節" if len(report["suspects"]) > 8 else ""
         print(f"{data['book']}:{data['chapter']}  {report['verses']} 節，可疑 {len(report['suspects'])}  {detail}{more}")
     print(f"合計 {total} 節，可疑 {flagged}（{flagged / max(1, total):.1%}）")
+    if args.report:
+        args.report.write_text(json.dumps({
+            "chapters": len(items),
+            "verses": total,
+            "suspectVerses": flagged,
+            "suspects": [{"book": d["book"], "chapter": d["chapter"], "verses": r["suspects"]} for d, _, r in items if r["suspects"]],
+        }, ensure_ascii=False, indent=1), encoding="utf-8")
     if args.review:
-        print("抽聽頁：", write_review(work, items))
+        chosen = items if args.review_all else [item for item in items if item[2]["suspects"]]
+        print("抽聽頁：", write_review(args.review, chosen))
     return 0
 
 
