@@ -41,8 +41,8 @@ const row = (id, name, enrollment, extra = {}) => ({
 });
 
 const PEOPLE = [
-  row("u1", "<img src=x onerror=alert(1)>", { chapters: 9 }),
-  row("u2", "李大華", null, { pastoralZone: "二牧區" }),
+  row("u1", "<img src=x onerror=alert(1)>", { chapters: 9 }, { lightning: { answered: 3, correct: 2, weeks: ["2000-01-03", "2000-01-10"] } }),
+  row("u2", "李大華", null, { pastoralZone: "二牧區", lightning: { answered: 1, correct: 1, weeks: ["2000-01-10"] } }),
   row("u3", "陳美玲", { chapters: 36 }, {
     pastoralZone: "二牧區",
     teams: [{ id: "t1", name: "火箭隊", division: 3, status: "forming", size: 2, captain: true }],
@@ -58,7 +58,13 @@ function serverReport(people) {
   const enrolled = people.filter((person) => person.enrollment).length;
   return preparePlanReport({
     resolved: { plan: PLAN, baselineDays: DAYS },
-    overview: { today: TODAY, people, meta: { inScope: people.length, enrolled } },
+    overview: {
+      today: TODAY,
+      people,
+      quiz: { days: 4 },
+      lightning: { from: "2000-01-01", to: TODAY, weeks: [{ weekStart: "2000-01-03", questions: 3 }, { weekStart: "2000-01-10", questions: 2 }] },
+      meta: { inScope: people.length, enrolled }
+    },
     bibleBooks: BOOKS
   });
 }
@@ -557,16 +563,54 @@ describe("管理分頁（#551、#570、#584）", () => {
     tabButton("quizzes").click();
     await vi.waitFor(() => expect(panel("quizzes").textContent).toContain("作答率"));
     const quizzes = panel("quizzes");
-    expect(quizzes.textContent).toContain("38%");
-    expect(quizzes.textContent).toContain("從沒作答：林志強");
-    expect(quizzes.textContent).toContain("不看分數、不排名");
+    // 順序：雲柱 → 小測驗 → 大測驗（#700）
+    expect([...quizzes.querySelectorAll(".pastoral-card__title")].map((el) => el.textContent)).toEqual(["雲柱測驗", "小測驗", "大測驗"]);
+    const daily = quizzes.querySelector("[data-pastoral-quiz]");
+    expect(daily.textContent).toContain("38%");
+    expect(daily.textContent).toContain("已發4 天");
+    expect(daily.textContent).toContain("作答過1／3 人");
+    expect(daily.textContent).not.toContain("有發題");
+    expect(daily.textContent).toContain("從沒作答：林志強");
+    // 有報名但沒收到題（沒有小組）：分開列，不算進作答率
+    expect(daily.textContent).toContain("收不到題（不算進作答率）：<img src=x onerror=alert(1)>");
+    expect(daily.querySelector("img")).toBeNull();
+    expect(daily.textContent).toContain("不看分數、不排名");
     expect(quizzes.textContent).not.toMatch(/第 ?\d+ ?名|名次|平均分|分數：/);
     expect(quizzes.querySelector("table")).toBeNull();
-    expect(unitNames(quizzes).sort()).toEqual(["一牧區", "二牧區"]);
-    expect(unitRow(quizzes, "一牧區").textContent).toContain("從沒作答 1 人");
-    expect(unitRow(quizzes, "一牧區").querySelector(".pastoral-unit__pct").textContent).toBe("0%");
+    expect(unitNames(daily).sort()).toEqual(["一牧區", "二牧區"]);
+    expect(unitRow(daily, "一牧區").textContent).toContain("報名 2 人");
+    expect(unitRow(daily, "一牧區").textContent).toContain("從沒作答 1 人・收不到題 1 人");
+    expect(unitRow(daily, "一牧區").querySelector(".pastoral-unit__pct").textContent).toBe("0%");
     expect(renderExamStatsPanel).toHaveBeenCalledWith(quizzes.querySelector("[data-pastoral-exam]"));
     expect(quizzes.textContent).toContain("大測驗統計");
+  });
+
+  it("lightning (#700): everyone in scope, weekly participation, overall and unit accuracy but never a person's", async () => {
+    const mod = await load();
+    mod.registerExamStatsLoader(async () => ({ renderExamStatsPanel: async () => {} }));
+    await mod.renderPastoralView();
+    tabButton("quizzes").click();
+    await vi.waitFor(() => expect(panel("quizzes").textContent).toContain("期間參加過"));
+    const card = panel("quizzes").querySelector("[data-pastoral-lightning-body]");
+    expect(card.textContent).toContain("1/10 那週參加2 人（50%）");
+    expect(card.textContent).toContain("期間參加過2／4 人");
+    // 答對 3 ÷ 送出 4
+    expect(card.textContent).toContain("答對率75%");
+    expect(card.textContent).toContain("不限報名");
+    expect(card.textContent).toContain("從沒參加：林志強、陳美玲");
+    expect(unitRow(card, "1/3 那週").textContent).toContain("1 人參加");
+    expect(unitRow(card, "一牧區").textContent).toContain("答對率 67%・從沒參加 1 人");
+    expect(unitRow(card, "二牧區").textContent).toContain("答對率 100%・從沒參加 1 人");
+
+    // 個人頁只有題數，沒有答對幾題
+    expect(mod.openPastoralTab("join-status")).toBe(true);
+    await mod.renderPastoralView();
+    await vi.waitFor(() => expect(rowNames(panel("roster"))).toEqual(["李大華"]));
+    openRow(panel("roster"), "u2");
+    const sheet = document.getElementById("pastoral-person-sheet");
+    await vi.waitFor(() => expect(sheet.textContent).toContain("計畫期間答 1／5 題"));
+    expect(sheet.textContent).toContain("還沒報名這個計畫。");
+    expect(sheet.textContent).not.toMatch(/答對/);
   });
 
   it("system administrator: whole church plus a link to the console", async () => {

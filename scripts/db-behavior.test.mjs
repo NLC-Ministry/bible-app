@@ -297,6 +297,64 @@ describe("牧養總覽的管理範圍（get_pastoral_overview）", () => {
       `SELECT public.get_pastoral_overview($1, NULL, TRUE, NULL, NULL)`, [ids.plan]
     ))).rejects.toThrow(/permission denied/);
   });
+
+  // #700：小測驗只算已截止的發題；沒有小組的報名者收不到題；雲柱只算計畫期間、每人答題／答對／參加週
+  it("小測驗只算已截止的發題，雲柱帶每人答題數與參加週", async () => {
+    const outcome = await asService(async tx => {
+      await tx.query(
+        `INSERT INTO public.reading_plans (user_id, global_plan_id, name, start_date, end_date, target_books)
+         SELECT person, gp.id, gp.name, gp.start_date, gp.end_date, gp.target_books
+         FROM public.global_plans AS gp, unnest($2::uuid[]) AS person WHERE gp.id = $1`,
+        [ids.plan, [ids.member, ids.other]]
+      );
+      // 今天的題還在作答時間內：不算「已發」
+      const { rows: [{ id: todayQuiz }] } = await tx.query(
+        `INSERT INTO public.daily_quizzes (global_plan_id, quiz_date, variant, questions, generation_status, review_status, reviewed_by, reviewed_at)
+         VALUES ($1, (now() AT TIME ZONE 'Asia/Taipei')::date, 'A', $2, 'ready', 'approved', $3, now()) RETURNING id`,
+        [ids.plan, JSON.stringify(QUESTIONS), ids.admin]
+      );
+      await tx.query(
+        `INSERT INTO public.quiz_publications (global_plan_id, quiz_date, quiz_id, small_group_id, published_by, publisher_role, scope_type, answer_close_at)
+         VALUES ($1, (now() AT TIME ZONE 'Asia/Taipei')::date, $2, $3, $4, 'admin', 'group', now() + interval '1 hour')`,
+        [ids.plan, todayQuiz, ids.group, ids.admin]
+      );
+      // 沒有小組的報名者
+      await tx.query(`UPDATE public.profiles SET small_group_id = NULL WHERE id = $1`, [ids.other]);
+      const question = async riseDate => (await tx.query(
+        `INSERT INTO public.lightning_quiz_questions (rise_date, rise_time_start, rise_time_end, question_type, payload, answer_key, status)
+         VALUES ($1, '07:00', '10:00', 'single', $2::jsonb, '0'::jsonb, 'published') RETURNING id`,
+        [riseDate, JSON.stringify({ prompt: "題目", options: ["甲", "乙"] })]
+      )).rows[0].id;
+      const played = (questionId, userId, correct) => tx.query(
+        `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+         VALUES ($1, $2, now(), 3000, '0'::jsonb, $3)`, [questionId, userId, correct]
+      );
+      const inWindow = await question("2026-10-07");
+      const beforePlan = await question("2026-08-20");
+      await played(inWindow, ids.member, true);
+      await played(beforePlan, ids.member, true);
+      await played(inWindow, ids.other, false);
+
+      const { rows: [{ result }] } = await tx.query(
+        `SELECT public.get_pastoral_overview($1, NULL, TRUE, NULL, $2) AS result`, [ids.plan, ids.admin]
+      );
+      const { rows: [{ quiz }] } = await tx.query(
+        `SELECT public.admin_api_plan_quiz($1, $2, NULL) AS quiz`, [ids.admin, ids.plan]
+      );
+      return { result, quiz };
+    });
+    const person = id => outcome.result.people.find(row => row.id === id);
+    expect(outcome.result.quiz).toEqual({ days: 1 });
+    expect(person(ids.member).quiz).toEqual({ published: 1, submitted: 1 });
+    expect(person(ids.other).quiz).toEqual({ published: 0, submitted: 0 });
+    expect(person(ids.member).lightning).toEqual({ answered: 1, correct: 1, weeks: ["2026-10-05"] });
+    expect(person(ids.other).lightning).toEqual({ answered: 1, correct: 0, weeks: ["2026-10-05"] });
+    expect(person(ids.admin).lightning).toEqual({ answered: 0, correct: 0, weeks: [] });
+    expect(outcome.result.lightning.from).toBe("2026-09-01");
+    expect(outcome.result.lightning.weeks).toEqual([{ weekStart: "2026-10-05", questions: 1 }]);
+    expect(outcome.quiz.daily.days).toEqual([{ date: QUIZ_DATE, eligible: 1, submitted: 1 }]);
+    expect(outcome.quiz.daily.unreached).toBe(1);
+  });
 });
 
 describe("雲柱選單題（menu，#612）", () => {

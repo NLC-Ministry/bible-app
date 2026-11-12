@@ -129,9 +129,11 @@ function QuizBody({ quiz, capabilities, onReload }: { quiz: Loaded<PlanQuiz>; ca
           <section className="adm-card">
             <header className="adm-card__header"><h3>每日小測驗作答率</h3></header>
             <div className="adm-card__body">
-              <p className="adm-muted adm-small">近 {days.length} 次發布・母體＝那天發給的小組裡的報名者。交過至少一次：{daily.participants} 人（報名者 {enrolled} 人的 {pct(daily.participants, enrolled)}%）。</p>
+              <p className="adm-muted adm-small">
+                近 {days.length} 天・每天發給全部小組，作答截止後才算・母體＝報名者{daily.unreached ? `（沒有小組、收不到題的 ${daily.unreached} 人不算）` : ""}。交過至少一次：{daily.participants} 人（報名者 {enrolled} 人的 {pct(daily.participants, enrolled)}%）。
+              </p>
               {days.length === 0
-                ? <p className="adm-muted">還沒有發布過。</p>
+                ? <p className="adm-muted">還沒有作答截止的發題。</p>
                 : (
                   <>
                     <svg className="adm-columns" viewBox={`0 0 ${days.length * 10} 100`} preserveAspectRatio="none" role="img"

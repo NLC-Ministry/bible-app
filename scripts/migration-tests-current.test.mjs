@@ -12,6 +12,14 @@ const SKIP_DIRS = new Set(["node_modules", ".git", ".worktrees", ".claude", "dis
 
 // 刻意讀原始檔、而且提到的函式之後被改寫過的少數情況：檔名 → { migration: 理由 }。
 const ALLOWED_RAW_READS = {
+  // #700 改寫了 plan_progress_people、admin_api_plan_quiz；原檔只拿來驗那支檔案自己的 REVOKE／GRANT，
+  // 新檔的授權另外驗（pastoral-overview.test.mjs 讀 latestFunctionDefinition().file），函式內容斷言走 latestFunctionDefinition
+  "scripts/pastoral-overview.test.mjs": {
+    "20261013114704_admin_api_plan_progress.sql": "只驗這支檔案自己的 REVOKE／GRANT 與包裝函式",
+  },
+  "scripts/plan-area.test.mjs": {
+    "20261013154355_admin_api_plan_area.sql": "只驗這支檔案自己的 REVOKE／GRANT 與每支函式都檢查操作者",
+  },
   // #694 改寫了 admin_api_directory_list；原檔只拿來驗那支檔案自己的授權與 DROP 舊簽名，函式內容斷言走 latestFunctionDefinition
   "scripts/admin-api-people.test.mjs": {
     "20261014072419_admin_api_people.sql": "只驗這支檔案自己的 REVOKE／GRANT 與 DROP 舊簽名",
