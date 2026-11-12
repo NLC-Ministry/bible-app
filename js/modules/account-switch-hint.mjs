@@ -99,8 +99,8 @@ export function currentLoginMethod(user) {
 // #664：裝置記得上次是哪個帳號：改成驗證當時的方式就能找回。文案不提帳號、合併。
 function recoverPlanMarkup(offer, copy) {
   const template = isGmailAccount(offer.masked)
-    ? (copy.recoverBodyGmail || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分（有設密碼也可以輸入密碼），就能把它們找回來，之後用之前或現在的方式登入都看得到。")
-    : (copy.recoverBody || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。");
+    ? (copy.recoverBodyGmail || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。")
+    : (copy.recoverBody || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。用上次登入的方式確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。");
   const body = template
     .replace("{account}", () => `<span class="account-switch-hint__account">${escapeText(offer.masked)}</span>`);
   const cta = copy.recoverCta || "確認身分，找回我的計畫";

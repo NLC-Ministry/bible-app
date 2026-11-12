@@ -170,7 +170,7 @@ describe("提示卡", () => {
     const card = render();
     expect(card.querySelector(".account-switch-hint__title").textContent.trim()).toBe("找不到你的讀經計畫嗎？");
     expect(card.querySelector(".account-switch-hint__body").textContent).toBe(
-      "你之前在這台裝置上是用 ab***@gmail.com 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分（有設密碼也可以輸入密碼），就能把它們找回來，之後用之前或現在的方式登入都看得到。"
+      "你之前在這台裝置上是用 ab***@gmail.com 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。"
     );
     expect(card.querySelector("[data-account-recover-plan]").textContent).toBe("確認身分，找回我的計畫");
     expect(card.querySelector("[data-account-switch-dismiss]").textContent).toBe("不是我／我是第一次參加");
@@ -183,13 +183,13 @@ describe("提示卡", () => {
     expect(card.querySelector("[data-account-recover-plan]").textContent).toBe("確認身分，找回我的計畫");
     const body = card.querySelector(".account-switch-hint__body").textContent;
     expect(body).toContain("是用 0912-***-678 登入的");
-    expect(body).toContain("用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分");
-    expect(body).not.toMatch(/手機|Email/);
+    expect(body).toContain("用上次登入的方式確認一次身分");
+    expect(body).not.toMatch(/手機|Email|密碼/);
   });
 
   it("其他 Email 列出所有方式，不只叫他按 Google（#682）", () => {
     const body = render({ method: "email", masked: "ab***@church.org" }).querySelector(".account-switch-hint__body").textContent;
-    expect(body).toContain("用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分");
+    expect(body).toContain("用上次登入的方式確認一次身分");
     expect(body).not.toContain("按 Google 確認一次身分");
   });
 
@@ -201,7 +201,7 @@ describe("提示卡", () => {
     const hintSource = readFileSync("js/modules/account-switch-hint.mjs", "utf8");
     expect(hintSource).toContain("你之前在這台裝置上是用 {account} 登入的");
     expect(texts).toContain("你之前在這台裝置上是用 {account} 登入的");
-    for (const line of ["按 Google 確認一次身分（有設密碼也可以輸入密碼）", "用上次的方式（按 Google、按 LINE 或輸入密碼）確認一次身分"]) {
+    for (const line of ["按 Google 確認一次身分", "用上次登入的方式確認一次身分"]) {
       expect(hintSource).toContain(line);
       expect(copy).toContain(line);
     }
