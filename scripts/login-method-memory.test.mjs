@@ -21,7 +21,7 @@ const daysAgo = days => new Date(NOW - days * DAY).toISOString();
 
 const PHONE_ACCOUNT = { phone: "886912345678", email: "" };
 const EMAIL_ACCOUNT = { phone: "", email: "abcdef@gmail.com" };
-const GENERIC_HINT = "請用跟上次相同的方式（手機、Email、Google 或 LINE）登入，才看得到你的計畫。";
+const GENERIC_HINT = "請用跟上次相同的方式登入，才看得到你的計畫；不確定上次怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。";
 
 // #693：Logto Custom JWT 只在速讀 App 的 access token 加 nlc_login（有沒有密碼、綁了哪些社群登入）。
 function accessToken(payload) {
@@ -209,19 +209,35 @@ describe("loginMethodHintText", () => {
   // #682：紀錄只知道帳號有手機還是 Email，分不出密碼、Google、LINE，所以不斷定登入方式。
   it("a Gmail account is told to press Google first (Logto links the same address to this account)", () => {
     expect(loginMethodHintText({ method: "email", masked: "ab***@gmail.com" }))
-      .toBe("上次在這台裝置登入的帳號是 ab***@gmail.com。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。");
+      .toBe("上次在這台裝置登入的帳號是 ab***@gmail.com。請按 Google 登入，才看得到你的計畫。");
     expect(loginMethodHintText({ method: "email", masked: "ab***@GMail.com" })).toContain("請按 Google 登入");
   });
 
-  it("another Email address lists every way, without claiming which one they used", () => {
+  it("another Email address asks them to check with staff instead of trying every way (#698)", () => {
     expect(loginMethodHintText({ method: "email", masked: "ab***@church.org" }))
-      .toBe("上次在這台裝置登入的帳號是 ab***@church.org。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。");
+      .toBe("上次在這台裝置登入的帳號是 ab***@church.org。請用當時的方式登入，才看得到你的計畫；不確定當時怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。");
     expect(loginMethodHintText({ method: "email", masked: "ab***@notgmail.com" })).not.toContain("請按 Google 登入");
   });
 
-  it("a phone account lists every way, without claiming which one they used", () => {
+  // #698：約四分之三的會友沒設過密碼；猜錯社群登入又會開出空帳號。沒有 #693 的資料時，
+  // 不提密碼、也不列出按鈕讓人輪流試。
+  it("#698: without the #693 claim, no line mentions a password or lists buttons to try", () => {
+    for (const record of [
+      { method: "phone", masked: "0912-***-678" },
+      { method: "email", masked: "ab***@church.org" },
+      { method: "email", masked: "ab***@gmail.com" },
+      { method: "", masked: "" },
+      null
+    ]) {
+      const text = loginMethodHintText(record);
+      expect(text).not.toContain("密碼");
+      expect(text).not.toContain("LINE");
+    }
+  });
+
+  it("a phone account asks them to check with staff instead of trying every way (#698)", () => {
     expect(loginMethodHintText({ method: "phone", masked: "0912-***-678" }))
-      .toBe("上次在這台裝置登入的帳號是 0912-***-678。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。");
+      .toBe("上次在這台裝置登入的帳號是 0912-***-678。請用當時的方式登入，才看得到你的計畫；不確定當時怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。");
   });
 
   // #693：token 帶了「有沒有密碼、綁了哪些社群登入」，就直接說該按哪個，不再讓沒密碼的人去輸入密碼。
@@ -247,7 +263,7 @@ describe("loginMethodHintText", () => {
   it("#693: falls back to the old lines when the claim can't say anything useful", () => {
     // 沒密碼也沒有認得的社群登入（例如只用驗證碼登入）：不知道該叫他按什麼。
     expect(loginMethodHintText({ method: "phone", masked: "0912-***-678", pw: false, social: [] }))
-      .toBe("上次在這台裝置登入的帳號是 0912-***-678。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。");
+      .toBe("上次在這台裝置登入的帳號是 0912-***-678。請用當時的方式登入，才看得到你的計畫；不確定當時怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。");
     expect(loginMethodHintText({ method: "phone", masked: "0912-***-678", pw: false, social: ["facebook"] }))
       .toContain("請用當時的方式");
     // 有密碼但不知道帳號是手機還是 Email：不知道要他輸入哪一個。
@@ -258,9 +274,9 @@ describe("loginMethodHintText", () => {
     const copy = readFileSync("js/copy/zh-Hant.js", "utf8");
     const source = readFileSync("js/login-method-memory.mjs", "utf8");
     for (const line of [
-      "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。",
-      "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。",
-      "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。",
+      "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫。",
+      "上次在這台裝置登入的帳號是 {account}。請用當時的方式登入，才看得到你的計畫；不確定當時怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。",
+      "上次在這台裝置登入的帳號是 {account}。請用當時的方式登入，才看得到你的計畫；不確定當時怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。",
       "上次在這台裝置登入的帳號是 {account}，沒有設密碼。請按 {social} 登入，才看得到你的計畫。",
       "上次在這台裝置登入的帳號沒有設密碼。請按 {social} 登入，才看得到你的計畫。",
       "上次在這台裝置登入的帳號是 {account}。請按 {social} 登入，或輸入{credential}和密碼，才看得到你的計畫。",

@@ -172,17 +172,18 @@ export function loginMethodHintText(record) {
   if (fromClaim) return fromClaim;
   const fill = template => template.replace("{account}", () => record.masked);
   // #682：紀錄只知道帳號有手機還是 Email，分不出密碼、Google、LINE，所以不斷定登入方式。
+  // #698：也不列出密碼和各個按鈕：多數人沒設過密碼，猜錯社群登入又會開出空帳號，所以請他先問同工。
   // Gmail 例外：Logto 會把相同 Email 的 Google 連到同一個帳號，按 Google 不會開出新帳號。
   if (record && record.method === "phone") {
-    return fill(copy.phone || "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 LINE、按 Google，或輸入手機和密碼。");
+    return fill(copy.phone || "上次在這台裝置登入的帳號是 {account}。請用當時的方式登入，才看得到你的計畫；不確定當時怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。");
   }
   if (record && record.method === "email") {
     if (isGmailAccount(record.masked)) {
-      return fill(copy.gmail || "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫；如果你有設密碼，也可以輸入密碼。");
+      return fill(copy.gmail || "上次在這台裝置登入的帳號是 {account}。請按 Google 登入，才看得到你的計畫。");
     }
-    return fill(copy.email || "上次在這台裝置登入的帳號是 {account}。請用當時的方式才看得到你的計畫：按 Google、按 LINE，或輸入 Email 和密碼。");
+    return fill(copy.email || "上次在這台裝置登入的帳號是 {account}。請用當時的方式登入，才看得到你的計畫；不確定當時怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。");
   }
-  return copy.unknown || "請用跟上次相同的方式（手機、Email、Google 或 LINE）登入，才看得到你的計畫。";
+  return copy.unknown || "請用跟上次相同的方式登入，才看得到你的計畫；不確定上次怎麼登入的，請先問小組或牧區同工，不要每種方式都試，以免開出另一個看不到計畫的新帳號。";
 }
 
 /** 畫在登入卡上；visible=false 用在不是要會友登入的畫面（沒註冊、資料讀不到等）。 */
