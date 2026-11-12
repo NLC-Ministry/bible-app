@@ -1,7 +1,7 @@
 // js/modules/pastoral.js — App 的「管理」分頁（#551、#570、#584）
 //
 // 牧者、大區長、區長、小組長看自己範圍的組員；系統管理員看全教會（系統管理功能在管理後台）。
-// 上方一行範圍列（點了開全頁選擇：計畫 → 大區 → 牧區 → 小組），下面四個分頁：總覽／名單／團隊／測驗。
+// 上方一行範圍列（只選計畫，#701）、一行麵包屑（大區 › 牧區 › 小組，#699、#701），下面四個分頁：總覽／名單／團隊／測驗。
 // 資料和後台同一套規則（#570），範圍由 nlc-data 依登入者決定（js/data/pastoral-overview.mjs）：
 //   · 總覽只拿數字（plan_summary）；換範圍就再問一次。
 //   · 名單、團隊、測驗打開才調閱名單（plan_roster，伺服器記稽核）；一次拿齊，之後點人、篩選、換範圍都不再請求。
@@ -83,12 +83,14 @@ const view = {
   scopeSteps: [],
   scopeBusy: false,
   personId: "",
-  // 範圍選擇從哪裡打開：範圍列（bar，選了算直接跳）或麵包屑的「選下一層」（crumb，選了算往下鑽）
-  scopeSource: "",
+  // 範圍選擇是哪一種（#701）：plan（範圍列，只選計畫）、down（麵包屑「選下一層」，選了算往下鑽）、
+  // switch（點麵包屑目前那段，同層互換，不記返回紀錄）
+  scopeMode: "",
   // 往下鑽的紀錄（#699）：比較卡點單位、麵包屑「選下一層」選了單位，各記一筆之前的範圍，返回鍵一次退一筆
   drillStack: [],
-  // 這個人可選的最上層（麵包屑第一段），換範圍載入中時沿用
-  topLevel: ""
+  // 這個人可選的最上層（麵包屑「全部○○」那段）與上一次的範圍選項；換範圍載入中時沿用，麵包屑不會閃
+  topLevel: "",
+  crumbOptions: {}
 };
 let currentPlan = null;
 let planList = [];
@@ -247,7 +249,9 @@ function onAction(event) {
     setDrillStack([]);
     void applyScope(target.dataset.level, "");
   } else if (action === "crumb-next") {
-    openScope(target, target.dataset.level);
+    openScope(target, target.dataset.level, "down");
+  } else if (action === "crumb-switch") {
+    openScope(target, target.dataset.level, "switch");
   } else if (action === "unit-metric") {
     view.unitMetric = target.dataset.metric;
     renderOverview();
@@ -274,7 +278,7 @@ function onAction(event) {
     openLayer("filters", target);
     renderFilterSheet();
   } else if (action === "open-scope") {
-    openScope(target);
+    openScope(target, "plan", "plan");
   } else if (action === "pick-plan") {
     void pickPlan(target.dataset.plan);
   } else if (action === "pick-scope") {
@@ -538,21 +542,10 @@ function choosableLevels(after = "") {
   return SCOPE_LEVELS.slice(start).filter((level) => Array.isArray(options[level]) && options[level].length > 1);
 }
 
-// 「2026 Q4 速讀 · 全部牧區」：選了單位寫最小那一層；沒選就寫可選的最上層「全部○○」
-function scopeUnitLabel() {
-  const chosen = [...SCOPE_LEVELS].reverse().find((level) => view.scope[level]);
-  if (chosen) return view.scope[chosen];
-  if (!currentSummary()) return "";
-  const options = scopeOptions();
-  const level = choosableLevels()[0];
-  if (level) return `全部${SCOPE_LEVEL_LABEL[level]}`;
-  const single = [...SCOPE_LEVELS].reverse().find((item) => (options[item] || []).length === 1);
-  return single ? options[single][0] : "";
-}
-
+// 範圍列只寫計畫名稱（#701）；範圍在麵包屑
 function scopeLabel() {
   if (!currentPlan) return planList.length ? "載入中…" : "目前沒有可管理的計畫";
-  return [currentPlan.name || "未命名計畫", scopeUnitLabel()].filter(Boolean).join(" · ");
+  return currentPlan.name || "未命名計畫";
 }
 
 function updatedText() {
@@ -579,40 +572,85 @@ function renderUpdated() {
 function renderScopeBar() {
   const label = $("pastoral-scope-label");
   if (label) label.textContent = scopeLabel();
+  // 只有一個計畫就沒有東西可選：不能點、箭頭藏起來（CSS 看 :disabled）
   const button = $("pastoral-scope-button");
-  if (button) button.disabled = !currentPlan;
+  if (button) button.disabled = !currentPlan || planList.length < 2;
   renderUpdated();
   renderCrumbs();
 }
 
 const lowerLevel = (level) => SCOPE_LEVELS[SCOPE_LEVELS.indexOf(level) + 1] || "";
 
-// 麵包屑（#699）：「全部大區 › 西區 › 三牧區」，前面幾段點了回到那一層；尾端「選○○」打開範圍選擇、停在那一層。
-// 只有一個單位可管的人不顯示。
+// 麵包屑的每一段（#699、#701）：
+//   fixed   可管範圍上面固定的單位（例如只管一個大區的人，前面寫那個大區），不能點
+//   all     可選的最上層「全部○○」
+//   chosen  範圍裡選了的單位
+//   implied 沒選、但在目前範圍只有一個單位的層級（比較卡會略過它），照樣寫出來
+function crumbSegments(options) {
+  const top = view.topLevel;
+  const topIndex = top ? SCOPE_LEVELS.indexOf(top) : SCOPE_LEVELS.length;
+  const single = (level) => (Array.isArray(options[level]) && options[level].length === 1 ? options[level][0] : "");
+  const segments = [];
+  SCOPE_LEVELS.slice(0, topIndex).forEach((level) => {
+    const unit = view.scope[level] || single(level);
+    if (unit) segments.push({ kind: "fixed", level, label: unit });
+  });
+  if (top) segments.push({ kind: "all", level: top, label: `全部${SCOPE_LEVEL_LABEL[top]}` });
+  const deepest = SCOPE_LEVELS.reduce((found, level, index) => (index >= topIndex && view.scope[level] ? index : found), -1);
+  for (let index = topIndex; index < SCOPE_LEVELS.length; index += 1) {
+    const level = SCOPE_LEVELS[index];
+    if (view.scope[level]) {
+      segments.push({ kind: "chosen", level, label: view.scope[level] });
+      continue;
+    }
+    const unit = single(level);
+    if (unit) segments.push({ kind: "implied", level, label: unit });
+    else if (index > deepest) break;
+  }
+  return segments;
+}
+
+// 「全部大區 › 西區 › 三牧區 ▾」：前面幾段點了回到那一層；目前那段點了換同層的單位；
+// 尾端「選○○」打開範圍選擇、停在下一層。
 function renderCrumbs() {
   const el = $("pastoral-crumbs");
   if (!el) return;
   const summary = currentSummary();
-  if (summary) view.topLevel = choosableLevels()[0] || "";
-  const top = currentPlan ? view.topLevel : "";
-  if (!top) {
+  if (summary) {
+    view.topLevel = choosableLevels()[0] || "";
+    view.crumbOptions = scopeOptions();
+  }
+  const options = view.crumbOptions || {};
+  const segments = currentPlan ? crumbSegments(options) : [];
+  if (!segments.length) {
     el.classList.add("hidden");
     el.innerHTML = "";
     return;
   }
-  const chosen = SCOPE_LEVELS.slice(SCOPE_LEVELS.indexOf(top)).filter((level) => view.scope[level]);
-  const segments = [{ label: `全部${SCOPE_LEVEL_LABEL[top]}`, clear: top }]
-    .concat(chosen.map((level) => ({ label: view.scope[level], clear: lowerLevel(level) })));
-  // 下一層要看目前範圍的選項；換範圍載入中先不顯示
-  const next = summary ? (chosen.length ? choosableLevels(chosen[chosen.length - 1])[0] : top) : "";
+  // 目前所在＝最後一段「全部」或選了的；後面跟著的 implied 只是說明，不能點
+  const anchor = segments.reduce((found, segment, index) => (segment.kind === "all" || segment.kind === "chosen" ? index : found), segments.length - 1);
   const sep = '<span class="nlc-icon nlc-icon--sm pastoral-crumbs__sep" data-icon="chevronRight" aria-hidden="true"></span>';
   const items = segments.map((segment, index) => {
-    const last = index === segments.length - 1;
-    const item = last
-      ? `<span class="pastoral-crumbs__item" aria-current="page">${esc(segment.label)}</span>`
-      : `<button type="button" class="pastoral-crumbs__item" data-pastoral-action="crumb" data-level="${segment.clear}">${esc(segment.label)}</button>`;
+    const label = esc(segment.label);
+    let item;
+    if (index === anchor) {
+      const siblings = segment.kind === "chosen" && Array.isArray(options[segment.level]) && options[segment.level].length > 1;
+      item = siblings
+        ? `<button type="button" class="pastoral-crumbs__item pastoral-crumbs__current" data-pastoral-action="crumb-switch" data-level="${segment.level}" aria-current="page" aria-haspopup="dialog">${label}<span class="nlc-icon nlc-icon--sm" data-icon="chevronDown" aria-hidden="true"></span></button>`
+        : `<span class="pastoral-crumbs__item" aria-current="page">${label}</span>`;
+    } else if (index < anchor && segment.kind !== "fixed") {
+      const level = segment.kind === "all" ? segment.level : lowerLevel(segment.level);
+      item = `<button type="button" class="pastoral-crumbs__item" data-pastoral-action="crumb" data-level="${level}">${label}</button>`;
+    } else {
+      item = `<span class="pastoral-crumbs__item pastoral-crumbs__fixed">${label}</span>`;
+    }
     return `<li>${index ? sep : ""}${item}</li>`;
   });
+  // 下一層要看目前範圍的選項；換範圍載入中先不顯示
+  const last = segments[segments.length - 1];
+  const next = summary && view.topLevel
+    ? (last.kind === "all" ? last.level : choosableLevels(last.level)[0])
+    : "";
   el.innerHTML = `<ol class="pastoral-crumbs__list">${items.join("")}</ol>${next
     ? `<button type="button" class="pastoral-crumbs__next" data-pastoral-action="crumb-next" data-level="${next}" aria-haspopup="dialog">選${SCOPE_LEVEL_LABEL[next]}</button>`
     : ""}`;
@@ -639,17 +677,13 @@ function renderScopeAndTab() {
   renderActiveTab();
 }
 
-// 範圍選擇（全頁）：先選計畫，再一層一層點大區 → 牧區 → 小組；每點一下就換範圍，下一層的單位依新範圍列出。
-// 麵包屑的「選下一層」帶 level，直接停在那一層，選了算往下鑽（#699）。
-function openScope(opener, level = "") {
-  if (!currentPlan) return;
-  const first = level || (planList.length > 1 ? "plan" : choosableLevels()[0]);
-  if (!first) {
-    toast("你負責的範圍只有這一個。");
-    return;
-  }
-  view.scopeSource = level ? "crumb" : "bar";
-  view.scopeSteps = [first];
+// 範圍選擇（全頁，#701）：範圍列只選計畫；層級從麵包屑打開——「選下一層」選了算往下鑽、可以接著往下選，
+// 點目前那段是同層互換、選了就關。
+function openScope(opener, step, mode) {
+  if (!currentPlan || !step) return;
+  if (step === "plan" && planList.length < 2) return;
+  view.scopeMode = mode;
+  view.scopeSteps = [step];
   openLayer("scope", opener);
   renderScopeSheet();
 }
@@ -695,7 +729,8 @@ function renderScopeSheet() {
         on: view.scope[step] === unit
       })));
   }
-  host.innerHTML = `<p class="pastoral-sheet__context">目前：${esc(scopeLabel())}</p><ul class="pastoral-picks">${items.join("")}</ul>`;
+  const context = step === "plan" ? scopeLabel() : crumbSegments(view.crumbOptions || {}).map((segment) => segment.label).join(" › ");
+  host.innerHTML = `<p class="pastoral-sheet__context">目前：${esc(context)}</p><ul class="pastoral-picks">${items.join("")}</ul>`;
   hydrate(host);
 }
 
@@ -717,6 +752,7 @@ async function pickPlan(key) {
     storePlanKey(key);
     view.scope = emptyScope();
     view.topLevel = "";
+    view.crumbOptions = {};
     setDrillStack([]);
     view.rosterLimit = ROSTER_PAGE;
     view.scopeBusy = true;
@@ -727,24 +763,26 @@ async function pickPlan(key) {
       view.scopeBusy = false;
     }
   }
-  nextScopeStep(choosableLevels()[0]);
+  // 範圍列只選計畫：選完就關，層級用麵包屑（#701）
+  nextScopeStep("");
 }
 
 async function pickScope(level, unit) {
   if (view.scopeBusy) return;
+  const switching = view.scopeMode === "switch";
   view.scopeBusy = true;
   renderScopeSheet();
   try {
-    // 範圍列選的是直接跳，清掉往下鑽的紀錄；麵包屑「選下一層」選的是往下鑽，記一筆
-    if (view.scopeSource === "crumb") await drillInto(level, unit);
+    if (!switching) await drillInto(level, unit);
     else {
-      setDrillStack([]);
+      // 同層互換：直接換掉這一層，不記返回紀錄；選「全部」＝往上一層，跟點麵包屑往上跳一樣清掉紀錄
+      if (!unit) setDrillStack([]);
       await applyScope(level, unit);
     }
   } finally {
     view.scopeBusy = false;
   }
-  nextScopeStep(unit ? choosableLevels(level)[0] : "");
+  nextScopeStep(unit && !switching ? choosableLevels(level)[0] : "");
 }
 
 function renderPanelMessage(tab, message) {

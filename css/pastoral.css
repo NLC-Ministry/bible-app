@@ -85,6 +85,11 @@
   cursor: default;
 }
 
+/* 只有一個計畫：範圍列沒有東西可選，箭頭藏起來（#701） */
+.pastoral__scope:disabled .nlc-icon {
+  display: none;
+}
+
 .pastoral__updated {
   flex-shrink: 0;
   min-height: 44px;
@@ -170,6 +175,22 @@ button.pastoral-crumbs__item:hover {
 .pastoral-crumbs__item[aria-current="page"] {
   color: var(--text-primary);
   font-weight: var(--type-weight-strong);
+}
+
+/* 目前那段有同層單位可換：「三牧區 ▾」（#701） */
+button.pastoral-crumbs__current {
+  gap: 0.125rem;
+  color: var(--text-primary);
+}
+
+button.pastoral-crumbs__current .nlc-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* 固定的上層、目前那段後面只有一個單位的層級：只是說明位置，不能點 */
+.pastoral-crumbs__fixed {
+  color: var(--text-secondary);
 }
 
 .pastoral-crumbs__next {
