@@ -106,13 +106,24 @@ function toPlainVerseText(raw) {
   return text.replace(/[<>]/g, "");
 }
 
+// 信望愛（修訂版）與 bolls（和合本 CUV，沿用信望愛資料）都用整節只有 "a" 表示
+// 「併於上節」；新標點和合本的 bolls 資料本身就寫「併於上節」(#704)。
+const MERGED_VERSE_TEXT = "併於上節";
+
+function isMergedVerseMarker(raw) {
+  return String(raw ?? "").trim() === "a";
+}
+
 function normalizeVerses(rawVerses) {
   if (!Array.isArray(rawVerses)) return [];
   return rawVerses
-    .map((v, index) => ({
-      verse: Number(v.verse || v.verseNumber || v.number || index + 1),
-      text: toPlainVerseText(v.text || v.content || "").trim()
-    }))
+    .map((v, index) => {
+      const rawText = v.text || v.content || "";
+      return {
+        verse: Number(v.verse || v.verseNumber || v.number || index + 1),
+        text: isMergedVerseMarker(rawText) ? MERGED_VERSE_TEXT : toPlainVerseText(rawText).trim()
+      };
+    })
     .filter(v => v.verse && v.text);
 }
 
@@ -189,7 +200,7 @@ const FHL_CHAPTER_VERSIONS = Object.freeze({ RCUVTS: "rcuv" });
 // 以及註腳「( [ 3.16] 「他獨一的兒子」或譯……)」；併節（併於上節）以 "a" 表示。
 function cleanFhlChapterText(text) {
   const raw = String(text ?? "");
-  if (raw.trim() === "a") return "併於上節";
+  if (isMergedVerseMarker(raw)) return MERGED_VERSE_TEXT;
   const withoutNotes = raw
     .replace(/<h\d[^>]*>[\s\S]*?<\/h\d>/gi, "")
     .replace(/\(\s*\[\s*[\d.\-–\s]+\][^()]*\)/g, "");
