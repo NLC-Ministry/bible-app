@@ -24,6 +24,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+DRIVE_DIR = "/content/drive/MyDrive/bible-verse-timing"
+# torchaudio MMS_FA 權重（~/.cache/torch/hub/checkpoints/model.pt，1,262,047,414 bytes）的 SHA-256。
+MMS_FA_MODEL_SHA256 = "20ef12963ab4924bef49ac4fc7f58ad5da2ee43b2c11bc8c853c9b90ecdbc680"
 
 RUNNER = r'''
 # 自動產生（scripts/human-audio-timing/kaggle_kernel.py），不要手改。
@@ -71,12 +74,13 @@ def write_colab_notebook(target: Path, encoded: str, chapter_args: list[str]) ->
 
     chapters = " ".join(chapter_args)
     # 時間表直接寫進雲端硬碟：Colab 中途斷線，重新「全部執行」會跳過已完成的章。
-    out = "/content/drive/MyDrive/bible-verse-timing/out"
+    out = f"{DRIVE_DIR}/out"
     cells = [
         {"cell_type": "markdown", "metadata": {}, "source": (
             "# 和合本朗讀逐節時間表（#637）\n"
             "1. 上方選單「執行階段 → 全部執行」。\n"
             "2. 跳出「允許存取 Google 雲端硬碟」時按允許：結果存在雲端硬碟的 `bible-verse-timing` 資料夾。\n"
+            "   對齊模型的官方下載點連不上時，先把本機的 `model.pt` 上傳到同一個資料夾。\n"
             "3. 執行中請保持這個分頁開著、電腦不要睡眠。斷線了就再按一次「全部執行」，會從斷掉的地方接著跑。\n"
             "4. 跑完會自動下載 `bible-verse-timing.zip`。")},
         code("!nvidia-smi --query-gpu=name,memory.total --format=csv\n"
@@ -85,6 +89,22 @@ def write_colab_notebook(target: Path, encoded: str, chapter_args: list[str]) ->
              "assert hasattr(torchaudio.functional, 'forced_align'), f'torchaudio {torchaudio.__version__} 沒有 forced_align'\n"
              "!pip install -q pypinyin \"soundfile>=0.12\""),
         code("from google.colab import drive\ndrive.mount('/content/drive')"),
+        # 模型官方下載點（dl.fbaipublicfiles.com）的憑證過期時，改用使用者上傳到雲端硬碟的同一份檔案；
+        # 比對 SHA-256，對不上就不用。
+        code("import hashlib, shutil\nfrom pathlib import Path\n"
+             f"MODEL_SHA256 = '{MMS_FA_MODEL_SHA256}'\n"
+             f"src = Path('{DRIVE_DIR}/model.pt')\n"
+             "dst = Path.home() / '.cache/torch/hub/checkpoints/model.pt'\n"
+             "if not dst.exists() and src.exists():\n"
+             "    tmp = dst.with_suffix('.part'); tmp.parent.mkdir(parents=True, exist_ok=True)\n"
+             "    shutil.copyfile(src, tmp)\n"
+             "    h = hashlib.sha256()\n"
+             "    with tmp.open('rb') as f:\n"
+             "        for block in iter(lambda: f.read(1 << 24), b''):\n"
+             "            h.update(block)\n"
+             "    assert h.hexdigest() == MODEL_SHA256, '雲端硬碟上的 model.pt 和預期的不同，請重新上傳'\n"
+             "    tmp.replace(dst)\n"
+             "print('對齊模型：', '已就緒' if dst.exists() else '沒有預先放好，會從官方網址下載')"),
         code("import base64, json\nfrom pathlib import Path\n"
              f"FILES = json.loads(base64.b64decode(\"{encoded}\").decode(\"utf-8\"))\n"
              "code = Path('/content/code'); code.mkdir(exist_ok=True)\n"
