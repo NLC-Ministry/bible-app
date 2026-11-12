@@ -2,7 +2,7 @@
 
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
-import { HUMAN_AUDIO_COPY, SPEECH_MODES, createHumanAudioPlayer, formatAudioClock, formatHumanAudioTimelineLabel, resolveReaderSpeechSource } from "./reader-human-audio.mjs";
+import { HUMAN_AUDIO_COPY, SPEECH_MODES, createHumanAudioPlayer, formatAudioClock, formatHumanAudioTimelineLabel, resolveReaderSpeechSource, shouldStopPausedAudioForRender } from "./reader-human-audio.mjs";
 import { createAudioTimingStore, findVerseAtTime, formatHumanAudioVerseLabel, getVerseStartTime } from "./reader-audio-timing.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import {
@@ -1387,6 +1387,14 @@ export async function renderReaderText(options = {}) {
 
   if (isSpeaking && options.preserveAudio !== true) {
     stopReaderAudio(true);
+  } else if (shouldStopPausedAudioForRender({
+    paused: isReaderAudioPaused,
+    preserveAudio: options.preserveAudio === true,
+    pausedChapterKey: pausedReaderAudioChapterKey,
+    renderChapterKey: humanAudioTimingKeyOf(state.readerState?.bookId, state.readerState?.chapter)
+  })) {
+    // 暫停中換到別章（#705）：比照 navigateToChapter 收掉朗讀與進度列。
+    stopReaderAudio(true);
   }
   document.body.classList.remove("reader-navbar-hidden");
   // 選取集合跨章保留（B 案）；只拆掉舊工具列 DOM，換章渲染後由 refreshVerseSelectionUI 重建
@@ -2275,6 +2283,8 @@ let humanAudioTimingKey = "";
 let humanAudioHighlightedVerse = null;
 // 暫停時停在第幾節；再按朗讀時如果使用者改標了別節，就從那一節開始。
 let humanAudioPausedVerse = null;
+// 暫停時畫面是哪一章（"書卷:章"）；換到別章時 renderReaderText 用它收掉暫停中的朗讀（#705）。
+let pausedReaderAudioChapterKey = "";
 const HUMAN_AUDIO_TIMING_WAIT_MS = 1500;
 
 function getReaderSpeechSource() {
@@ -2657,6 +2667,9 @@ window.clearReaderAudioOnPageExit = function () {
 function pauseReaderAudio() {
   // 真人朗讀是真的暫停 <audio>，再按就從暫停的位置續播。
   // 有逐節時間表（#637）時，跟裝置語音一樣把念到的那一節標成起點；暫停中改標別節，再按就從那節開始。
+  if (isSpeaking) {
+    pausedReaderAudioChapterKey = humanAudioTimingKeyOf(state.readerState?.bookId, state.readerState?.chapter);
+  }
   if (isSpeaking && readerAudioSource === SPEECH_MODES.HUMAN) {
     currentAudioSessionId++;
     humanAudioPlayer?.pause();
