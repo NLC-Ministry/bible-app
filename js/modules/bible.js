@@ -3,6 +3,7 @@
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { getReaderSpeechRate, resolveReaderStartIndex, selectPreferredChineseVoice, selectPreferredVoice } from "./reader-speech.mjs";
 import { HUMAN_AUDIO_COPY, SPEECH_MODES, createHumanAudioPlayer, formatAudioClock, formatHumanAudioTimelineLabel, resolveReaderSpeechSource } from "./reader-human-audio.mjs";
+import { createAudioTimingStore, findVerseAtTime, formatHumanAudioVerseLabel, getVerseStartTime } from "./reader-audio-timing.mjs";
 import { rankBibleSearchResults } from "./bible-search-ranker.mjs";
 import {
   buildFhlSearchUrl,
@@ -2267,6 +2268,14 @@ let pendingReaderVoicePromise = null;
 let readerAudioSource = SPEECH_MODES.DEVICE;
 let humanAudioPlayer = null;
 let humanAudioSeeking = false;
+// 真人朗讀逐節時間表（#637）：目前播的那一章的 [{ verse, start }]，沒有時間表就是 null（整章播、不標示節）。
+let humanAudioTimingStore = null;
+let humanAudioTimings = null;
+let humanAudioTimingKey = "";
+let humanAudioHighlightedVerse = null;
+// 暫停時停在第幾節；再按朗讀時如果使用者改標了別節，就從那一節開始。
+let humanAudioPausedVerse = null;
+const HUMAN_AUDIO_TIMING_WAIT_MS = 1500;
 
 function getReaderSpeechSource() {
   return resolveReaderSpeechSource({ mode: state.speechSettings?.mode, version: state.readerState?.version });
@@ -2310,6 +2319,53 @@ function hideReaderAudioTimeline() {
   document.getElementById("reader-audio-timeline")?.classList.add("hidden");
 }
 
+function humanAudioTimingKeyOf(bookId, chapter) {
+  return `${Number(bookId)}:${Number(chapter)}`;
+}
+
+function getHumanAudioTimingStore() {
+  if (!humanAudioTimingStore) humanAudioTimingStore = createAudioTimingStore();
+  return humanAudioTimingStore;
+}
+
+// 讀這一章的時間表；等太久（網路慢）就先當作沒有，照 #636 整章播，不讓按下朗讀卡住。
+async function loadHumanAudioTimings(bookId, chapter) {
+  const key = humanAudioTimingKeyOf(bookId, chapter);
+  const timings = await Promise.race([
+    getHumanAudioTimingStore().getChapter(bookId, chapter),
+    new Promise(resolve => window.setTimeout(() => resolve(null), HUMAN_AUDIO_TIMING_WAIT_MS))
+  ]);
+  humanAudioTimingKey = key;
+  humanAudioTimings = timings;
+  humanAudioHighlightedVerse = null;
+  return timings;
+}
+
+// 正在播的那一章、而且畫面上也是那一章，才用時間表（接下一章時聲音會比畫面先換）。
+function getActiveHumanAudioTimings() {
+  if (!humanAudioTimings || !humanAudioPlayer) return null;
+  const { bookId, chapter } = state.readerState || {};
+  if (humanAudioTimingKey !== humanAudioTimingKeyOf(bookId, chapter)) return null;
+  return humanAudioPlayer.isLoaded(bookId, chapter) ? humanAudioTimings : null;
+}
+
+// 併節（例如民 1:20–21 合成一段念）時 lastVerse 比 verseNum 大，幾節一起標示。
+function highlightHumanAudioVerse(verseNum, { lastVerse = verseNum, scroll = true } = {}) {
+  const key = verseNum == null ? null : `${verseNum}-${lastVerse}`;
+  if (humanAudioHighlightedVerse === key) return;
+  humanAudioHighlightedVerse = key;
+  clearSpeakingHighlight();
+  if (verseNum == null) return;
+  let firstEl = null;
+  for (let n = verseNum; n <= lastVerse; n++) {
+    const verseEl = document.getElementById(`reader-verse-${n}`);
+    if (!verseEl) continue;
+    verseEl.classList.add("speaking-highlight");
+    firstEl ||= verseEl;
+  }
+  if (firstEl && scroll) scrollReaderVerseIntoView(firstEl, "smooth");
+}
+
 function updateHumanAudioTimeline(status = "speaking", position = null) {
   const timeline = document.getElementById("reader-audio-timeline");
   const label = document.getElementById("reader-audio-progress-label");
@@ -2317,7 +2373,21 @@ function updateHumanAudioTimeline(status = "speaking", position = null) {
   if (!timeline || !label || !seek) return;
   const { currentTime, duration } = position || humanAudioPlayer?.getPosition() || { currentTime: 0, duration: NaN };
   setReaderAudioTimelineMode("time");
-  const text = formatHumanAudioTimelineLabel({ status, currentTime, duration });
+  const timings = status === "loading" ? null : getActiveHumanAudioTimings();
+  let text = formatHumanAudioTimelineLabel({ status, currentTime, duration });
+  if (timings) {
+    // 章首報章名的那幾秒還不算第 1 節：進度顯示第 1 節，但不標示。
+    const found = findVerseAtTime(timings, currentTime);
+    text = formatHumanAudioVerseLabel({
+      status,
+      verse: found?.verse ?? timings[0].verse,
+      lastVerse: found?.lastVerse ?? timings[0].verse,
+      total: timings.length
+    });
+    if (!humanAudioSeeking) {
+      highlightHumanAudioVerse(found?.verse ?? null, { lastVerse: found?.lastVerse, scroll: status === "speaking" });
+    }
+  }
   if (label.textContent !== text) label.textContent = text;
   if (!humanAudioSeeking) {
     seek.max = String(Number.isFinite(duration) ? Math.floor(duration) : 0);
@@ -2353,7 +2423,10 @@ function getHumanAudioRate() {
 
 function prefetchNextHumanAudio(bookId, chapter) {
   const next = resolveAdjacentChapter(BIBLE_BOOKS, bookId, chapter, 1);
-  if (next) getHumanAudioPlayer().prefetch(next.book.id, next.chapter);
+  if (!next) return;
+  getHumanAudioPlayer().prefetch(next.book.id, next.chapter);
+  // 跨到下一卷時，下一卷的時間表也先抓。
+  getHumanAudioTimingStore().prefetch(next.book.id);
 }
 
 // 鎖定畫面／耳機控制（Media Session）：顯示書卷章節，並可播放、暫停、切上一章／下一章。
@@ -2400,10 +2473,12 @@ async function startHumanReaderAudio(startVerseNum = null) {
   const player = getHumanAudioPlayer();
   const { bookId, chapter } = state.readerState;
   const resuming = isReaderAudioPaused && readerAudioSource === SPEECH_MODES.HUMAN && player.isLoaded(bookId, chapter);
+  const pausedVerse = humanAudioPausedVerse;
   if (!resuming) {
     stopReaderAudio(true);
     resetReaderAudioState();
   }
+  humanAudioPausedVerse = null;
   currentAudioSessionId++;
   const sessionId = currentAudioSessionId;
   readerAudioSource = SPEECH_MODES.HUMAN;
@@ -2413,9 +2488,29 @@ async function startHumanReaderAudio(startVerseNum = null) {
   showReaderAudioNotice(false);
   updateHumanAudioTimeline(resuming ? "speaking" : "loading", resuming ? null : { currentTime: 0, duration: NaN });
   updateReaderAudioMediaSession(bookId, chapter);
+
+  const selectedVerseNum = Number(startVerseNum ?? state.readerState?.selectedVerseNum ?? 1) || 1;
+  let startAt = null;
   try {
-    if (resuming) await player.resume({ rate: getHumanAudioRate() });
-    else await player.start({ bookId, chapter, rate: getHumanAudioRate() });
+    if (resuming) {
+      // 暫停後改標了別節：從那一節開始；沒改就從暫停的地方續播。
+      const timings = getActiveHumanAudioTimings();
+      const jumpTo = timings && pausedVerse != null && selectedVerseNum !== pausedVerse
+        ? getVerseStartTime(timings, selectedVerseNum)
+        : null;
+      if (jumpTo != null) {
+        player.seek(jumpTo);
+        startAt = jumpTo;
+      }
+      await player.resume({ rate: getHumanAudioRate() });
+    } else {
+      // 時間表和音檔網址一起抓，不要一個等完再等另一個。
+      player.prefetch(bookId, chapter);
+      const timings = await loadHumanAudioTimings(bookId, chapter);
+      if (sessionId !== currentAudioSessionId) return;
+      startAt = selectedVerseNum > 1 && timings ? getVerseStartTime(timings, selectedVerseNum) : null;
+      await player.start({ bookId, chapter, rate: getHumanAudioRate(), startAt: startAt ?? 0 });
+    }
   } catch (error) {
     if (sessionId !== currentAudioSessionId) return;
     console.warn("[ReaderAudio] Human audio failed", error);
@@ -2424,9 +2519,9 @@ async function startHumanReaderAudio(startVerseNum = null) {
     return;
   }
   if (sessionId !== currentAudioSessionId) return;
-  if (!resuming && typeof showToast === "function") {
-    const selectedVerseNum = Number(startVerseNum ?? state.readerState?.selectedVerseNum ?? 1);
-    showToast(selectedVerseNum > 1 ? HUMAN_AUDIO_COPY.startsAtChapterStart : HUMAN_AUDIO_COPY.started);
+  if (typeof showToast === "function") {
+    if (startAt != null) showToast(`從第 ${selectedVerseNum} 節開始朗讀`);
+    else if (!resuming) showToast(selectedVerseNum > 1 && !humanAudioTimings ? HUMAN_AUDIO_COPY.startsAtChapterStart : HUMAN_AUDIO_COPY.started);
   }
   prefetchNextHumanAudio(bookId, chapter);
 }
@@ -2513,6 +2608,8 @@ function stopReaderAudio(quiet = false, options = {}) {
   }
   humanAudioPlayer?.stop();
   humanAudioSeeking = false;
+  humanAudioHighlightedVerse = null;
+  humanAudioPausedVerse = null;
   readerAudioSource = SPEECH_MODES.DEVICE;
   setReaderAudioMediaSessionState("none");
   isSpeaking = false;
@@ -2558,16 +2655,27 @@ window.clearReaderAudioOnPageExit = function () {
 // so the next 朗讀 press below always restarts from that verse's beginning —
 // whichever verse ends up marked, including one the user taps while paused.
 function pauseReaderAudio() {
-  // 真人朗讀是真的暫停 <audio>，再按就從暫停的位置續播（沒有逐節可以標記）。
+  // 真人朗讀是真的暫停 <audio>，再按就從暫停的位置續播。
+  // 有逐節時間表（#637）時，跟裝置語音一樣把念到的那一節標成起點；暫停中改標別節，再按就從那節開始。
   if (isSpeaking && readerAudioSource === SPEECH_MODES.HUMAN) {
     currentAudioSessionId++;
     humanAudioPlayer?.pause();
     isSpeaking = false;
     isReaderAudioPaused = true;
+    const timings = getActiveHumanAudioTimings();
+    const found = timings ? findVerseAtTime(timings, humanAudioPlayer?.getPosition().currentTime) : null;
+    humanAudioPausedVerse = found?.verse ?? null;
+    if (found) {
+      clearReaderStartSelection();
+      const verseEl = document.getElementById(`reader-verse-${found.verse}`);
+      verseEl?.classList.add("reader-start-selected");
+      verseEl?.setAttribute("aria-pressed", "true");
+      state.readerState.selectedVerseNum = found.verse;
+    }
     updateHumanAudioTimeline("paused");
     setReaderAudioMediaSessionState("paused");
     updateReaderAudioButton(false);
-    if (typeof showToast === "function") showToast(HUMAN_AUDIO_COPY.paused);
+    if (typeof showToast === "function") showToast(found ? HUMAN_AUDIO_COPY.pausedAtVerse : HUMAN_AUDIO_COPY.paused);
     return true;
   }
   if (!isSpeaking || typeof window.speechSynthesis === "undefined") return false;
@@ -2737,6 +2845,8 @@ async function continueHumanAudioToNextChapter(sessionId) {
   }
   const playing = player.start({ bookId: next.book.id, chapter: next.chapter, rate: getHumanAudioRate() });
   playing.catch(() => {});
+  // 下一章的時間表不擋聲音；畫面換好、時間表到了，timeupdate 就會開始標示。
+  void loadHumanAudioTimings(next.book.id, next.chapter);
   updateReaderAudioMediaSession(next.book.id, next.chapter);
   updateHumanAudioTimeline("loading", { currentTime: 0, duration: NaN });
   const moved = await navigateToChapter(1, { autoContinue: true });

@@ -10,13 +10,17 @@ import { AUDIO_TIMING_FORMAT_VERSION, normalizeChapterTimings } from "../../js/m
 
 // 每章輸出 → { [書卷]: { v, book, chapters: { [章]: [[節, 秒], ...] } } }。
 // 一章的資料不合格式（節重複、秒數倒退）就整章不放，App 那章退回整章播放。
+// 沒對到的節（信望愛和合本把它併進前一節，經文是 "a"，例如民 1:20–21 合成一段念）用前一節的秒數，
+// App 看到同一個秒數就當成「第 20–21 節」一起標示，共幾節也不會少算。
 export function packTimings(chapterDocs) {
   const books = new Map();
   const skipped = [];
   for (const doc of chapterDocs) {
-    const rows = (doc.verses || [])
-      .filter(([, start]) => start != null)
-      .map(([verse, start]) => [Number(verse), Math.round(Number(start) * 100) / 100]);
+    const rows = [];
+    for (const [verse, start] of doc.verses || []) {
+      if (start != null) rows.push([Number(verse), Math.round(Number(start) * 100) / 100]);
+      else if (rows.length) rows.push([Number(verse), rows[rows.length - 1][1]]);
+    }
     if (!normalizeChapterTimings(rows)) {
       skipped.push(`${doc.book}:${doc.chapter}`);
       continue;
