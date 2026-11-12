@@ -59,6 +59,8 @@ export type RosterRow = {
   round: number; progress: number; chapters: number; byRound: Record<string, number>; behindDays: number;
   lastReadAt: string | null; daysSinceRead: number | null; readDays7: number;
   care: boolean; careReasons: CareReason[]; teams: RosterTeam[]; quiz: { published: number; submitted: number };
+  /** #700：雲柱（計畫期間）答幾題、答對幾題、參加過哪幾週；後台目前沒有顯示，舊伺服器沒有這個欄位 */
+  lightning?: { answered: number; correct: number; weeks: string[] };
 };
 export type PlanRoster = { plan: PlanInfo; today: string; progressBuckets: Bucket[]; checkinBuckets: Bucket[]; people: RosterRow[]; meta: PlanMeta };
 
@@ -70,7 +72,7 @@ export type ExamPaper = {
 export type PlanQuiz = {
   today: string;
   enrolled: number;
-  daily: { enabled: boolean; configured: boolean; days: QuizDay[]; participants: number };
+  daily: { enabled: boolean; configured: boolean; days: QuizDay[]; participants: number; /** #700：報名了但收不到題（沒有小組）的人數；舊伺服器沒有 */ unreached?: number };
   exam: { enabled: boolean; papers: ExamPaper[] };
   lightning: null | { from: string; to: string; questions: number; participants: number; weeks: { week_start: string; questions: number; participants: number }[] };
 };

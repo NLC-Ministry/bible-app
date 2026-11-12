@@ -145,6 +145,23 @@ describe("plan roster", () => {
     expect(byId.p7).toMatchObject({ enrolled: false, progressBucket: "not_enrolled", checkinBucket: "none" });
     expect(roster.people.filter((row) => row.care)).toHaveLength(buildPlanSummary(report()).care.total);
   });
+
+  it("carries the quiz days and lightning period through to the roster (#700); an old server gives null", () => {
+    const people = [{ ...PEOPLE[0], lightning: { answered: "3", correct: 2, weeks: ["2026-11-03", "2026-11-10T00:00:00"] } }, PEOPLE[6]];
+    const data = {
+      ...overview(people),
+      quiz: { days: 9 },
+      lightning: { from: "2026-11-01", to: "2026-11-11", weeks: [{ weekStart: "2026-11-03", questions: 3 }, { weekStart: "2026-11-10", questions: 0 }] }
+    };
+    const withLightning = buildPlanRoster(preparePlanReport({ resolved: resolvePlanForReport(PLAN_ROW), overview: data }));
+    expect(withLightning.quiz).toEqual({ days: 9 });
+    expect(withLightning.lightning).toEqual({ from: "2026-11-01", to: "2026-11-11", weeks: [{ weekStart: "2026-11-03", questions: 3 }] });
+    const byId = Object.fromEntries(withLightning.people.map((row) => [row.id, row]));
+    expect(byId.p1.lightning).toEqual({ answered: 3, correct: 2, weeks: ["2026-11-03", "2026-11-10"] });
+    expect(byId.p7.lightning).toEqual({ answered: 0, correct: 0, weeks: [] });
+    expect(roster.quiz).toBeNull();
+    expect(roster.lightning).toBeNull();
+  });
 });
 
 describe("scope filter params", () => {

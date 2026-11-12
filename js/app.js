@@ -703,8 +703,10 @@ appRouter.switchTab = async function (tabId, options = {}) {
     if (typeof window.closeAdminSection === "function") {
       window.closeAdminSection();
     }
-    // 管理分頁的全頁畫面（範圍選擇、篩選、個人頁，#584）放在 body 底下，換分頁要明確收起。
-    if (document.body.classList.contains("pastoral-layer-open")) {
+    // 管理分頁的全頁畫面（範圍選擇、篩選、個人頁，#584）放在 body 底下，換分頁要明確收起；
+    // 往下鑽的紀錄（#699）也一起清掉，回來時返回鍵不會退到舊的範圍。
+    if (document.body.classList.contains("pastoral-layer-open")
+      || document.body.classList.contains("pastoral-scope-drilled")) {
       loadModule('pastoral').then((pastoral) => pastoral.closePastoralLayers()).catch(() => {});
     }
 
@@ -1432,6 +1434,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         // 管理分頁的全頁畫面（#584）：返回鍵一次關一層（範圍選擇先退回上一步），留在管理分頁。
         if (document.body.classList.contains("pastoral-layer-open")) {
           loadModule('pastoral').then((pastoral) => pastoral.closePastoralLayer()).catch(() => {});
+          pushRootState();
+          return;
+        }
+
+        // 管理分頁從比較卡／麵包屑往下鑽過（#699）：返回鍵一次退一層範圍，退到底才離開分頁。
+        if (document.body.classList.contains("pastoral-scope-drilled")
+          && window.appRouter && window.appRouter.currentTab === "admin-view") {
+          loadModule('pastoral').then((pastoral) => pastoral.stepBackPastoralScope()).catch(() => {});
           pushRootState();
           return;
         }

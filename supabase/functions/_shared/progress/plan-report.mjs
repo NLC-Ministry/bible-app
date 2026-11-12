@@ -57,7 +57,24 @@ function reconcile(sqlMeta, people) {
   return { inScope, enrolled, rows, rowsEnrolled, consistent: inScope === rows && enrolled === rowsEnrolled };
 }
 
-// SQL 的 { today, people, meta } + 比對尺 → 每個人都判斷好的報表
+const dateKey = (value) => (typeof value === "string" ? value.slice(0, 10) : "");
+
+// #700：這期小測驗已截止的發題天數；SQL 還是舊版（沒有這個欄位）時回 null
+function quizInfo(raw) {
+  if (!raw || typeof raw !== "object" || !Number.isFinite(Number(raw.days))) return null;
+  return { days: Math.max(0, Number(raw.days)) };
+}
+
+// #700：雲柱的期間（計畫開始～今天或計畫結束）與每週題數；SQL 還是舊版時回 null
+function lightningInfo(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const weeks = (Array.isArray(raw.weeks) ? raw.weeks : [])
+    .map((week) => ({ weekStart: dateKey(week && week.weekStart), questions: Math.max(0, Number(week && week.questions) || 0) }))
+    .filter((week) => week.weekStart && week.questions > 0);
+  return { from: dateKey(raw.from), to: dateKey(raw.to), weeks };
+}
+
+// SQL 的 { today, people, quiz, lightning, meta } + 比對尺 → 每個人都判斷好的報表
 export function preparePlanReport({ resolved, overview, bibleBooks = BIBLE_BOOK_CHAPTERS }) {
   const { plan, baselineDays } = resolved;
   const data = overview && typeof overview === "object" ? overview : {};
@@ -65,7 +82,7 @@ export function preparePlanReport({ resolved, overview, bibleBooks = BIBLE_BOOK_
   const ctx = buildPlanContext({ plan, baselineDays, bibleBooks, today });
   const rows = (Array.isArray(data.people) ? data.people : []).filter((row) => row && typeof row === "object" && typeof row.id === "string");
   const people = describePeople(rows, ctx);
-  return { plan, ctx, people, meta: reconcile(data.meta, people) };
+  return { plan, ctx, people, quiz: quizInfo(data.quiz), lightning: lightningInfo(data.lightning), meta: reconcile(data.meta, people) };
 }
 
 function planInfo(report) {
@@ -190,7 +207,8 @@ function rosterRow(person) {
     care: person.care,
     careReasons: person.careReasons,
     teams: person.teams,
-    quiz: person.quiz
+    quiz: person.quiz,
+    lightning: person.lightning
   };
 }
 
@@ -205,6 +223,9 @@ export function buildPlanRoster(report) {
     progressBuckets: PROGRESS_BUCKETS,
     checkinBuckets: CHECKIN_BUCKETS,
     people,
+    // #700：小測驗已截止天數、雲柱期間與每週題數（App 管理→測驗分頁用）
+    quiz: report.quiz ?? null,
+    lightning: report.lightning ?? null,
     meta: report.meta
   };
 }

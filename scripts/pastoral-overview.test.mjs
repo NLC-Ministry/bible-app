@@ -90,6 +90,19 @@ describe("get_pastoral_overview migration", () => {
     expect(file).not.toMatch(/GRANT[^;]*plan_progress_people/);
   });
 
+  it("the latest rewrite (#700) keeps both functions locked down", () => {
+    const latest = latestFunctionDefinition("plan_progress_people").file;
+    const quizFile = latestFunctionDefinition("admin_api_plan_quiz").file;
+    const latestSql = read(`supabase/migrations/${latest}`);
+    expect(latestSql).toContain(`REVOKE ALL ON FUNCTION ${INNER_SIGNATURE} FROM PUBLIC, anon, authenticated, service_role;`);
+    expect(latestSql).not.toMatch(/GRANT[^;]*plan_progress_people/);
+    const quizSql = read(`supabase/migrations/${quizFile}`);
+    expect(quizSql).toContain("REVOKE ALL ON FUNCTION public.admin_api_plan_quiz(uuid, uuid, text) FROM PUBLIC, anon, authenticated;");
+    expect(quizSql).toContain("GRANT EXECUTE ON FUNCTION public.admin_api_plan_quiz(uuid, uuid, text) TO service_role;");
+    expect(quizSql).not.toMatch(/GRANT[^;]*admin_api_plan_quiz[^;]*authenticated/);
+    expect(latestFunctionDefinition("admin_api_plan_quiz").text).toContain("PERFORM public.admin_api_assert_admin(p_actor_id);");
+  });
+
   it("returns an independent count for reconciliation (meta)", () => {
     expect(fn).toContain("'inScope', (SELECT COUNT(*)::int FROM roster WHERE EXISTS (SELECT 1 FROM global_plan))");
     expect(fn).toContain("'enrolled', (SELECT COUNT(*)::int FROM enrollment)");

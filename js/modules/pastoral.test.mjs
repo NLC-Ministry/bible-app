@@ -41,8 +41,8 @@ const row = (id, name, enrollment, extra = {}) => ({
 });
 
 const PEOPLE = [
-  row("u1", "<img src=x onerror=alert(1)>", { chapters: 9 }),
-  row("u2", "李大華", null, { pastoralZone: "二牧區" }),
+  row("u1", "<img src=x onerror=alert(1)>", { chapters: 9 }, { lightning: { answered: 3, correct: 2, weeks: ["2000-01-03", "2000-01-10"] } }),
+  row("u2", "李大華", null, { pastoralZone: "二牧區", lightning: { answered: 1, correct: 1, weeks: ["2000-01-10"] } }),
   row("u3", "陳美玲", { chapters: 36 }, {
     pastoralZone: "二牧區",
     teams: [{ id: "t1", name: "火箭隊", division: 3, status: "forming", size: 2, captain: true }],
@@ -58,7 +58,13 @@ function serverReport(people) {
   const enrolled = people.filter((person) => person.enrollment).length;
   return preparePlanReport({
     resolved: { plan: PLAN, baselineDays: DAYS },
-    overview: { today: TODAY, people, meta: { inScope: people.length, enrolled } },
+    overview: {
+      today: TODAY,
+      people,
+      quiz: { days: 4 },
+      lightning: { from: "2000-01-01", to: TODAY, weeks: [{ weekStart: "2000-01-03", questions: 3 }, { weekStart: "2000-01-10", questions: 2 }] },
+      meta: { inScope: people.length, enrolled }
+    },
     bibleBooks: BOOKS
   });
 }
@@ -197,6 +203,135 @@ describe("管理分頁（#551、#570、#584）", () => {
     expect(planReport).toHaveBeenLastCalledWith("plan_summary", { p_global_plan_id: PLAN_ID, scope: { pastoralZone: "二牧區" } });
     expect(document.getElementById("pastoral-scope-label").textContent).toBe("2026 第四季 · 二牧區");
     expect(calls("plan_roster")).toHaveLength(0);
+  });
+
+  // #699：比較卡往下鑽之後要回得去——共用麵包屑（含選下一層）＋返回鍵一次退一層
+  describe("麵包屑與往下鑽（#699）", () => {
+    const TWO_REGIONS = [
+      ...PEOPLE,
+      row("w1", "王西一", { chapters: 9 }, { greatRegion: "西區", pastoralZone: "三牧區", smallGroup: "丙組" }),
+      row("w2", "王西二", { chapters: 9 }, { greatRegion: "西區", pastoralZone: "四牧區", smallGroup: "丁組" }),
+      row("w3", "王西三", { chapters: 9 }, { greatRegion: "西區", pastoralZone: "三牧區", smallGroup: "戊組" })
+    ];
+    const crumbs = () => document.getElementById("pastoral-crumbs");
+    const crumbLabels = () => [...crumbs().querySelectorAll(".pastoral-crumbs__item")].map((el) => el.textContent.trim());
+    const crumb = (label) => [...crumbs().querySelectorAll(".pastoral-crumbs__item")].find((el) => el.textContent.trim() === label);
+    const nextCrumb = () => crumbs().querySelector('[data-pastoral-action="crumb-next"]');
+    const status = () => document.getElementById("pastoral-status").textContent;
+    const drilled = () => document.body.classList.contains("pastoral-scope-drilled");
+
+    beforeEach(() => setup({ role: "admin", people: TWO_REGIONS }));
+
+    it("comparison card: 大區 → 牧區, then the breadcrumb jumps back to 各大區比較", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      const overview = panel("overview");
+      expect(overview.textContent).toContain("各大區比較");
+      expect(crumbLabels()).toEqual(["全部大區"]);
+      expect(nextCrumb().textContent.trim()).toBe("選大區");
+      unitRow(overview, "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各牧區比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區"]);
+      expect(nextCrumb().textContent.trim()).toBe("選牧區");
+      unitRow(overview, "三牧區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各小組比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區", "三牧區"]);
+      expect(crumbs().querySelector('[aria-current="page"]').textContent.trim()).toBe("三牧區");
+      expect(nextCrumb().textContent.trim()).toBe("選小組");
+      expect(drilled()).toBe(true);
+      crumb("全部大區").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各大區比較"));
+      expect(status()).toContain("範圍內 7 人");
+      expect(document.getElementById("pastoral-scope-label").textContent).toBe("2026 第四季 · 全部大區");
+      expect(crumbLabels()).toEqual(["全部大區"]);
+      // 最上層的數字還在 5 分鐘快取內，不重問
+      expect(calls("plan_summary")).toHaveLength(3);
+      // 點麵包屑往上跳是直接跳，不留返回紀錄
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("the back key steps up one level at a time after drilling from the comparison card", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      const overview = panel("overview");
+      unitRow(overview, "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各牧區比較"));
+      unitRow(overview, "三牧區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(overview.textContent).toContain("各小組比較"));
+      expect(mod.stepBackPastoralScope()).toBe(true);
+      await vi.waitFor(() => expect(overview.textContent).toContain("各牧區比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區"]);
+      expect(status()).toContain("範圍內 3 人");
+      expect(drilled()).toBe(true);
+      expect(mod.stepBackPastoralScope()).toBe(true);
+      await vi.waitFor(() => expect(overview.textContent).toContain("各大區比較"));
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("roster: the breadcrumb's next level opens the picker at that level; picks are steps the back key undoes", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      tabButton("roster").click();
+      const roster = panel("roster");
+      await vi.waitFor(() => expect(roster.querySelectorAll(".pastoral-row")).toHaveLength(6));
+      nextCrumb().click();
+      const sheet = document.getElementById("pastoral-scope-sheet");
+      const title = () => document.getElementById("pastoral-scope-sheet-title").textContent;
+      expect(sheet.classList.contains("hidden")).toBe(false);
+      expect(title()).toBe("選擇大區");
+      pick(sheet, "西區").click();
+      await vi.waitFor(() => expect(title()).toBe("選擇牧區"));
+      // 四牧區只有一個小組 → 沒有下一層可選，選完就關
+      pick(sheet, "四牧區").click();
+      await vi.waitFor(() => expect(sheet.classList.contains("hidden")).toBe(true));
+      expect(rowNames(roster)).toEqual(["王西二"]);
+      expect(crumbLabels()).toEqual(["全部大區", "西區", "四牧區"]);
+      expect(nextCrumb()).toBeNull();
+      expect(calls("plan_roster")).toHaveLength(1);
+      expect(mod.stepBackPastoralScope()).toBe(true);
+      await vi.waitFor(() => expect(crumbLabels()).toEqual(["全部大區", "西區"]));
+      expect(rowNames(roster).sort()).toEqual(["王西一", "王西三", "王西二"].sort());
+      crumb("全部大區").click();
+      await vi.waitFor(() => expect(roster.querySelectorAll(".pastoral-row")).toHaveLength(6));
+      expect(calls("plan_roster")).toHaveLength(1);
+    });
+
+    it("picking from the scope bar is a jump: no back-key history", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      unitRow(panel("overview"), "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(panel("overview").textContent).toContain("各牧區比較"));
+      expect(crumbLabels()).toEqual(["全部大區", "西區"]);
+      expect(drilled()).toBe(true);
+      document.getElementById("pastoral-scope-button").click();
+      const sheet = document.getElementById("pastoral-scope-sheet");
+      pick(sheet, "東區").click();
+      await vi.waitFor(() => expect(document.getElementById("pastoral-scope-sheet-title").textContent).toBe("選擇牧區"));
+      mod.closePastoralLayer();
+      mod.closePastoralLayer();
+      expect(crumbLabels()).toEqual(["全部大區", "東區"]);
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("leaving the tab clears the drill history", async () => {
+      const mod = await load();
+      await mod.renderPastoralView();
+      unitRow(panel("overview"), "西區").querySelector(".pastoral-unit__name").click();
+      await vi.waitFor(() => expect(drilled()).toBe(true));
+      mod.closePastoralLayers();
+      expect(drilled()).toBe(false);
+      expect(mod.stepBackPastoralScope()).toBe(false);
+    });
+
+    it("someone with a single unit sees no breadcrumb", async () => {
+      setup({ role: "group_leader", people: [PEOPLE[0]] });
+      const mod = await load();
+      await mod.renderPastoralView();
+      expect(crumbs().classList.contains("hidden")).toBe(true);
+    });
   });
 
   it("roster: fetched once when opened; one row per person sorted by days behind; a row pushes the person page without a request", async () => {
@@ -428,16 +563,54 @@ describe("管理分頁（#551、#570、#584）", () => {
     tabButton("quizzes").click();
     await vi.waitFor(() => expect(panel("quizzes").textContent).toContain("作答率"));
     const quizzes = panel("quizzes");
-    expect(quizzes.textContent).toContain("38%");
-    expect(quizzes.textContent).toContain("從沒作答：林志強");
-    expect(quizzes.textContent).toContain("不看分數、不排名");
+    // 順序：雲柱 → 小測驗 → 大測驗（#700）
+    expect([...quizzes.querySelectorAll(".pastoral-card__title")].map((el) => el.textContent)).toEqual(["雲柱測驗", "小測驗", "大測驗"]);
+    const daily = quizzes.querySelector("[data-pastoral-quiz]");
+    expect(daily.textContent).toContain("38%");
+    expect(daily.textContent).toContain("已發4 天");
+    expect(daily.textContent).toContain("作答過1／3 人");
+    expect(daily.textContent).not.toContain("有發題");
+    expect(daily.textContent).toContain("從沒作答：林志強");
+    // 有報名但沒收到題（沒有小組）：分開列，不算進作答率
+    expect(daily.textContent).toContain("收不到題（不算進作答率）：<img src=x onerror=alert(1)>");
+    expect(daily.querySelector("img")).toBeNull();
+    expect(daily.textContent).toContain("不看分數、不排名");
     expect(quizzes.textContent).not.toMatch(/第 ?\d+ ?名|名次|平均分|分數：/);
     expect(quizzes.querySelector("table")).toBeNull();
-    expect(unitNames(quizzes).sort()).toEqual(["一牧區", "二牧區"]);
-    expect(unitRow(quizzes, "一牧區").textContent).toContain("從沒作答 1 人");
-    expect(unitRow(quizzes, "一牧區").querySelector(".pastoral-unit__pct").textContent).toBe("0%");
+    expect(unitNames(daily).sort()).toEqual(["一牧區", "二牧區"]);
+    expect(unitRow(daily, "一牧區").textContent).toContain("報名 2 人");
+    expect(unitRow(daily, "一牧區").textContent).toContain("從沒作答 1 人・收不到題 1 人");
+    expect(unitRow(daily, "一牧區").querySelector(".pastoral-unit__pct").textContent).toBe("0%");
     expect(renderExamStatsPanel).toHaveBeenCalledWith(quizzes.querySelector("[data-pastoral-exam]"));
     expect(quizzes.textContent).toContain("大測驗統計");
+  });
+
+  it("lightning (#700): everyone in scope, weekly participation, overall and unit accuracy but never a person's", async () => {
+    const mod = await load();
+    mod.registerExamStatsLoader(async () => ({ renderExamStatsPanel: async () => {} }));
+    await mod.renderPastoralView();
+    tabButton("quizzes").click();
+    await vi.waitFor(() => expect(panel("quizzes").textContent).toContain("期間參加過"));
+    const card = panel("quizzes").querySelector("[data-pastoral-lightning-body]");
+    expect(card.textContent).toContain("1/10 那週參加2 人（50%）");
+    expect(card.textContent).toContain("期間參加過2／4 人");
+    // 答對 3 ÷ 送出 4
+    expect(card.textContent).toContain("答對率75%");
+    expect(card.textContent).toContain("不限報名");
+    expect(card.textContent).toContain("從沒參加：林志強、陳美玲");
+    expect(unitRow(card, "1/3 那週").textContent).toContain("1 人參加");
+    expect(unitRow(card, "一牧區").textContent).toContain("答對率 67%・從沒參加 1 人");
+    expect(unitRow(card, "二牧區").textContent).toContain("答對率 100%・從沒參加 1 人");
+
+    // 個人頁只有題數，沒有答對幾題
+    expect(mod.openPastoralTab("join-status")).toBe(true);
+    await mod.renderPastoralView();
+    await vi.waitFor(() => expect(rowNames(panel("roster"))).toEqual(["李大華"]));
+    openRow(panel("roster"), "u2");
+    const sheet = document.getElementById("pastoral-person-sheet");
+    await vi.waitFor(() => expect(sheet.textContent).toContain("計畫期間答 1／5 題"));
+    expect(sheet.textContent).toContain("還沒報名這個計畫。");
+    expect(sheet.textContent).not.toMatch(/答對/);
   });
 
   it("system administrator: whole church plus a link to the console", async () => {

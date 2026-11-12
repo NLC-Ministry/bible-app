@@ -24,6 +24,7 @@ import {
   UNSET_UNIT_LABEL,
   careReasonText,
   clearRosterCondition,
+  compareLightningUnits,
   compareQuizUnits,
   countRosterConditions,
   defaultRosterFilters,
@@ -37,6 +38,7 @@ import {
   rosterConditionChips,
   rosterPerson,
   sortPlanRoster,
+  summarizeLightning,
   summarizeQuiz,
   summarizeTeams,
   teamLabel
@@ -80,7 +82,13 @@ const view = {
   layerReturn: null,
   scopeSteps: [],
   scopeBusy: false,
-  personId: ""
+  personId: "",
+  // 範圍選擇從哪裡打開：範圍列（bar，選了算直接跳）或麵包屑的「選下一層」（crumb，選了算往下鑽）
+  scopeSource: "",
+  // 往下鑽的紀錄（#699）：比較卡點單位、麵包屑「選下一層」選了單位，各記一筆之前的範圍，返回鍵一次退一筆
+  drillStack: [],
+  // 這個人可選的最上層（麵包屑第一段），換範圍載入中時沿用
+  topLevel: ""
 };
 let currentPlan = null;
 let planList = [];
@@ -234,7 +242,12 @@ function onAction(event) {
     view.rosterLimit = ROSTER_PAGE;
     setTab("roster");
   } else if (action === "drill") {
-    void applyScope(target.dataset.level, target.dataset.unit);
+    void drillInto(target.dataset.level, target.dataset.unit);
+  } else if (action === "crumb") {
+    setDrillStack([]);
+    void applyScope(target.dataset.level, "");
+  } else if (action === "crumb-next") {
+    openScope(target, target.dataset.level);
   } else if (action === "unit-metric") {
     view.unitMetric = target.dataset.metric;
     renderOverview();
@@ -366,9 +379,37 @@ export function closePastoralLayer() {
   return true;
 }
 
-/** 離開管理分頁時全部收起（不還原捲動，別的分頁用同一個捲動區） */
+/** 離開管理分頁時全部收起（不還原捲動，別的分頁用同一個捲動區），往下鑽的紀錄也清掉 */
 export function closePastoralLayers() {
   closeLayer({ restore: false });
+  setDrillStack([]);
+}
+
+// ── 往下鑽與返回（#699）────────────────────────────────────────────────
+// app.js 的返回鍵是同步判斷的，所以「還有可退的範圍」用 body class 讓它看得到。
+
+function setDrillStack(stack) {
+  view.drillStack = stack;
+  document.body.classList.toggle("pastoral-scope-drilled", stack.length > 0);
+}
+
+function drillInto(level, unit) {
+  if (unit && SCOPE_LEVELS.includes(level) && view.scope[level] !== unit) {
+    setDrillStack([...view.drillStack, { ...view.scope }]);
+  }
+  return applyScope(level, unit);
+}
+
+/** 返回鍵：退回往下鑽之前的範圍，一次一層。沒有紀錄回 false。 */
+export function stepBackPastoralScope() {
+  if (!view.drillStack.length) return false;
+  const stack = view.drillStack.slice();
+  const previous = stack.pop();
+  setDrillStack(stack);
+  view.scope = { ...emptyScope(), ...previous };
+  view.rosterLimit = ROSTER_PAGE;
+  void refreshSummary();
+  return true;
 }
 
 // ── 資料 ────────────────────────────────────────────────────────────────
@@ -452,6 +493,9 @@ async function ensureRoster({ force = false } = {}) {
     }
     rosters.set(planKey, {
       people: result.data.people.map(rosterPerson),
+      // #700：小測驗已截止天數、雲柱期間與每週題數（舊伺服器沒有＝null）
+      quiz: result.data.quiz || null,
+      lightning: result.data.lightning || null,
       loadedAt: Date.now(),
       inconsistent: result.inconsistent
     });
@@ -538,6 +582,42 @@ function renderScopeBar() {
   const button = $("pastoral-scope-button");
   if (button) button.disabled = !currentPlan;
   renderUpdated();
+  renderCrumbs();
+}
+
+const lowerLevel = (level) => SCOPE_LEVELS[SCOPE_LEVELS.indexOf(level) + 1] || "";
+
+// 麵包屑（#699）：「全部大區 › 西區 › 三牧區」，前面幾段點了回到那一層；尾端「選○○」打開範圍選擇、停在那一層。
+// 只有一個單位可管的人不顯示。
+function renderCrumbs() {
+  const el = $("pastoral-crumbs");
+  if (!el) return;
+  const summary = currentSummary();
+  if (summary) view.topLevel = choosableLevels()[0] || "";
+  const top = currentPlan ? view.topLevel : "";
+  if (!top) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  const chosen = SCOPE_LEVELS.slice(SCOPE_LEVELS.indexOf(top)).filter((level) => view.scope[level]);
+  const segments = [{ label: `全部${SCOPE_LEVEL_LABEL[top]}`, clear: top }]
+    .concat(chosen.map((level) => ({ label: view.scope[level], clear: lowerLevel(level) })));
+  // 下一層要看目前範圍的選項；換範圍載入中先不顯示
+  const next = summary ? (chosen.length ? choosableLevels(chosen[chosen.length - 1])[0] : top) : "";
+  const sep = '<span class="nlc-icon nlc-icon--sm pastoral-crumbs__sep" data-icon="chevronRight" aria-hidden="true"></span>';
+  const items = segments.map((segment, index) => {
+    const last = index === segments.length - 1;
+    const item = last
+      ? `<span class="pastoral-crumbs__item" aria-current="page">${esc(segment.label)}</span>`
+      : `<button type="button" class="pastoral-crumbs__item" data-pastoral-action="crumb" data-level="${segment.clear}">${esc(segment.label)}</button>`;
+    return `<li>${index ? sep : ""}${item}</li>`;
+  });
+  el.innerHTML = `<ol class="pastoral-crumbs__list">${items.join("")}</ol>${next
+    ? `<button type="button" class="pastoral-crumbs__next" data-pastoral-action="crumb-next" data-level="${next}" aria-haspopup="dialog">選${SCOPE_LEVEL_LABEL[next]}</button>`
+    : ""}`;
+  el.classList.remove("hidden");
+  hydrate(el);
 }
 
 function applyScope(level, unit) {
@@ -559,14 +639,16 @@ function renderScopeAndTab() {
   renderActiveTab();
 }
 
-// 範圍選擇（全頁）：先選計畫，再一層一層點大區 → 牧區 → 小組；每點一下就換範圍，下一層的單位依新範圍列出
-function openScope(opener) {
+// 範圍選擇（全頁）：先選計畫，再一層一層點大區 → 牧區 → 小組；每點一下就換範圍，下一層的單位依新範圍列出。
+// 麵包屑的「選下一層」帶 level，直接停在那一層，選了算往下鑽（#699）。
+function openScope(opener, level = "") {
   if (!currentPlan) return;
-  const first = planList.length > 1 ? "plan" : choosableLevels()[0];
+  const first = level || (planList.length > 1 ? "plan" : choosableLevels()[0]);
   if (!first) {
     toast("你負責的範圍只有這一個。");
     return;
   }
+  view.scopeSource = level ? "crumb" : "bar";
   view.scopeSteps = [first];
   openLayer("scope", opener);
   renderScopeSheet();
@@ -634,6 +716,8 @@ async function pickPlan(key) {
     view.planKey = key;
     storePlanKey(key);
     view.scope = emptyScope();
+    view.topLevel = "";
+    setDrillStack([]);
     view.rosterLimit = ROSTER_PAGE;
     view.scopeBusy = true;
     renderScopeSheet();
@@ -651,7 +735,12 @@ async function pickScope(level, unit) {
   view.scopeBusy = true;
   renderScopeSheet();
   try {
-    await applyScope(level, unit);
+    // 範圍列選的是直接跳，清掉往下鑽的紀錄；麵包屑「選下一層」選的是往下鑽，記一筆
+    if (view.scopeSource === "crumb") await drillInto(level, unit);
+    else {
+      setDrillStack([]);
+      await applyScope(level, unit);
+    }
   } finally {
     view.scopeBusy = false;
   }
@@ -945,6 +1034,9 @@ function renderPersonSheet() {
     if (quizFeatureEnabled !== false && person.quiz.published > 0) facts.push(["小測驗", `作答 ${person.quiz.submitted}／${person.quiz.published} 次`]);
     if (person.care) facts.push(["需要關心", person.careReasons.map(careReasonText).join("、")]);
   }
+  // 雲柱不屬於計畫，沒報名的人也看；只放題數，不放答對幾題（#700）
+  const lightningQuestions = summarizeLightning([], currentRoster()?.lightning).questions;
+  if (lightningQuestions > 0) facts.push(["雲柱", `計畫期間答 ${person.lightning.answered}／${lightningQuestions} 題`]);
   const invited = view.invited.has(person.id);
   const late = lateText(person);
   const action = person.enrolled
@@ -961,7 +1053,8 @@ function renderPersonSheet() {
           ${late ? `<span class="pastoral-row__late">${esc(late)}</span>` : ""}
         </span>
       </div>
-      ${facts.length ? `<dl class="pastoral-person__facts">${facts.map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("")}</dl>` : '<p class="pastoral-card__hint">還沒報名這個計畫。</p>'}
+      ${person.enrolled ? "" : '<p class="pastoral-card__hint">還沒報名這個計畫。</p>'}
+      ${facts.length ? `<dl class="pastoral-person__facts">${facts.map(([term, value]) => `<dt>${esc(term)}</dt><dd>${esc(value)}</dd>`).join("")}</dl>` : ""}
       <div class="pastoral-person__actions">${action}</div>
     </section>`;
   hydrate(host);
@@ -1103,11 +1196,22 @@ async function ensureQuizFeature() {
   return quizFeatureEnabled;
 }
 
+// 日期鍵（YYYY-MM-DD）→ 「11/3」
+function shortDay(key) {
+  const text = String(key || "");
+  return text.length >= 10 ? `${Number(text.slice(5, 7))}/${Number(text.slice(8, 10))}` : text;
+}
+
+// 分頁順序：雲柱 → 小測驗 → 大測驗（#700）
 async function renderQuizzes() {
   const el = panel("quizzes");
   if (!el || !currentRoster()) return;
   if (!el.querySelector("[data-pastoral-quiz]")) {
     el.innerHTML = `
+      <section class="pastoral-card" aria-labelledby="pastoral-lightning-title">
+        <div class="pastoral-card__head"><h3 class="pastoral-card__title" id="pastoral-lightning-title">雲柱測驗</h3></div>
+        <div class="pastoral-stack" data-pastoral-lightning-body><p class="pastoral-empty">載入中…</p></div>
+      </section>
       <section class="pastoral-card" data-pastoral-quiz aria-labelledby="pastoral-quiz-title">
         <div class="pastoral-card__head"><h3 class="pastoral-card__title" id="pastoral-quiz-title">小測驗</h3></div>
         <div class="pastoral-stack" data-pastoral-quiz-body><p class="pastoral-empty">載入中…</p></div>
@@ -1118,6 +1222,7 @@ async function renderQuizzes() {
       </section>`;
     void renderExamStats(el.querySelector("[data-pastoral-exam]"));
   }
+  renderLightningStats(el.querySelector("[data-pastoral-lightning-body]"));
   const enabled = await ensureQuizFeature();
   const body = el.querySelector("[data-pastoral-quiz-body]");
   if (!body || view.tab !== "quizzes") return;
@@ -1125,33 +1230,99 @@ async function renderQuizzes() {
     body.innerHTML = '<p class="pastoral-empty">小測驗目前沒有開放。</p>';
     return;
   }
+  renderDailyQuizStats(body);
+}
+
+// 雲柱：母體＝範圍內全部會友（不限報名）；答對率只看整體與單位，不看個人、不排名
+function renderLightningStats(body) {
+  if (!body) return;
+  const roster = currentRoster();
+  const info = roster && roster.lightning;
+  if (!info) {
+    body.innerHTML = '<p class="pastoral-empty">雲柱統計暫時看不到，請稍後再試。</p>';
+    return;
+  }
   const people = scopedRoster();
-  const summary = summarizeQuiz(people);
-  if (!summary.eligible) {
-    body.innerHTML = '<p class="pastoral-empty">這個計畫在範圍內還沒有發過小測驗。</p>';
+  const summary = summarizeLightning(people, info);
+  if (!summary.questions) {
+    body.innerHTML = '<p class="pastoral-empty">這個計畫期間還沒有雲柱題目。</p>';
+    return;
+  }
+  if (!summary.members) {
+    body.innerHTML = '<p class="pastoral-empty">這個範圍內沒有會友。</p>';
     return;
   }
   const level = pickUnitLevel(people);
-  const units = compareQuizUnits(people, level, { compare: orgComparator });
+  const units = compareLightningUnits(people, level, info, { compare: orgComparator });
+  const latest = summary.latestWeek;
+  const correctText = summary.correctRate === null ? "—" : `${summary.correctRate}%`;
   body.innerHTML = `
-    <p class="pastoral-card__hint">只算已報名、有發題給他的小組；不看分數、不排名。</p>
+    <p class="pastoral-card__hint">全教會活動，算 ${esc(shortDay(info.from))}–${esc(shortDay(info.to))} 出的 ${summary.questions} 題；母體是範圍內所有會友（不限報名）。答對率只看整體，不看個人、不排名。</p>
     <div class="pastoral-tiles">
-      ${tile("有發題的人", summary.eligible)}
+      ${tile(`${shortDay(latest.weekStart)} 那週參加`, `${latest.participants} 人（${latest.rate}%）`)}
+      ${tile("期間參加過", `${summary.participants}／${summary.members} 人`)}
+      ${tile("答對率", correctText)}
+      ${tile("從沒參加", summary.never.length)}
+    </div>
+    <div class="pastoral-stack">
+      <p class="pastoral-filters__label">每週參與率（近 ${summary.weeks.length} 週）</p>
+      <ul class="pastoral-units">${summary.weeks.slice().reverse().map((week) => unitItem({
+        name: `${shortDay(week.weekStart)} 那週`,
+        size: `${week.questions} 題`,
+        pct: week.rate,
+        note: `${week.participants} 人參加`
+      })).join("")}</ul>
+    </div>
+    ${units.length ? `<div class="pastoral-stack">
+      <p class="pastoral-filters__label">各${SCOPE_LEVEL_LABEL[level]}參與率</p>
+      <ul class="pastoral-units">${units.map((unit) => unitItem({
+        name: unit.name,
+        size: `${unit.members} 人`,
+        pct: unit.rate,
+        note: `答對率 ${unit.correctRate === null ? "—" : `${unit.correctRate}%`}・從沒參加 ${unit.never.length} 人`,
+        alert: unit.never.length > 0
+      })).join("")}</ul>
+    </div>` : ""}
+    ${summary.never.length ? `<p class="pastoral-names">從沒參加：${namesLine(summary.never)}</p>` : ""}`;
+  paintBars(body);
+}
+
+// 小測驗：統一排程、每天發給全部小組；母體＝報名者，作答截止後才算；不看分數、不排名
+function renderDailyQuizStats(body) {
+  const roster = currentRoster();
+  const days = roster && roster.quiz && Number.isFinite(Number(roster.quiz.days)) ? Number(roster.quiz.days) : null;
+  const people = scopedRoster();
+  const summary = summarizeQuiz(people, { days });
+  if (!summary.enrolled) {
+    body.innerHTML = '<p class="pastoral-empty">這個範圍內還沒有人報名。</p>';
+    return;
+  }
+  if (!summary.published && !(days > 0)) {
+    body.innerHTML = '<p class="pastoral-empty">這個計畫還沒有作答截止的小測驗。</p>';
+    return;
+  }
+  const level = pickUnitLevel(people);
+  const units = compareQuizUnits(people, level, { compare: orgComparator, days });
+  body.innerHTML = `
+    <p class="pastoral-card__hint">母體是範圍內的報名者；當天的題作答截止後才算。不看分數、不排名。</p>
+    <div class="pastoral-tiles">
+      ${days === null ? "" : tile("已發", `${days} 天`)}
       ${tile("作答率", `${summary.rate}%`)}
-      ${tile("作答過", summary.answeredAny)}
+      ${tile("作答過", `${summary.answeredAny}／${summary.enrolled} 人`)}
       ${tile("從沒作答", summary.neverAnswered.length)}
     </div>
     ${units.length ? `<div class="pastoral-stack">
       <p class="pastoral-filters__label">各${SCOPE_LEVEL_LABEL[level]}作答率</p>
       <ul class="pastoral-units">${units.map((unit) => unitItem({
         name: unit.name,
-        size: `有發題 ${unit.eligible} 人`,
+        size: `報名 ${unit.enrolled} 人`,
         pct: unit.rate,
-        note: `從沒作答 ${unit.neverAnswered.length} 人`,
+        note: `從沒作答 ${unit.neverAnswered.length} 人${unit.unreached.length ? `・收不到題 ${unit.unreached.length} 人` : ""}`,
         alert: unit.neverAnswered.length > 0
       })).join("")}</ul>
     </div>` : ""}
-    ${summary.neverAnswered.length ? `<p class="pastoral-names">從沒作答：${namesLine(summary.neverAnswered)}</p>` : ""}`;
+    ${summary.neverAnswered.length ? `<p class="pastoral-names">從沒作答：${namesLine(summary.neverAnswered)}</p>` : ""}
+    ${summary.unreached.length ? `<p class="pastoral-names">沒有小組、收不到題（不算進作答率）：${namesLine(summary.unreached)}</p>` : ""}`;
   paintBars(body);
 }
 
