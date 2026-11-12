@@ -156,6 +156,7 @@ def main() -> int:
     if unchecked:
         print(f"{len(unchecked)} 章沒有音檔、沒檢查：{', '.join(unchecked[:20])}{'…' if len(unchecked) > 20 else ''}")
     if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps({
             "unchecked": unchecked,
             "chapters": len(items),

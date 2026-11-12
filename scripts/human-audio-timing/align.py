@@ -282,7 +282,8 @@ def main() -> int:
         args.dump_books.write_text(json.dumps(list(books.values()), ensure_ascii=False), encoding="utf-8")
         return 0
     work = args.work.resolve()
-    if REPO_ROOT in work.parents or work == REPO_ROOT:
+    # 只在 repo 裡執行時檢查（雲端只有這支腳本，REPO_ROOT 會變成 / 之類的上層資料夾）。
+    if BOOKS_FILE.exists() and (REPO_ROOT in work.parents or work == REPO_ROOT):
         raise SystemExit("--work 不能放在 repo 裡面")
     chapters = parse_chapters(args, books)
     if not chapters:
