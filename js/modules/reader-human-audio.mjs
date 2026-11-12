@@ -39,6 +39,14 @@ export function resolveReaderSpeechSource({ mode, version } = {}) {
   return { source: SPEECH_MODES.DEVICE, fallback: true };
 }
 
+// 朗讀暫停中、畫面要換成別章（卷章選單、書籤等不經上一章／下一章按鈕的路徑）時，
+// 收掉暫停中的朗讀，進度列才不會留著前一章的「已暫停・第 N 節」（#705）。
+// 同一章重新顯示（換譯本、改字級）保留暫停；朗讀自動接下一章（preserveAudio）不在這裡處理。
+export function shouldStopPausedAudioForRender({ paused, preserveAudio = false, pausedChapterKey, renderChapterKey } = {}) {
+  if (!paused || preserveAudio) return false;
+  return !pausedChapterKey || pausedChapterKey !== renderChapterKey;
+}
+
 export function buildFhlAudioInfoUrl(bookId, chapter) {
   return `${FHL_AUDIO_INFO_ENDPOINT}?version=0&bid=${Number(bookId)}&chap=${Number(chapter)}&gb=0`;
 }
