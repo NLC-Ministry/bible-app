@@ -137,9 +137,14 @@ def main() -> int:
     out_dir = (args.out or work / "out").resolve()
     total = flagged = 0
     items = []
+    unchecked: list[str] = []
     for path in sorted(out_dir.glob("*_*.json"), key=lambda p: tuple(int(x) for x in p.stem.split("_"))):
         data = json.loads(path.read_text(encoding="utf-8"))
         audio = work / "audio" / f"{data['book']}_{data['chapter']:03d}.mp3"
+        if not audio.exists():
+            # 雲端斷線重跑時，之前算完的章音檔已經不在：只能跳過自動檢查。
+            unchecked.append(f"{data['book']}:{data['chapter']}")
+            continue
         report = check_chapter(data, audio)
         total += report["verses"]
         flagged += len(report["suspects"])
@@ -148,8 +153,11 @@ def main() -> int:
         more = f"…等 {len(report['suspects'])} 節" if len(report["suspects"]) > 8 else ""
         print(f"{data['book']}:{data['chapter']}  {report['verses']} 節，可疑 {len(report['suspects'])}  {detail}{more}")
     print(f"合計 {total} 節，可疑 {flagged}（{flagged / max(1, total):.1%}）")
+    if unchecked:
+        print(f"{len(unchecked)} 章沒有音檔、沒檢查：{', '.join(unchecked[:20])}{'…' if len(unchecked) > 20 else ''}")
     if args.report:
         args.report.write_text(json.dumps({
+            "unchecked": unchecked,
             "chapters": len(items),
             "verses": total,
             "suspectVerses": flagged,

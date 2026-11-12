@@ -1,4 +1,6 @@
-"""把 align.py／check.py 包成一份 Kaggle 程式碼，在免費 GPU 上跑全部章節（#637）。
+"""把 align.py／check.py 包成一份 Kaggle 程式碼或 Colab notebook，在免費 GPU 上跑全部章節（#637）。
+
+Kaggle 要帳號完成手機驗證才有網路和 GPU；沒辦法驗證時用 --colab 產生 notebook，上傳到 Colab 全部執行。
 
 Kaggle 上沒有這個 repo，所以兩支腳本和書卷清單都直接嵌進產生出來的 run.py。
 音檔放 /kaggle/temp（不會被存成輸出），時間表、檢查報告和抽聽頁放 /kaggle/working（跑完可下載）。
@@ -48,28 +50,80 @@ subprocess.run([sys.executable, str(code / "check.py"), "--work", work, "--out",
 '''
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dir", required=True, type=Path, help="產生 run.py 與 kernel-metadata.json 的資料夾")
-    parser.add_argument("--kernel-id", required=True, help="<Kaggle 帳號>/<slug>")
-    parser.add_argument("--title", default="bible verse timing")
-    parser.add_argument("--chapters", nargs="*", help="書卷編號:章")
-    parser.add_argument("--all", action="store_true")
-    args = parser.parse_args()
-    if bool(args.all) == bool(args.chapters):
-        raise SystemExit("--all 和 --chapters 二選一")
-
-    args.dir.mkdir(parents=True, exist_ok=True)
-    books = args.dir / "books.json"
-    subprocess.run([sys.executable, str(HERE / "align.py"), "--work", str(args.dir), "--dump-books", str(books)], check=True)
+def bundle_files(tmp_dir: Path) -> str:
+    """align.py、check.py 和書卷清單包成一段 base64，雲端那邊再寫回檔案。"""
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    books = tmp_dir / "books.json"
+    subprocess.run([sys.executable, str(HERE / "align.py"), "--work", str(tmp_dir), "--dump-books", str(books)], check=True)
     files = {
         "align.py": (HERE / "align.py").read_text(encoding="utf-8"),
         "check.py": (HERE / "check.py").read_text(encoding="utf-8"),
         "books.json": books.read_text(encoding="utf-8"),
     }
     books.unlink()
-    encoded = base64.b64encode(json.dumps(files, ensure_ascii=False).encode("utf-8")).decode("ascii")
+    return base64.b64encode(json.dumps(files, ensure_ascii=False).encode("utf-8")).decode("ascii")
+
+
+def write_colab_notebook(target: Path, encoded: str, chapter_args: list[str]) -> None:
+    """Google Colab 版：不需要手機驗證。執行中分頁要開著、電腦不能睡；跑完自動下載 zip。"""
+    def code(source: str) -> dict:
+        return {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [], "source": source.strip("\n")}
+
+    chapters = " ".join(chapter_args)
+    # 時間表直接寫進雲端硬碟：Colab 中途斷線，重新「全部執行」會跳過已完成的章。
+    out = "/content/drive/MyDrive/bible-verse-timing/out"
+    cells = [
+        {"cell_type": "markdown", "metadata": {}, "source": (
+            "# 和合本朗讀逐節時間表（#637）\n"
+            "1. 上方選單「執行階段 → 全部執行」。\n"
+            "2. 跳出「允許存取 Google 雲端硬碟」時按允許：結果存在雲端硬碟的 `bible-verse-timing` 資料夾。\n"
+            "3. 執行中請保持這個分頁開著、電腦不要睡眠。斷線了就再按一次「全部執行」，會從斷掉的地方接著跑。\n"
+            "4. 跑完會自動下載 `bible-verse-timing.zip`。")},
+        code("!nvidia-smi --query-gpu=name,memory.total --format=csv\n"
+             "import torch, torchaudio\n"
+             "assert torch.cuda.is_available(), '沒有 GPU：選單「執行階段 → 變更執行階段類型」選 T4 GPU 後再全部執行'\n"
+             "assert hasattr(torchaudio.functional, 'forced_align'), f'torchaudio {torchaudio.__version__} 沒有 forced_align'\n"
+             "!pip install -q pypinyin \"soundfile>=0.12\""),
+        code("from google.colab import drive\ndrive.mount('/content/drive')"),
+        code("import base64, json\nfrom pathlib import Path\n"
+             f"FILES = json.loads(base64.b64decode(\"{encoded}\").decode(\"utf-8\"))\n"
+             "code = Path('/content/code'); code.mkdir(exist_ok=True)\n"
+             "for name, text in FILES.items():\n    (code / name).write_text(text, encoding='utf-8')\n"
+             "print('已寫入', sorted(FILES))"),
+        code(f"!python /content/code/align.py --work /content/work --out {out} --books /content/code/books.json --prefetch 4 {chapters}"),
+        code(f"!python /content/code/check.py --work /content/work --out {out} "
+             f"--report {out}/check-report.json --review {out}/review.html\n"
+             f"!cd {out}/.. && zip -qr /content/bible-verse-timing.zip out\n"
+             "from google.colab import files\nfiles.download('/content/bible-verse-timing.zip')"),
+    ]
+    target.write_text(json.dumps({
+        "nbformat": 4, "nbformat_minor": 0,
+        "metadata": {"accelerator": "GPU", "colab": {"gpuType": "T4", "provenance": []},
+                     "kernelspec": {"name": "python3", "display_name": "Python 3"}},
+        "cells": cells,
+    }, ensure_ascii=False), encoding="utf-8")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--dir", required=True, type=Path, help="產生 run.py 與 kernel-metadata.json 的資料夾")
+    parser.add_argument("--kernel-id", help="<Kaggle 帳號>/<slug>")
+    parser.add_argument("--colab", type=Path, help="改產生 Google Colab 用的 .ipynb 到這個路徑")
+    parser.add_argument("--title", default="bible verse timing")
+    parser.add_argument("--chapters", nargs="*", help="書卷編號:章")
+    parser.add_argument("--all", action="store_true")
+    args = parser.parse_args()
+    if bool(args.all) == bool(args.chapters):
+        raise SystemExit("--all 和 --chapters 二選一")
+    if bool(args.kernel_id) == bool(args.colab):
+        raise SystemExit("--kernel-id（Kaggle）和 --colab 二選一")
+
+    encoded = bundle_files(args.dir)
     chapter_args = ["--all"] if args.all else ["--chapters", *args.chapters]
+    if args.colab:
+        write_colab_notebook(args.colab, encoded, chapter_args)
+        print(f"已產生 {args.colab}")
+        return 0
     (args.dir / "run.py").write_text(RUNNER.format(files=encoded, chapter_args=json.dumps(chapter_args)), encoding="utf-8")
     (args.dir / "kernel-metadata.json").write_text(json.dumps({
         "id": args.kernel_id,
