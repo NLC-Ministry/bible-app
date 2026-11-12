@@ -1,5 +1,5 @@
 // 真人朗讀（#636）：播信望愛站的和合本華語朗讀音檔，和裝置語音（speechSynthesis）並存。
-// 一章一個 mp3、沒有逐節時間，所以真人朗讀不標示念到哪一節（逐節同步見 #637）。
+// 一章一個 mp3；逐節時間另外由 reader-audio-timing.mjs 提供（#637），沒有時間表的章就整章播、不標示節。
 // 音檔在 media.fhl.net、沒有 CORS，只能交給 <audio> 串流；不進 Service Worker 快取。
 
 export const SPEECH_MODES = Object.freeze({ DEVICE: "device", HUMAN: "human" });
@@ -16,6 +16,7 @@ export const HUMAN_AUDIO_COPY = Object.freeze({
   started: "開始真人朗讀",
   startsAtChapterStart: "真人朗讀會從章首開始，可拖曳進度條調整位置",
   paused: "朗讀已暫停，再按一次會從暫停的地方繼續",
+  pausedAtVerse: "朗讀已暫停，再按一次會繼續；點別的節就從那一節開始",
   unavailable: "真人朗讀需要網路，可改用裝置語音",
   fallbackNotice: "此版本沒有真人朗讀，改用裝置語音",
   switchToCuv: "改看和合本聽真人朗讀",
@@ -36,6 +37,14 @@ export function resolveReaderSpeechSource({ mode, version } = {}) {
   if (normalizeSpeechMode(mode) !== SPEECH_MODES.HUMAN) return { source: SPEECH_MODES.DEVICE, fallback: false };
   if (supportsHumanAudio(version)) return { source: SPEECH_MODES.HUMAN, fallback: false };
   return { source: SPEECH_MODES.DEVICE, fallback: true };
+}
+
+// 朗讀暫停中、畫面要換成別章（卷章選單、書籤等不經上一章／下一章按鈕的路徑）時，
+// 收掉暫停中的朗讀，進度列才不會留著前一章的「已暫停・第 N 節」（#705）。
+// 同一章重新顯示（換譯本、改字級）保留暫停；朗讀自動接下一章（preserveAudio）不在這裡處理。
+export function shouldStopPausedAudioForRender({ paused, preserveAudio = false, pausedChapterKey, renderChapterKey } = {}) {
+  if (!paused || preserveAudio) return false;
+  return !pausedChapterKey || pausedChapterKey !== renderChapterKey;
 }
 
 export function buildFhlAudioInfoUrl(bookId, chapter) {
@@ -79,6 +88,7 @@ export function createHumanAudioPlayer({
   let loadedKey = null;
   // start()／stop() 都會換代；還在等網址的 start() 發現換代了就不播。
   let generation = 0;
+  let pendingSeek = null;
   const urlCache = new Map();
 
   const keyOf = (bookId, chapter) => `${Number(bookId)}:${Number(chapter)}`;
@@ -88,11 +98,33 @@ export function createHumanAudioPlayer({
     audio = createAudio();
     audio.preload = "auto";
     audio.addEventListener("timeupdate", () => { if (loadedKey) onTimeUpdate(); });
-    audio.addEventListener("loadedmetadata", () => { if (loadedKey) onTimeUpdate(); });
+    audio.addEventListener("loadedmetadata", () => {
+      applyPendingSeek();
+      if (loadedKey) onTimeUpdate();
+    });
     audio.addEventListener("ended", () => { if (loadedKey) onEnded(); });
     // stop() 拿掉 src 時，有些瀏覽器會丟 error 事件；那時 loadedKey 已清空，不算播放失敗。
     audio.addEventListener("error", () => { if (loadedKey) onError(); });
     return audio;
+  }
+
+  // 換 src 後馬上設 currentTime，瀏覽器會當成「從這裡開始播」；有些瀏覽器（舊版 iOS Safari）
+  // 在拿到長度前會忽略它，所以 loadedmetadata 時再檢查一次。play() 不等這個，維持在使用者按下的同一輪。
+  function seekWhenReady(el, startAt, token) {
+    const target = Number(startAt);
+    if (!Number.isFinite(target) || target <= 0) return;
+    try { el.currentTime = target; } catch (_e) {}
+    pendingSeek = { target, token };
+  }
+
+  function applyPendingSeek() {
+    if (!pendingSeek || !audio) return;
+    const { target, token } = pendingSeek;
+    pendingSeek = null;
+    if (token !== generation) return;
+    if (Math.abs((Number(audio.currentTime) || 0) - target) > 0.5) {
+      try { audio.currentTime = target; } catch (_e) {}
+    }
   }
 
   function resolveUrl(bookId, chapter) {
@@ -120,7 +152,8 @@ export function createHumanAudioPlayer({
     prefetch(bookId, chapter) {
       resolveUrl(bookId, chapter).catch(() => {});
     },
-    async start({ bookId, chapter, rate }) {
+    // startAt：從第幾秒開始（從標記的節開始播，#637）。
+    async start({ bookId, chapter, rate, startAt = 0 }) {
       const token = ++generation;
       const url = await resolveUrl(bookId, chapter);
       if (token !== generation) return false;
@@ -128,6 +161,7 @@ export function createHumanAudioPlayer({
       loadedKey = keyOf(bookId, chapter);
       el.src = url;
       el.playbackRate = clampHumanAudioRate(rate);
+      seekWhenReady(el, startAt, token);
       await el.play();
       return token === generation;
     },
