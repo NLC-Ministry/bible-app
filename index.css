@@ -3389,12 +3389,18 @@ body:not(.dark-theme) .settings-row-btn:hover {
   line-height: 1.6;
 }
 
-.login-method-hint {
+.login-method-hint,
+.login-retry-hint {
   margin: -1.5rem 0 1rem;
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.6;
   color: var(--text-primary);
+}
+
+/* #707：兩行提示都在時，只有第一行往上收進副標的下邊距。 */
+.login-retry-hint:not(.hidden) + .login-method-hint {
+  margin-top: 0;
 }
 
 .login-gate-refresh-actions {

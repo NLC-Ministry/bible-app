@@ -50,6 +50,8 @@ const auth = {
     continuation: "nlc_auth_continuation",
     continuationVersion: "nlc_auth_continuation_version",
     planRecoveryFlow: "nlc_auth_plan_recovery",
+    // #707：登入開始的時間，回到 App 時用來判斷「剛才的登入沒回來」（js/login-retry-hint.mjs）。
+    flowStartedAt: "nlc_auth_flow_started_at",
     memberContext: "nlc_member_context",
     supabaseAccessToken: "nlc_supabase_access_token",
     supabaseExpiresAt: "nlc_supabase_expires_at",
@@ -251,7 +253,8 @@ const auth = {
       this.keys.continuation,
       this.keys.continuationVersion,
       this.keys.flowId,
-      this.keys.planRecoveryFlow
+      this.keys.planRecoveryFlow,
+      this.keys.flowStartedAt
     ].forEach((key) => {
       sessionStorage.removeItem(key);
       localStorage.removeItem(key);
@@ -535,6 +538,8 @@ const auth = {
     this._setFlowItem(this.keys.continuationVersion, String(AUTH_POLICY_VERSION));
     this._setFlowItem(this.keys.flowId, safeContinuation.flowId);
     if (planRecovery) this._setFlowItem(this.keys.planRecoveryFlow, "1");
+    // #707：找回計畫的登入有自己的取消處理，不記。
+    else this._setFlowItem(this.keys.flowStartedAt, String(Date.now()));
 
     const redirectUri = this._getRedirectUri();
     const endpoints = await this._getEndpoints();

@@ -96,6 +96,10 @@ window.APP_COPY = {
     socialAndPassword: "上次在這台裝置登入的帳號是 {account}。請按 {social} 登入，或輸入{credential}和密碼，才看得到你的計畫。",
     passwordOnly: "上次在這台裝置登入的帳號是 {account}。請輸入{credential}和密碼登入，才看得到你的計畫。",
   },
+  // #707：剛才開始的登入沒有回來（多半卡在 Logto 的「未找到會話」）。
+  loginRetryHint: {
+    text: "剛才沒有登入成功嗎？再按一次「登入」就可以了。登入頁如果出現「未找到會話」，也是這樣處理。",
+  },
   memberHub: {
     cardTitle: "新生命會員中心",
     cardBody: "姓名、牧區與教會身份由會員中心統一管理，更新後自動同步至本 app。",
