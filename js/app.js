@@ -38,6 +38,7 @@ import { initOfflineBibleControls } from './pwa/OfflineBibleControls.js';
 import { SupabaseRepository } from './pwa/SupabaseRepository.js';
 import { clearBadge, requestNotificationPermission } from '../lib/services/badge-service.ts';
 import { installConsoleErrorCapture } from './diagnostics/report-diagnostics.mjs';
+import { refreshLoginRetryHint } from './login-retry-hint.mjs';
 
 window.__bootMark?.("core-imports-done");
 // 回報時附上最近的 console.error（#548）；window error／unhandledrejection 由 index.html 收
@@ -1051,6 +1052,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   document.addEventListener("visibilitychange", () => onAppForeground());
   window.addEventListener("pageshow", (e) => { if (e && e.persisted) onAppForeground(); });
+  // #707：從 Logto 登入頁按返回、頁面由 bfcache 還原時不會重跑開機，登入卡要自己重新判斷提示。
+  window.addEventListener("pageshow", (e) => {
+    if (e && e.persisted) refreshLoginRetryHint(document.getElementById("login-gate"));
+  });
   // auth.js fires this the moment getValidAccessToken() gives up (tokens already
   // cleared). Surface the login card immediately, not only on the next foreground.
   window.addEventListener("auth:session-expired", () => surfaceLoginCardIfSessionLost());

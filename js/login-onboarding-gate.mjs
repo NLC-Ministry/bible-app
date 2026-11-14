@@ -3,6 +3,7 @@ import {
   shouldGateInteractiveAuth
 } from "./auth-environment.js";
 import { renderLoginMethodHint } from "./login-method-memory.mjs";
+import { renderLoginRetryHint } from "./login-retry-hint.mjs";
 
 export const BIBLE_HUB_CONTINUE_RETURN_TO = "/?resume=plan";
 
@@ -137,5 +138,7 @@ export function applyLoginGateView({
   if (statusEl) statusEl.classList.add("hidden");
   // #677：只有要會友登入的畫面才提醒上次的方式。
   renderLoginMethodHint(loginGate, { visible: copy.mode === "sso", ...(storage ? { storage } : {}) });
+  // #707：剛才的登入沒回來（例如卡在 Logto 的「未找到會話」）時，提醒再按一次登入。
+  renderLoginRetryHint(loginGate, { visible: copy.mode === "sso", ...(storage ? { storage } : {}) });
   return copy;
 }
