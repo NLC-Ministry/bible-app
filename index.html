@@ -83,7 +83,8 @@
         "nlc_member_context", "nlc_supabase_access_token", "nlc_supabase_expires_at", "nlc_supabase_profile",
         "nlc_edge_session_expires_at", "nlc_profile_locked_fields", "nlc_oidc_metadata",
         "nlc_auth_state", "nlc_auth_verifier", "nlc_auth_nonce", "nlc_auth_flow_id",
-        "nlc_auth_continuation", "nlc_auth_continuation_version", "nlc_auth_plan_recovery"
+        "nlc_auth_continuation", "nlc_auth_continuation_version", "nlc_auth_plan_recovery",
+        "nlc_auth_flow_started_at"
       ];
       function relogin() {
         for (var i = 0; i < LOGIN_KEYS.length; i++) {
@@ -1775,6 +1776,7 @@
       </div>
       <h2 class="login-title">新生命聖經速讀計畫</h2>
       <p class="login-subtitle" id="login-gate-subtitle">跟弟兄姊妹一起速讀聖經。登入後，換裝置也能接著讀。第一次使用也從這裡開始。</p>
+      <p class="login-retry-hint hidden" data-login-retry-hint role="status"></p>
       <p class="login-method-hint hidden" data-login-method-hint role="note"></p>
 
       <!-- Primary: sign in (church SSO) -->
