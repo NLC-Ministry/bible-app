@@ -1,7 +1,7 @@
 // 小測驗／大測驗共用的「題型一～五」定義：資料形狀、渲染、DOM 綁定、正確性比對。
 // 純函式模組，不依賴 window/state，方便兩邊呼叫也方便單元測試。
 
-import { questionImageHtml } from "./quiz-image.mjs";
+import { getOptionImages, questionImageHtml } from "./quiz-image.mjs";
 //
 // 題目正規化後的形狀（跟 exam_questions.payload / answer_key 同一套慣例）：
 //   { id, type, payload: {...}, answerKey, explanation, verseRef }
@@ -278,14 +278,35 @@ export function shouldShuffleOptions(payload) {
 }
 
 // 顯示順序打亂，但 value 仍是原本的選項索引——作答格式、判分、檢討畫面都不受影響。
-function renderOptionsList(id, options, multiple, random, shuffle = true) {
+// images（#709，getOptionImages 的結果）：有任何選項帶圖就整題改成圖卡，點圖卡＝選取；
+// 作答時圖卡不顯示選項文字（認圖題才不會洩漏答案），沒有圖的選項卡片才顯示文字。
+// 放大鈕放在 label 外面，點它只放大、不會選取。
+function renderOptionsList(id, options, multiple, random, shuffle = true, images = null) {
   const inputType = multiple ? "checkbox" : "radio";
   const name = multiple ? `q-${id}[]` : `q-${id}`;
   const indexed = (options || []).map((option, optionIndex) => ({ option, optionIndex }));
-  return `<div class="daily-quiz-options">
-    ${(shuffle ? shuffleItems(indexed, random) : indexed).map(({ option, optionIndex }) => `
-      <label><input type="${inputType}" name="${escapeHtml(name)}" value="${optionIndex}"><span>${escapeHtml(option)}</span></label>
+  const ordered = shuffle ? shuffleItems(indexed, random) : indexed;
+  const input = optionIndex => `<input type="${inputType}" name="${escapeHtml(name)}" value="${optionIndex}">`;
+  if (!images) {
+    return `<div class="daily-quiz-options">
+    ${ordered.map(({ option, optionIndex }) => `
+      <label>${input(optionIndex)}<span>${escapeHtml(option)}</span></label>
     `).join("")}
+  </div>`;
+  }
+  return `<div class="daily-quiz-options daily-quiz-options--images">
+    ${ordered.map(({ option, optionIndex }, position) => {
+      const image = images[optionIndex];
+      const alt = `圖片選項 ${position + 1}`;
+      return image
+        ? `<div class="daily-quiz-option-card">
+        <label>${input(optionIndex)}<span class="daily-quiz-option-card__media"><img src="${escapeHtml(image.src)}" alt="${alt}" loading="lazy" decoding="async"></span></label>
+        <button type="button" class="daily-quiz-option-card__zoom" data-quiz-image-open data-quiz-image-fit data-quiz-image-src="${escapeHtml(image.src)}" data-quiz-image-alt="${alt}" aria-label="放大${alt}">放大</button>
+      </div>`
+        : `<div class="daily-quiz-option-card daily-quiz-option-card--text">
+        <label>${input(optionIndex)}<span class="daily-quiz-option-card__text">${escapeHtml(option)}</span></label>
+      </div>`;
+    }).join("")}
   </div>`;
 }
 
@@ -345,9 +366,9 @@ export function renderQuestionFieldsetHtml(question, index, { shuffleSeed } = {}
           <label><input type="radio" name="q-${escapeHtml(id)}" value="false"><span>錯</span></label>
         </div>`;
       case "single":
-        return renderOptionsList(id, payload.options, false, random, shouldShuffleOptions(payload));
+        return renderOptionsList(id, payload.options, false, random, shouldShuffleOptions(payload), getOptionImages(payload));
       case "multiple":
-        return renderOptionsList(id, payload.options, true, random, shouldShuffleOptions(payload));
+        return renderOptionsList(id, payload.options, true, random, shouldShuffleOptions(payload), getOptionImages(payload));
       case "matching": {
         // 連線用的 SVG 不寫死在樣板裡，改由 bindQuestionFieldset 用
         // document.createElementNS 動態插入（跟 exam.js 連連看同一招）——

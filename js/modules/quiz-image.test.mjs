@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { getQuestionImage, questionImageHtml, installQuizImageViewer, isUploadedQuizImageSrc, quizImagePublicUrl } from "./quiz-image.mjs";
+import { getQuestionImage, getOptionImages, questionImageHtml, installQuizImageViewer, isUploadedQuizImageSrc, quizImagePublicUrl } from "./quiz-image.mjs";
 import { normalizeQuestion, renderQuestionFieldsetHtml, bindQuestionFieldset, readResponseFromFieldset } from "./quiz-question-types.mjs";
 import { renderQuestionReviewHtml } from "./quiz-review.mjs";
 
@@ -122,5 +122,106 @@ describe("question image in the shared renderers", () => {
     expect(viewers[0].querySelector("img").getAttribute("src")).toBe(IMAGE.src);
     viewers[0].querySelector("[data-quiz-image-close]").click();
     expect(document.querySelector(".quiz-image-viewer")).toBeNull();
+  });
+});
+
+// #709：單選／多選的選項可以是圖片（payload.optionImages 和 options 一樣長）
+describe("option images (#709)", () => {
+  const OPTIONS = ["銅海", "燈臺", "陳設餅桌", "香壇"];
+  const IMAGES = OPTIONS.map((_, index) => ({ src: `assets/quiz/option-${index + 1}.webp` }));
+  const imageQuestion = (type = "single", optionImages = IMAGES, extra = {}) => normalizeQuestion({
+    id: `img-${type}`, type,
+    payload: { stem: "哪一張是燈臺？", options: OPTIONS, optionImages, ...extra },
+    answerKey: type === "single" ? 1 : [1]
+  });
+  beforeEach(() => { document.body.innerHTML = ""; });
+
+  describe("getOptionImages", () => {
+    it("returns one entry per option, null where an option has no (valid) image", () => {
+      expect(getOptionImages({ options: OPTIONS, optionImages: IMAGES })).toEqual(IMAGES.map(image => ({ src: image.src })));
+      expect(getOptionImages({ options: OPTIONS, optionImages: [IMAGES[0], null, { src: "https://evil.example/a.webp" }, { src: "javascript:alert(1)" }] }))
+        .toEqual([{ src: IMAGES[0].src }, null, null, null]);
+    });
+
+    it("pads a short list and ignores extra entries", () => {
+      expect(getOptionImages({ options: OPTIONS, optionImages: [IMAGES[0]] })).toEqual([{ src: IMAGES[0].src }, null, null, null]);
+      expect(getOptionImages({ options: ["a"], optionImages: IMAGES })).toEqual([{ src: IMAGES[0].src }]);
+    });
+
+    it("is null when no option has a valid image", () => {
+      expect(getOptionImages({ options: OPTIONS })).toBeNull();
+      expect(getOptionImages({ options: OPTIONS, optionImages: "x" })).toBeNull();
+      expect(getOptionImages({ options: OPTIONS, optionImages: [null, { src: "/etc/passwd.png" }] })).toBeNull();
+      expect(getOptionImages(null)).toBeNull();
+    });
+  });
+
+  it("renders image cards without the option text, and tapping a card selects it", () => {
+    ["single", "multiple"].forEach(type => {
+      document.body.innerHTML = renderQuestionFieldsetHtml(imageQuestion(type), 0, { shuffleSeed: "member-1" });
+      const fieldset = document.querySelector("fieldset");
+      const cards = fieldset.querySelectorAll(".daily-quiz-option-card");
+      expect(cards).toHaveLength(4);
+      expect(fieldset.querySelector(".daily-quiz-options--images")).not.toBeNull();
+      cards.forEach(card => {
+        const input = card.querySelector("input");
+        expect(input.type).toBe(type === "single" ? "radio" : "checkbox");
+        expect(card.querySelector("label img").getAttribute("src")).toBe(IMAGES[Number(input.value)].src);
+        // 作答時不顯示選項文字（認圖題才不會洩漏答案）
+        expect(card.textContent).not.toContain(OPTIONS[Number(input.value)]);
+      });
+
+      let response;
+      bindQuestionFieldset(fieldset, type, value => { response = value; });
+      const lamp = Array.from(cards).find(card => card.querySelector("input").value === "1");
+      lamp.querySelector("label img").click();
+      expect(response).toEqual(type === "single" ? 1 : [1]);
+      expect(readResponseFromFieldset(fieldset, type)).toEqual(type === "single" ? 1 : [1]);
+    });
+  });
+
+  it("the zoom button opens the viewer without selecting the option", () => {
+    installQuizImageViewer();
+    document.body.innerHTML = renderQuestionFieldsetHtml(imageQuestion(), 0);
+    const fieldset = document.querySelector("fieldset");
+    const card = fieldset.querySelector(".daily-quiz-option-card");
+    const value = Number(card.querySelector("input").value);
+    card.querySelector("[data-quiz-image-open]").click();
+    expect(fieldset.querySelector("input:checked")).toBeNull();
+    const viewer = document.querySelector(".quiz-image-viewer");
+    expect(viewer.querySelector("img").getAttribute("src")).toBe(IMAGES[value].src);
+    viewer.querySelector("[data-quiz-image-close]").click();
+  });
+
+  it("an option without an image shows its text inside the card", () => {
+    document.body.innerHTML = renderQuestionFieldsetHtml(imageQuestion("single", [IMAGES[0], null, IMAGES[2], IMAGES[3]]), 0);
+    const card = Array.from(document.querySelectorAll(".daily-quiz-option-card")).find(item => item.querySelector("input").value === "1");
+    expect(card.querySelector("img")).toBeNull();
+    expect(card.querySelector("[data-quiz-image-open]")).toBeNull();
+    expect(card.textContent).toContain("燈臺");
+  });
+
+  it("keeps the authored order when shuffleOptions is false", () => {
+    document.body.innerHTML = renderQuestionFieldsetHtml(imageQuestion("single", IMAGES, { shuffleOptions: false }), 0, { shuffleSeed: "member-2" });
+    expect(Array.from(document.querySelectorAll(".daily-quiz-option-card input")).map(input => input.value)).toEqual(["0", "1", "2", "3"]);
+  });
+
+  it("questions without option images keep the plain text list", () => {
+    document.body.innerHTML = renderQuestionFieldsetHtml(imageQuestion("single", null), 0);
+    expect(document.querySelector(".daily-quiz-option-card")).toBeNull();
+    expect(document.querySelector(".daily-quiz-options--images")).toBeNull();
+  });
+
+  it("the review shows each option's thumbnail with its text", () => {
+    const html = renderQuestionReviewHtml(imageQuestion(), { response: 2, result: "wrong" });
+    document.body.innerHTML = html;
+    const items = document.querySelectorAll(".exam-result__choices li");
+    expect(items).toHaveLength(4);
+    items.forEach((item, index) => {
+      expect(item.querySelector("img").getAttribute("src")).toBe(IMAGES[index].src);
+      expect(item.textContent).toContain(OPTIONS[index]);
+    });
+    expect(items[1].classList.contains("is-right")).toBe(true);
+    expect(items[2].classList.contains("is-mine")).toBe(true);
   });
 });

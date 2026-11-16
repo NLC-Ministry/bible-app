@@ -5,6 +5,8 @@
 // 手機放大檢視需要至少 960px 寬（quiz-image.mjs），所以寬度上限抓 2000px、品質逐步往下降到放得進大小上限。
 
 export const QUIZ_IMAGE_MAX_WIDTH = 2000;
+// 選項圖片（#709）一題有好幾張、手機上一張只佔半個螢幕寬，縮小一點省會友的流量
+export const QUIZ_OPTION_IMAGE_MAX_WIDTH = 1000;
 // 和 admin-api 的 MAX_QUIZ_IMAGE_BYTES、quiz-images bucket 的 file_size_limit 同值
 export const QUIZ_IMAGE_MAX_BYTES = 716800;
 export const QUIZ_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
@@ -56,7 +58,7 @@ async function loadImage(file) {
 }
 
 /** 選到的檔案 → { mime, base64, w, h }；不是圖片或縮不到上限以內就丟錯（message 是給管理員看的中文）。 */
-export async function prepareQuizImage(file) {
+export async function prepareQuizImage(file, { maxWidth = QUIZ_IMAGE_MAX_WIDTH } = {}) {
   if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type || "")) {
     throw new Error("圖片只接受 PNG、JPEG、WebP。");
   }
@@ -66,7 +68,7 @@ export async function prepareQuizImage(file) {
   } catch (_) {
     throw new Error("這張圖片打不開，請換一張。");
   }
-  const { w, h } = fitWithin(source.width, source.height);
+  const { w, h } = fitWithin(source.width, source.height, maxWidth);
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -83,10 +85,10 @@ export async function prepareQuizImage(file) {
   throw new Error("圖片太大，縮小後還是超過 700 KB，請換一張。");
 }
 
-/** 選檔 → 縮圖 → 上傳；成功回傳檔名，失敗丟錯。 */
-export async function uploadQuizImageFile(file) {
+/** 選檔 → 縮圖 → 上傳；成功回傳檔名，失敗丟錯。options.maxWidth 同 prepareQuizImage。 */
+export async function uploadQuizImageFile(file, options) {
   if (!uploader) throw new Error("這裡不能上傳圖片，請到系統管理後台操作。");
-  const image = await prepareQuizImage(file);
+  const image = await prepareQuizImage(file, options);
   const reply = await uploader(image);
   if (!reply || reply.ok !== true || typeof reply.name !== "string") {
     throw new Error(reply?.message || "上傳失敗，請再試一次。");

@@ -40,8 +40,8 @@ import {
 import {
   QUIZ_GENERATION_STAGES, quizGenerationElapsedSeconds, renderQuizGenerationErrorHtml, renderQuizGenerationProgressHtml
 } from "./quiz-generation-status.mjs";
-import { getQuestionImage, questionImageHtml, installQuizImageViewer, quizImagePublicUrl } from "./quiz-image.mjs";
-import { canUploadQuizImage, QUIZ_IMAGE_ACCEPT, uploadQuizImageFile } from "./quiz-image-upload.mjs";
+import { getOptionImages, getQuestionImage, questionImageHtml, installQuizImageViewer, quizImagePublicUrl } from "./quiz-image.mjs";
+import { canUploadQuizImage, QUIZ_IMAGE_ACCEPT, QUIZ_OPTION_IMAGE_MAX_WIDTH, uploadQuizImageFile } from "./quiz-image-upload.mjs";
 import { mountDailyQuizTrial } from "./daily-quiz-trial.mjs";
 import {
   ATTEMPT_STATUS_LABELS,
@@ -1552,11 +1552,20 @@ function setAdminLightningQuizFieldsetImage(fieldset, image) {
 function bindAdminLightningQuizImageSection(fieldset) {
   if (!fieldset || !canUploadQuizImage()) return;
   fieldset.addEventListener('click', event => {
+    const optionRow = event.target.closest('[data-option-row]');
     if (event.target.closest('[data-lq-image-pick]')) {
       fieldset.querySelector('[data-lq-image-file]')?.click();
     } else if (event.target.closest('[data-lq-image-remove]')) {
       setAdminLightningQuizFieldsetImage(fieldset, null);
+    } else if (optionRow && event.target.closest('[data-option-image-pick]')) {
+      optionRow.querySelector('[data-option-image-file]')?.click();
+    } else if (optionRow && event.target.closest('[data-option-image-remove]')) {
+      setAdminQuizOptionRowImage(optionRow, null);
     }
+  });
+  fieldset.addEventListener('change', event => {
+    const optionInput = event.target.closest('[data-option-image-file]');
+    if (optionInput) uploadAdminQuizOptionImage(optionInput.closest('[data-option-row]'), optionInput);
   });
   fieldset.addEventListener('change', async event => {
     const input = event.target.closest('[data-lq-image-file]');
@@ -1579,6 +1588,40 @@ function bindAdminLightningQuizImageSection(fieldset) {
       showToast(error?.message || '上傳失敗，請再試一次。');
     }
   });
+}
+
+// 選項圖片（#709）：目前的圖網址存在選項列的 data-option-image 上（跟題目附圖一樣），
+// 刪除／新增選項列時圖片自然跟著自己那一列；存檔時才組成 payload.optionImages。
+function setAdminQuizOptionRowImage(row, image) {
+  if (!row) return;
+  if (image?.src) row.dataset.optionImage = image.src;
+  else delete row.dataset.optionImage;
+  const slot = row.querySelector('[data-option-image-slot]');
+  if (slot) slot.outerHTML = renderAdminQuizOptionImageSlotHtml(image);
+}
+
+function readAdminQuizOptionRowImage(row) {
+  const src = row?.dataset.optionImage;
+  return src ? { src } : null;
+}
+
+async function uploadAdminQuizOptionImage(row, input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!row || !file) return;
+  const pick = row.querySelector('[data-option-image-pick]');
+  const pickLabel = pick?.textContent;
+  if (pick) { pick.disabled = true; pick.textContent = '上傳中…'; }
+  try {
+    const name = await uploadQuizImageFile(file, { maxWidth: QUIZ_OPTION_IMAGE_MAX_WIDTH });
+    const src = quizImagePublicUrl(name);
+    if (!src) throw new Error('上傳成功，但組不出圖片網址，請重新整理後再試。');
+    setAdminQuizOptionRowImage(row, { src });
+    showToast('圖片已上傳，記得按「儲存」。');
+  } catch (error) {
+    if (pick?.isConnected) { pick.disabled = false; pick.textContent = pickLabel; }
+    showToast(error?.message || '上傳失敗，請再試一次。');
+  }
 }
 
 // #687：單選／多選可以關掉「打亂選項順序」（例如有「以上皆是」、選項有先後順序）。
@@ -1605,13 +1648,13 @@ function renderAdminLightningQuizQuestionFieldsetHtml(question) {
   const normalized = question && question.type ? question : adminQuizCustomDefaultQuestion('single');
   const type = normalized.type || 'single';
   const image = getQuestionImage(normalized.payload);
-  return `<fieldset class="admin-daily-quiz-question admin-quiz-custom-question" data-question-type="${type}" ${image ? `data-lq-image="${adminQuizEscape(JSON.stringify(normalized.payload.image))}"` : ''}>
+  return `<fieldset class="admin-daily-quiz-question admin-quiz-custom-question" data-question-type="${type}" data-lq-option-images ${image ? `data-lq-image="${adminQuizEscape(JSON.stringify(normalized.payload.image))}"` : ''}>
     <label>題型<select class="form-control" data-field="type">
       ${Object.entries(ADMIN_QUIZ_CUSTOM_TYPE_LABELS).map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('')}
     </select></label>
     <label>題目<textarea class="form-control" data-field="stem" rows="2" placeholder="請輸入題目內容">${adminQuizEscape(normalized.payload?.stem || '')}</textarea></label>
     ${renderAdminLightningQuizImageSectionHtml(image)}
-    <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized)}</div>
+    <div data-question-body>${renderAdminQuizCustomQuestionBodyHtml(normalized, { optionImages: true })}</div>
     ${renderAdminLightningQuizShuffleToggleHtml(type, normalized.payload)}
     <label>詳解（作答結束後才顯示，可留白）<textarea class="form-control" data-field="explanation" rows="2" placeholder="例如：步驟名稱、經文出處">${adminQuizEscape(normalized.explanation || '')}</textarea></label>
   </fieldset>`;
@@ -1649,15 +1692,18 @@ function collectAdminLightningQuizQuestionContent(fieldset) {
   if (type === 'single' || type === 'multiple') {
     const rows = Array.from(fieldset.querySelectorAll('[data-option-row]'));
     const options = rows.map(row => row.querySelector('[data-option-text]')?.value.trim() || '');
+    // 選項圖片（#709）：有任何一張才寫 optionImages，和 options 一樣長
+    const images = rows.map(readAdminQuizOptionRowImage);
+    const payload = images.some(Boolean) ? { stem, options, optionImages: images } : { stem, options };
     if (type === 'single') {
       const correctIndex = rows.findIndex(row => row.querySelector('[data-option-correct]')?.checked);
-      return { type, payload: { stem, options }, answerKey: correctIndex };
+      return { type, payload, answerKey: correctIndex };
     }
     const answerKey = rows.reduce((acc, row, optionIndex) => {
       if (row.querySelector('[data-option-correct]')?.checked) acc.push(optionIndex);
       return acc;
     }, []);
-    return { type, payload: { stem, options }, answerKey };
+    return { type, payload, answerKey };
   }
   if (type === 'matching') {
     // 雲柱配對題可以多對一（#588）：右邊文字相同的列合併成同一個右邊點
@@ -2149,6 +2195,7 @@ function openAdminLightningQuizDetail(question) {
   const correctionNote = lightningAnswerCorrectionNote(question);
   const payload = question.payload || {};
   const options = Array.isArray(payload.options) ? payload.options : [];
+  const optionImages = getOptionImages(payload);
   installQuizImageViewer();
   if (title) title.textContent = formatAdminLightningQuizWhen(question);
   body.innerHTML = `
@@ -2158,7 +2205,13 @@ function openAdminLightningQuizDetail(question) {
     </div>
     <p class="admin-lq-detail__stem">${escapeHTML(payload.stem || '')}</p>
     ${questionImageHtml(payload)}
-    ${options.length ? `<ol class="admin-lq-detail__options" type="A">${options.map(option => `<li>${escapeHTML(option)}</li>`).join('')}</ol>` : ''}
+    ${options.length ? `<ol class="admin-lq-detail__options" type="A">${options.map((option, index) => {
+      const optionImage = optionImages?.[index];
+      const thumb = optionImage
+        ? `<button type="button" class="admin-lq-detail__option-thumb" data-quiz-image-open data-quiz-image-fit data-quiz-image-src="${escapeHTML(optionImage.src)}" data-quiz-image-alt="${escapeHTML(option)}" aria-label="放大「${escapeHTML(option)}」的圖片"><img src="${escapeHTML(optionImage.src)}" alt="${escapeHTML(option)}"></button>`
+        : '';
+      return `<li>${thumb}<span>${escapeHTML(option)}</span></li>`;
+    }).join('')}</ol>` : ''}
     <p class="admin-lq-detail__answer">正解：<strong>${escapeHTML(formatResponseForDisplay(question.questionType, payload, question.answerKey))}</strong></p>
     ${correctionNote ? `<p class="admin-daily-quiz-note" data-lq-answer-corrected>${escapeHTML(correctionNote)}</p>` : ''}
     ${question.explanation ? `<p class="admin-lq-detail__explanation">詳解：${escapeHTML(question.explanation)}</p>` : ''}
@@ -4149,11 +4202,28 @@ function adminQuizCustomDefaultQuestion(type) {
   }
 }
 
-function renderAdminQuizCustomOptionRowHtml(text = '', checked = false) {
-  return `<div class="admin-quiz-custom-option-row" data-option-row>
+// 選項圖片（#709）只有雲柱編輯器會開（imageSlot）；小測驗共用這個選項列，但不帶圖。
+// 不能上傳的地方只顯示既有的圖，存檔時照樣帶回。
+function renderAdminQuizOptionImageSlotHtml(image) {
+  const canUpload = canUploadQuizImage();
+  if (!image && !canUpload) return '';
+  const actions = canUpload ? `<button type="button" class="secondary-btn" data-option-image-pick>${image ? '更換圖片' : '加入圖片'}</button>
+    ${image ? '<button type="button" class="secondary-btn" data-option-image-remove>移除圖片</button>' : ''}
+    <input type="file" accept="${QUIZ_IMAGE_ACCEPT}" data-option-image-file hidden>` : '';
+  return `<div class="admin-quiz-option-image" data-option-image-slot>
+    ${image ? `<img src="${adminQuizEscape(image.src)}" alt="">` : ''}
+    ${actions}
+  </div>`;
+}
+
+function renderAdminQuizCustomOptionRowHtml(text = '', checked = false, { imageSlot = false, image = null } = {}) {
+  const slot = imageSlot ? renderAdminQuizOptionImageSlotHtml(image) : '';
+  const imageAttr = imageSlot && image ? ` data-option-image="${adminQuizEscape(image.src)}"` : '';
+  return `<div class="admin-quiz-custom-option-row${imageSlot ? ' admin-quiz-custom-option-row--image' : ''}" data-option-row${imageAttr}>
     <input type="checkbox" data-option-correct ${checked ? 'checked' : ''}>
     <input class="form-control" data-option-text value="${adminQuizEscape(text)}" placeholder="選項文字">
     <button type="button" class="icon-button icon-button--subtle" data-option-remove aria-label="移除選項"><span class="nlc-icon" data-icon="close" aria-hidden="true"></span></button>
+    ${slot}
   </div>`;
 }
 
@@ -4181,7 +4251,8 @@ function renderAdminQuizCustomMenuRowHtml(text = '', quantity = 0) {
   </div>`;
 }
 
-function renderAdminQuizCustomQuestionBodyHtml(question) {
+// options.optionImages（#709）：雲柱編輯器才給 true，選項列多一格「加入圖片」
+function renderAdminQuizCustomQuestionBodyHtml(question, { optionImages = false } = {}) {
   const { type, payload = {}, answerKey } = question;
   if (type === 'truefalse') {
     return `<label>正確答案<select class="form-control" data-field="answerKey">
@@ -4194,11 +4265,15 @@ function renderAdminQuizCustomQuestionBodyHtml(question) {
       ? new Set(Number.isInteger(answerKey) ? [answerKey] : [])
       : new Set(Array.isArray(answerKey) ? answerKey : []);
     const options = payload.options && payload.options.length ? payload.options : ['', ''];
+    const images = optionImages ? getOptionImages(payload) || [] : [];
+    const imageNote = optionImages && canUploadQuizImage()
+      ? '選項可以加圖片，會友直接點圖作答；選項文字仍要填，作答時不顯示，檢討和統計會用。'
+      : '';
     return `<div class="admin-quiz-custom-options" data-options>
-      ${options.map((text, i) => renderAdminQuizCustomOptionRowHtml(text, correctSet.has(i))).join('')}
+      ${options.map((text, i) => renderAdminQuizCustomOptionRowHtml(text, correctSet.has(i), { imageSlot: optionImages, image: images[i] || null })).join('')}
     </div>
     <button type="button" class="secondary-btn" data-option-add>新增選項</button>
-    <p class="admin-daily-quiz-note">勾選核取方塊標記正確答案${type === 'single' ? '（只能選一個）' : '（可複選）'}。</p>`;
+    <p class="admin-daily-quiz-note">勾選核取方塊標記正確答案${type === 'single' ? '（只能選一個）' : '（可複選）'}。${imageNote}</p>`;
   }
   if (type === 'matching') {
     const left = payload.left && payload.left.length ? payload.left : [{ text: '' }, { text: '' }];
@@ -4245,18 +4320,20 @@ function bindAdminQuizCustomQuestionBlock(fieldset, onChange) {
   const typeSelect = fieldset.querySelector('[data-field="type"]');
   const body = fieldset.querySelector('[data-question-body]');
   if (!typeSelect || !body) return;
+  // 雲柱編輯器的 fieldset 帶 data-lq-option-images（#709）：選項列有「加入圖片」
+  const optionImages = fieldset.hasAttribute('data-lq-option-images');
 
   typeSelect.addEventListener('change', () => {
     const nextType = typeSelect.value;
     fieldset.dataset.questionType = nextType;
-    body.innerHTML = renderAdminQuizCustomQuestionBodyHtml(adminQuizCustomDefaultQuestion(nextType));
+    body.innerHTML = renderAdminQuizCustomQuestionBodyHtml(adminQuizCustomDefaultQuestion(nextType), { optionImages });
     if (typeof hydrateIcons === 'function') hydrateIcons(body);
     if (typeof onChange === 'function') onChange();
   });
 
   fieldset.addEventListener('click', event => {
     if (event.target.closest('[data-option-add]')) {
-      body.querySelector('[data-options]')?.insertAdjacentHTML('beforeend', renderAdminQuizCustomOptionRowHtml());
+      body.querySelector('[data-options]')?.insertAdjacentHTML('beforeend', renderAdminQuizCustomOptionRowHtml('', false, { imageSlot: optionImages }));
       if (typeof hydrateIcons === 'function') hydrateIcons(body);
       if (typeof onChange === 'function') onChange();
     } else if (event.target.closest('[data-option-remove]')) {
