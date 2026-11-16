@@ -1,5 +1,7 @@
 // 題目附圖（#449）：payload.image = { src, alt }，顯示在題幹下方，點一下全螢幕放大。
 // 不是新題型——任何題型的 payload 都可以帶；目前只有雲柱測驗會用到。
+// 選項圖片（#709）：單選／多選的 payload.optionImages = [{ src } | null, …]，和 options 一樣長；
+// options 仍是文字（給檢討、統計、正解文字用，舊版 App 也照樣能顯示）。
 // 圖片來源只接受兩種：站內 assets/ 底下的靜態檔，或後台上傳到本站 Supabase 公開 bucket
 // quiz-images 的檔案（#585，檔名是隨機 UUID）。題目內容是管理員寫的，但仍不讓它變成
 // 任意外部網址或 javascript: 連結。
@@ -42,15 +44,34 @@ function escapeHtml(value) {
   }[character]));
 }
 
+// 圖片物件的 src 合法就回傳去掉空白的 src，否則空字串。
+function safeImageSrc(image) {
+  if (!image || typeof image !== "object") return "";
+  const src = typeof image.src === "string" ? image.src.trim() : "";
+  return (SAFE_IMAGE_SRC.test(src) && !src.includes("..")) || isUploadedQuizImageSrc(src) ? src : "";
+}
+
 /** payload.image 合法就回傳 { src, alt }，否則 null。 */
 export function getQuestionImage(payload) {
   const image = payload && typeof payload === "object" ? payload.image : null;
-  if (!image || typeof image !== "object") return null;
-  const src = typeof image.src === "string" ? image.src.trim() : "";
-  const safe = (SAFE_IMAGE_SRC.test(src) && !src.includes("..")) || isUploadedQuizImageSrc(src);
-  if (!safe) return null;
+  const src = safeImageSrc(image);
+  if (!src) return null;
   const alt = typeof image.alt === "string" && image.alt.trim() ? image.alt.trim() : "題目附圖";
   return { src, alt };
+}
+
+/**
+ * payload.optionImages → 和 options 一樣長的陣列，每格是 { src } 或 null（沒有圖／網址不合法）。
+ * 沒有任何一個選項有合法的圖就回傳 null，呼叫端照純文字選項顯示。
+ */
+export function getOptionImages(payload) {
+  if (!payload || typeof payload !== "object" || !Array.isArray(payload.optionImages)) return null;
+  const options = Array.isArray(payload.options) ? payload.options : [];
+  const images = options.map((_, index) => {
+    const src = safeImageSrc(payload.optionImages[index]);
+    return src ? { src } : null;
+  });
+  return images.some(Boolean) ? images : null;
 }
 
 /** 題幹下方的圖片；沒有圖或網址不合法時回傳空字串。 */
@@ -75,17 +96,18 @@ function closeViewer(viewer) {
   viewer._opener?.focus?.({ preventScroll: true });
 }
 
-export function openQuizImageViewer(src, alt = "") {
+// fit（#709 選項圖片）：整張縮到螢幕內，不用左右滑動。
+export function openQuizImageViewer(src, alt = "", { fit = false } = {}) {
   if (typeof document === "undefined" || !src) return null;
   document.querySelector(".quiz-image-viewer")?.remove();
   const viewer = document.createElement("div");
-  viewer.className = "quiz-image-viewer";
+  viewer.className = fit ? "quiz-image-viewer quiz-image-viewer--fit" : "quiz-image-viewer";
   viewer.setAttribute("role", "dialog");
   viewer.setAttribute("aria-modal", "true");
   viewer.setAttribute("aria-label", alt || "題目附圖");
   viewer.innerHTML = `
     <div class="quiz-image-viewer__bar">
-      <span class="quiz-image-viewer__hint">可以左右滑動看每一格</span>
+      <span class="quiz-image-viewer__hint">${fit ? "" : "可以左右滑動看每一格"}</span>
       <button type="button" class="quiz-image-viewer__close" data-quiz-image-close>關閉</button>
     </div>
     <div class="quiz-image-viewer__scroll"><img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}"></div>`;
@@ -109,7 +131,12 @@ export function installQuizImageViewer() {
     const trigger = event.target.closest?.("[data-quiz-image-open]");
     if (!trigger) return;
     event.preventDefault();
+    // 選項圖片的放大鈕（#709）不包著圖，網址放在 data-quiz-image-src
     const img = trigger.querySelector("img");
-    if (img) openQuizImageViewer(img.getAttribute("src"), img.getAttribute("alt") || "");
+    const src = trigger.getAttribute("data-quiz-image-src") || img?.getAttribute("src");
+    if (src) {
+      openQuizImageViewer(src, trigger.getAttribute("data-quiz-image-alt") || img?.getAttribute("alt") || "",
+        { fit: trigger.hasAttribute("data-quiz-image-fit") });
+    }
   });
 }
