@@ -1,13 +1,13 @@
 // js/modules/quiz-review.mjs
 // 測驗結果的唯讀檢討畫面，跟大測驗成績頁同一套視覺（沿用 exam-result__* 樣式）：
-//   選擇題：標出「你選的」與「正解」
+//   選擇題：標出「你選的」與「正解」；選項有圖（#709）就在文字前放縮圖，點了放大
 //   連連看：畫線——你的連線是綠色實線，連錯的地方補一條紅色虛線的正解
 //   排序題：列出你的順序（位置對的標綠、錯的標出應在第幾）與正確順序
 //   選單題：每個項目列出你選的數量（對的標綠、錯的補正確數量，#612）
 // 小測驗、雲柱測驗共用；連連看畫線 paintMatchReviewLines 大測驗 exam.js 也共用。
 
 import { isAnswerCorrect, menuQuantities } from "./quiz-question-types.mjs";
-import { questionImageHtml } from "./quiz-image.mjs";
+import { getOptionImages, questionImageHtml } from "./quiz-image.mjs";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -50,13 +50,19 @@ export function normalizeAttemptAnswers(attempt, questions) {
   return byQuestionId;
 }
 
-function choiceListHtml(options, mine, right) {
-  return `<ol class="exam-result__choices exam-result__choices--marked">${options.map((option, index) => {
+function choiceThumbHtml(image, option) {
+  if (!image) return "";
+  return `<button type="button" class="exam-result__choice-thumb" data-quiz-image-open data-quiz-image-fit data-quiz-image-src="${esc(image.src)}" data-quiz-image-alt="${esc(option)}" aria-label="放大「${esc(option)}」的圖片"><img src="${esc(image.src)}" alt="${esc(option)}" loading="lazy" decoding="async"></button>`;
+}
+
+function choiceListHtml(options, mine, right, images = null) {
+  return `<ol class="exam-result__choices exam-result__choices--marked${images ? " exam-result__choices--images" : ""}">${options.map((option, index) => {
     const isMine = mine.includes(index);
     const isRight = right.includes(index);
     const cls = [isMine ? "is-mine" : "", isRight ? "is-right" : ""].filter(Boolean).join(" ");
     const tags = `${isMine ? '<span class="exam-choice-tag exam-choice-tag--mine">你選的</span>' : ""}${isRight ? '<span class="exam-choice-tag exam-choice-tag--right">正解</span>' : ""}`;
-    return `<li${cls ? ` class="${cls}"` : ""}>${esc(option)}${tags ? `　${tags}` : ""}</li>`;
+    const text = images ? `<span class="exam-result__choice-text">${esc(option)}${tags ? `　${tags}` : ""}</span>` : `${esc(option)}${tags ? `　${tags}` : ""}`;
+    return `<li${cls ? ` class="${cls}"` : ""}>${images ? choiceThumbHtml(images[index], option) : ""}${text}</li>`;
   }).join("")}</ol>`;
 }
 
@@ -125,7 +131,8 @@ function reviewBodyHtml(type, payload, answerKey, response) {
     case "multiple":
       return choiceListHtml(payload.options || [],
         toIndexList(response, type === "multiple"),
-        toIndexList(answerKey, type === "multiple"));
+        toIndexList(answerKey, type === "multiple"),
+        getOptionImages(payload));
     case "matching":
       return matchingBoardHtml(payload, response, answerKey);
     case "ordering":
