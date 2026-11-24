@@ -1520,7 +1520,59 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
     expect(moved).toEqual({ reminders: 1, reports: 1 });
   });
 
-  const setRole = (id, code) => async tx => tx.query(`UPDATE public.profiles SET role_id = $2 WHERE id = $1`, [id, await roleId(tx, code)]);
+  // #712：雲柱在首頁、所有人都能答，新帳號順手答一題不該讓自助找回永遠失敗
+  const lightningQuestion = async (tx, riseDate = "2026-11-12") => (await tx.query(
+    `INSERT INTO public.lightning_quiz_questions (rise_date, rise_time_start, rise_time_end, question_type, payload, answer_key, status)
+     VALUES ($1, '07:00', '10:00', 'single', $2::jsonb, '0'::jsonb, 'published') RETURNING id`,
+    [riseDate, JSON.stringify({ prompt: "題目", options: ["甲", "乙"] })]
+  )).rows[0].id;
+  const lightningAnswer = (tx, questionId, userId) => tx.query(
+    `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+     VALUES ($1, $2, now(), 3000, '0'::jsonb, TRUE)`, [questionId, userId]
+  );
+  const lightningWeek = (tx, { entries = [], excluded = {} }) => tx.query(
+    `INSERT INTO public.lightning_quiz_week_rankings (week_start, entries, excluded, display_days, display_until)
+     VALUES ('2026-11-09', $1::jsonb, $2::jsonb, 1, '2026-11-16')`,
+    [JSON.stringify(entries), JSON.stringify(excluded)]
+  );
+
+  it("空帳號答過雲柱也能找回，作答搬到舊帳號", async () => {
+    const outcome = await withRecovery({
+      prepare: async tx => {
+        await lightningAnswer(tx, await lightningQuestion(tx, "2026-11-12"), R.source);
+        await lightningAnswer(tx, await lightningQuestion(tx, "2026-11-13"), R.source);
+        await lightningAnswer(tx, await lightningQuestion(tx, "2026-11-14"), R.target);
+      },
+      fn: async ({ tx, start, merge, challenge }) => {
+        expect(await start()).toEqual({ ok: true });
+        return {
+          result: await merge(),
+          attempts: (await one(tx, `SELECT count(*)::int AS n FROM public.lightning_quiz_attempts WHERE user_id = $1`, [R.target])).n,
+          outcome: (await challenge()).outcome
+        };
+      }
+    });
+    expect(outcome).toEqual({ result: { ok: true }, attempts: 3, outcome: "merged" });
+  });
+
+  it("同一題兩個帳號都答過：不自動挑一筆留，擋下轉人工", async () => {
+    await withRecovery({
+      prepare: async tx => {
+        const questionId = await lightningQuestion(tx);
+        await lightningAnswer(tx, questionId, R.source);
+        await lightningAnswer(tx, questionId, R.target);
+      },
+      fn: async ({ tx, start, merge, challenge, unmerged }) => {
+        expect(await start()).toEqual({ ok: true });
+        expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+        expect(await challenge()).toMatchObject({ outcome: "lightning_quiz_conflict", target_profile_id: R.target });
+        expect((await one(tx, `SELECT count(*)::int AS n FROM public.lightning_quiz_attempts WHERE user_id = $1`, [R.source])).n).toBe(1);
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  const setRole =(id, code) => async tx => tx.query(`UPDATE public.profiles SET role_id = $2 WHERE id = $1`, [id, await roleId(tx, code)]);
   const addOrphanLog = tx => tx.query(`INSERT INTO public.reading_logs (user_id, plan_id, book, chapter) VALUES ($1, NULL, '創世記', 1)`, [R.source]);
 
   it.each([
@@ -1534,6 +1586,14 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
     ["來源是小組長", setRole(R.source, "group_leader")],
     ["來源有委任範圍", setProfile(R.source, `managed_zones = '牧區 A-1'`)],
     ["來源有兩個登入身分", tx => tx.query(`INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES ($1, 'logto', 'recovery-sub-third', FALSE)`, [R.source])],
+    ["來源在雲柱週排名的排除名單裡", async tx => {
+      await lightningAnswer(tx, await lightningQuestion(tx), R.source);
+      await lightningWeek(tx, { excluded: { "2026-11-12": [R.source] } });
+    }],
+    ["來源上過雲柱週排名（名單是快照，也會發兌換券）", async tx => {
+      await lightningAnswer(tx, await lightningQuestion(tx), R.source);
+      await lightningWeek(tx, { entries: [{ riseDate: "2026-11-12", winners: [{ rank: 1, userId: R.source, name: "會友", pastoralZone: "", elapsedMs: 3000 }] }] });
+    }],
     ["之後新增的表也算實質資料（fail closed）", async tx => {
       await tx.exec(`CREATE TABLE public.recovery_future_table (user_id UUID REFERENCES public.profiles(id))`);
       await tx.query(`INSERT INTO public.recovery_future_table VALUES ($1)`, [R.source]);
