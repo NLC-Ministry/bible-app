@@ -276,7 +276,8 @@ describe("按下主按鈕", () => {
     ["函式還沒部署（404）", () => new Response("not found", { status: 404 }), "暫時無法找回計畫"],
     ["伺服器還沒設定", () => json({ error: "recovery_not_configured" }, 503), "暫時無法找回計畫"],
     ["伺服器出錯", () => json({ error: "recover_plan_failed" }, 500), "暫時無法找回計畫"],
-    ["這個帳號不符合", () => json({ error: "not_eligible" }, 403), "沒有辦法自動找回"],
+    // #712：再試也一樣，引導到回報按鈕留言
+    ["這個帳號不符合", () => json({ error: "not_eligible" }, 403), "右下角的對話按鈕留言"],
     ["太多次", () => json({ error: "rate_limited" }, 429), "太多次"]
   ])("%s：留在原畫面、什麼都沒變", async (_label, recoverPlan, message) => {
     stubNetwork({ recoverPlan });
