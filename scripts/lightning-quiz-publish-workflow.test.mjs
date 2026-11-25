@@ -65,10 +65,10 @@ describe("雲柱測驗 每題各自發布（0211）", () => {
     expect(upsert).toContain("'unchanged', TRUE");
   });
 
-  // #309：同一天已有排程的題目時直接擋（原本會把舊的自動下架；archived 狀態已拿掉）
-  it("同一天只能有一題已排程；鎖定後不能取消排程", () => {
+  // #309 原本同一天只能一題已排程；#718 hotfix 起同一天可以多題（行為測試在 db-behavior）。
+  // 這裡只確認不會自動下架別題、鎖定後不能取消排程。
+  it("排程不會自動下架同一天的別題；鎖定後不能取消排程", () => {
     const status = functionBody("admin_set_lightning_quiz_status");
-    expect(status).toMatch(/WHERE rise_date = q\.rise_date AND status = 'published' AND id <> q\.id\) THEN\s+RAISE EXCEPTION 'lightning_quiz_date_taken';/);
     expect(status).not.toContain("'archived'");
     expect(status).toMatch(/p_status = 'draft' AND q\.status = 'published'[\s\S]*_lightning_quiz_is_locked\(q\.id\)[\s\S]*lightning_quiz_locked/);
     expect(status).toContain("lightning_quiz_invalid_status_transition");

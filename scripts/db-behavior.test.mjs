@@ -532,6 +532,74 @@ describe("雲柱得獎與兌換總覽（#614）", () => {
   });
 });
 
+describe("雲柱同一天多題（#718 hotfix）", () => {
+  const draft = async (tx, riseDate, start, end) => (await tx.query(
+    `INSERT INTO public.lightning_quiz_questions (rise_date, rise_time_start, rise_time_end, question_type, payload, answer_key, status)
+     VALUES ($1, $2::time, $3::time, 'single', $4::jsonb, '0'::jsonb, 'draft') RETURNING id`,
+    [riseDate, start, end, JSON.stringify({ stem: `${start} 題`, options: ["甲", "乙"] })]
+  )).rows[0].id;
+  const publish = (tx, id) => tx.query(
+    `SELECT public.admin_set_lightning_quiz_status($1, 'published', $2) AS result`, [id, ids.admin]
+  );
+
+  it("同一天同一時段可以排好幾題", async () => {
+    const published = await asService(async tx => {
+      await publish(tx, await draft(tx, "2099-01-05", "11:00", "14:00"));
+      await publish(tx, await draft(tx, "2099-01-05", "11:00", "14:00"));
+      const noon = await draft(tx, "2099-01-05", "07:00", "10:00");
+      await publish(tx, noon);
+      // 已排程的題目改到跟別題同一時段也可以
+      await tx.query(
+        `SELECT public.admin_upsert_lightning_quiz_question($1, '2099-01-05', '11:00', '14:00', 'single', $2::jsonb, '0'::jsonb, NULL, $3)`,
+        [noon, JSON.stringify({ stem: "改時間", options: ["甲", "乙"] }), ids.admin]
+      );
+      return (await tx.query(
+        `SELECT count(*)::int AS n FROM public.lightning_quiz_questions
+         WHERE rise_date = '2099-01-05' AND status = 'published' AND rise_time_start = '11:00'`
+      )).rows[0].n;
+    });
+    expect(published).toBe(3);
+  });
+
+  it("首頁先給作答中、再給還沒答的題；都答完顯示已答；都結束就 hidden", async () => {
+    const outcome = await asService(async tx => {
+      const { rows: [clock] } = await tx.query(
+        `SELECT (NOW() AT TIME ZONE 'Asia/Taipei')::date::text AS today,
+                ((NOW() AT TIME ZONE 'Asia/Taipei')::time - interval '2 minutes')::time::text AS ended_at,
+                (NOW() AT TIME ZONE 'Asia/Taipei')::time < '00:05' AS too_early,
+                (NOW() AT TIME ZONE 'Asia/Taipei')::time > '23:55' AS too_late`
+      );
+      if (clock.too_early || clock.too_late) return null; // 接近午夜排不出「開放中」的時段
+      const today = async () => (await tx.query(`SELECT public.get_todays_lightning_quiz($1) AS r`, [ids.member])).rows[0].r;
+      const attempt = (questionId, done) => tx.query(
+        `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+         VALUES ($1, $2, ${done ? "now(), 3000, '0'::jsonb, TRUE" : "NULL, NULL, NULL, NULL"})`, [questionId, ids.member]
+      );
+      const first = await draft(tx, clock.today, "00:00", "23:59:59");
+      const second = await draft(tx, clock.today, "00:00", "23:59:59");
+      await tx.query(`UPDATE public.lightning_quiz_questions SET created_at = created_at + interval '1 second' WHERE id = $1`, [second]);
+      await tx.query(`UPDATE public.lightning_quiz_questions SET status = 'published' WHERE id IN ($1, $2)`, [first, second]);
+      const fresh = await today();
+      await attempt(second, false);
+      const inProgress = await today();
+      await tx.query(`DELETE FROM public.lightning_quiz_attempts WHERE question_id = $1`, [second]);
+      await attempt(first, true);
+      const afterFirst = await today();
+      await attempt(second, true);
+      const afterBoth = await today();
+      await tx.query(`UPDATE public.lightning_quiz_questions SET rise_time_end = $1::time WHERE id IN ($2, $3)`, [clock.ended_at, first, second]);
+      const allEnded = await today();
+      return { first, second, fresh, inProgress, afterFirst, afterBoth, allEnded };
+    });
+    if (!outcome) return;
+    expect(outcome.fresh).toMatchObject({ status: "available", questionId: outcome.first });
+    expect(outcome.inProgress).toMatchObject({ status: "in_progress", questionId: outcome.second });
+    expect(outcome.afterFirst).toMatchObject({ status: "available", questionId: outcome.second });
+    expect(outcome.afterBoth).toMatchObject({ status: "answered" });
+    expect(outcome.allEnded).toEqual({ status: "hidden" });
+  });
+});
+
 describe("雲柱更正正解（admin_set_lightning_quiz_answer_key，#616）", () => {
   // 已結束、已排程的單選題，原正解 0。member 答 1（錯）、other 答 0（對）、admin 開始了還沒送出。
   const seedQuestion = async (tx, { type = "single", payload, answerKey = 0, riseDate = "2026-09-30", status = "published" } = {}) => {
