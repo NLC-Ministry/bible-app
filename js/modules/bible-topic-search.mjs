@@ -88,14 +88,26 @@ export function formatTopicRefLabel(parsed, bookLabel, english = false) {
     : `${bookLabel} ${parsed.chapter}章:${verses}節`;
 }
 
-// 從整章經文取出範圍內的節，去掉標籤後串成一段純文字（呼叫端再 escape）。
+// 逐字剝掉 <…> 之間的內容（含巢狀與沒閉合的），結果保證不含 < 或 >。
+// 不用 regex replace：剝一次會留下半個標籤（CodeQL js/incomplete-multi-character-sanitization）。
+function stripTags(value) {
+  let out = "";
+  let depth = 0;
+  for (const ch of value) {
+    if (ch === "<") { depth += 1; continue; }
+    if (ch === ">") { if (depth > 0) depth -= 1; continue; }
+    if (depth === 0) out += ch;
+  }
+  return out;
+}
+
+// 從整章經文取出範圍內的節，去掉標籤後串成一段純文字（呼叫端用 textContent 顯示）。
 export function pickTopicRefText(chapterVerses, parsed) {
   if (!Array.isArray(chapterVerses) || !parsed) return "";
   return chapterVerses
     .filter(item => Number(item?.verse) >= parsed.verse && Number(item?.verse) <= parsed.endVerse)
     .sort((left, right) => Number(left.verse) - Number(right.verse))
-    // 剝完標籤再拿掉殘留的 < >：巢狀或沒閉合的標籤剝一次會留下半個（CodeQL js/incomplete-multi-character-sanitization）
-    .map(item => String(item.text || "").replace(/<[^>]*>/g, "").replace(/[<>]/g, "").trim())
+    .map(item => stripTags(String(item.text || "")).trim())
     .filter(Boolean)
     .join(" ");
 }
