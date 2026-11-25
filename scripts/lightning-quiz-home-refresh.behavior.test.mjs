@@ -106,6 +106,43 @@ describe("首頁雲柱測驗卡片的自動更新", () => {
     expect(rpc).toHaveBeenCalledTimes(2);
   });
 
+  // #718：還沒開始的題目顯示開放時段，已結束的顯示自己的結果；最早要變化的那一刻（開始或結束）再查
+  it("還沒開始、已結束的題目也列出來，並在下一題開始時再查", async () => {
+    const payload = { stem: "題目", options: ["甲", "乙"] };
+    const rpc = vi.fn(async () => ({
+      success: true,
+      data: {
+        status: "available", questionId: "q2", questionType: "single", payload, secondsUntilEnd: 100,
+        items: [
+          { status: "ended", questionId: "q1", result: "correct", elapsedMs: 4200, riseTimeStart: "07:00", riseTimeEnd: "08:00" },
+          { status: "available", questionId: "q2", questionType: "single", payload, secondsUntilEnd: 100, riseTimeStart: "11:00", riseTimeEnd: "14:00" },
+          { status: "upcoming", questionId: "q3", secondsUntilStart: 30, riseTimeStart: "19:00", riseTimeEnd: "22:00" },
+          { status: "ended", questionId: "q4", result: "not_participated", elapsedMs: null, riseTimeStart: "09:00", riseTimeEnd: "10:00" }
+        ]
+      }
+    }));
+    setupGlobals(rpc);
+    const { refreshLightningQuizHomeCard } = await import("../js/modules/lightning-quiz.mjs");
+
+    await refreshLightningQuizHomeCard();
+    const host = document.getElementById("lightning-quiz-host");
+    const items = [...host.querySelectorAll(".lightning-quiz-multi__item")];
+    expect(items).toHaveLength(4);
+    expect(host.querySelector(".lightning-quiz-multi__note").textContent).toContain("今天有 4 題");
+    expect(items[0].querySelector(".lightning-quiz-multi__label").textContent).toBe("第 1 題・07:00–08:00");
+    expect(items[0].textContent).toContain("已結束");
+    expect(items[0].textContent).toContain("答對了・4.2 秒");
+    expect(items[1].querySelector("[data-lq-start]")).not.toBeNull();
+    expect(items[2].textContent).toContain("19:00 開放作答");
+    expect(items[2].querySelector("[data-lq-start]")).toBeNull();
+    expect(items[3].textContent).toContain("沒有作答");
+
+    await vi.advanceTimersByTimeAsync(30_999);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
   it("items 只有一題時照舊顯示單題畫面", async () => {
     const rpc = vi.fn(async () => ({
       success: true,

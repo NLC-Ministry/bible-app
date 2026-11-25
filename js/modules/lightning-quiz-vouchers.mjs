@@ -22,6 +22,12 @@ export function splitVouchers(vouchers) {
   return { usable, past };
 }
 
+// 得獎的是哪一題：同一天有好幾題（#718）時加上「第 N 題」，一天一題就只寫日期。
+export function voucherAwardLabel(voucher) {
+  const question = Number(voucher.questionCount) > 1 ? `第 ${voucher.questionNumber} 題` : "";
+  return `${formatWeekday(voucher.riseDate)}${question}${formatRankLabel(voucher.rank)}`;
+}
+
 function voucherMetaText(voucher) {
   if (voucher.status === "redeemed") {
     const when = formatVoucherTime(voucher.redeemedAt);
@@ -39,7 +45,7 @@ export function voucherCardHtml(voucher) {
       <span class="nlc-icon lq-voucher__icon" data-icon="ticket" aria-hidden="true"></span>
       <div class="lq-voucher__title">
         <strong>克勞斯 ${escapeHTML(String(amount))} 元抵用券</strong>
-        <span>雲柱測驗英雄榜・${escapeHTML(formatWeekday(voucher.riseDate))}${escapeHTML(formatRankLabel(voucher.rank))}</span>
+        <span>雲柱測驗英雄榜・${escapeHTML(voucherAwardLabel(voucher))}</span>
       </div>
       ${STATUS_BADGES[status]}
     </div>
@@ -91,7 +97,7 @@ async function redeemVoucher(voucherId, button) {
   const voucher = lastVouchers.find(v => String(v.id) === voucherId);
   const confirmed = await window.showConfirmDialog({
     title: "確認兌換這張抵用券？",
-    message: `${voucher ? `${formatWeekday(voucher.riseDate)}${formatRankLabel(voucher.rank)}・兌換碼 ${voucher.code}。` : ""}請在克勞斯店員面前按「確認兌換」，兌換後這張券就不能再使用。`,
+    message: `${voucher ? `${voucherAwardLabel(voucher)}・兌換碼 ${voucher.code}。` : ""}請在克勞斯店員面前按「確認兌換」，兌換後這張券就不能再使用。`,
     confirmText: "確認兌換",
     cancelText: "取消"
   });

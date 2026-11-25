@@ -7262,6 +7262,7 @@ db._lightningQuizErrorMessage = function(error) {
     lightning_quiz_has_attempts: "這一題已經有人作答，不能刪除。",
     lightning_quiz_locked: "這一題已經開始或已有人作答，題目已鎖定；要沿用請按「複製成新題」。",
     lightning_quiz_date_taken: "這一天已經排了另一題；一天只能排一題，請先把那一題取消排程或換日期。",
+    lightning_quiz_day_full: "這一天已經有 5 題了（準備中和已排程都算），一天最多 5 題；請換一天，或先刪掉用不到的題目。",
     lightning_quiz_window_passed: "這個時段已經開始或結束了，請改成還沒到的日期或時間。",
     lightning_quiz_invalid_status_transition: "目前的狀態不能這樣切換，請重新整理後再試。",
     lightning_quiz_missing_fields: "請完整填寫題目內容後再儲存。",
@@ -7298,6 +7299,9 @@ db._lightningQuizErrorMessage = function(error) {
   const detail = raw.match(/lightning_quiz_(?:date_taken|window_passed):(\d{4}-\d{2}-\d{2})/);
   const itemNo = raw.match(/lightning_quiz_import_invalid_item:(\d+)/);
   if (detail) return `${detail[1]}：${messages[key]}（這次一題都沒有匯入）`;
+  // #718：新增、改日期、匯入都可能撞到一天 5 題的上限；帶日期就說是哪一天
+  const fullDay = raw.match(/lightning_quiz_day_full:(\d{4}-\d{2}-\d{2})/);
+  if (key === "lightning_quiz_day_full" && fullDay) return `${fullDay[1]}：${messages[key]}`;
   if (itemNo) return `第 ${itemNo[1]} 題：${messages[key]}`;
   return messages[key];
 };

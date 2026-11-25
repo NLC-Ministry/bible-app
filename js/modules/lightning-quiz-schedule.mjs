@@ -50,14 +50,27 @@ function slotStillAhead(date, timeStart, now) {
   return date > now.date || (date === now.date && hhmmss(timeStart) > hhmmss(now.time));
 }
 
-// 日曆：從本週一起 weeks 週，只列規則裡的星期。同一天有已排程的題目優先顯示。
+// 一天最多幾題（準備中＋已排程都算），跟 SQL 的 _lightning_quiz_assert_day_capacity 一致（#718）。
+export const LIGHTNING_QUIZ_DAY_LIMIT = 5;
+
+// 同一天的題目順序：已排程在前，再依開始時間、id（跟首頁、前三名的順序一致）。
+function compareDayQuestions(a, b) {
+  const published = Number(b.status === "published") - Number(a.status === "published");
+  return published
+    || hhmmss(a.riseTimeStart).localeCompare(hhmmss(b.riseTimeStart))
+    || String(a.id ?? "").localeCompare(String(b.id ?? ""));
+}
+
+// 日曆：從本週一起 weeks 週，只列規則裡的星期。一格列出那天每一題（#718）；
+// question 是排第一的那題（相容舊的呼叫端）。
 export function buildLightningQuizCalendar({ weekdays, questions, now, weeks = 4 }) {
   const days = [...new Set((weekdays || []).map(Number))].filter(d => d >= 1 && d <= 7).sort((a, b) => a - b);
   const byDate = new Map();
   (Array.isArray(questions) ? questions : []).forEach(question => {
-    const current = byDate.get(question.riseDate);
-    if (!current || (current.status !== "published" && question.status === "published")) byDate.set(question.riseDate, question);
+    if (!byDate.has(question.riseDate)) byDate.set(question.riseDate, []);
+    byDate.get(question.riseDate).push(question);
   });
+  byDate.forEach(list => list.sort(compareDayQuestions));
   const start = weekStartOf(now.date);
   return Array.from({ length: weeks }, (_, weekIndex) => {
     const weekStart = addDays(start, weekIndex * 7);
@@ -65,14 +78,17 @@ export function buildLightningQuizCalendar({ weekdays, questions, now, weeks = 4
       weekStart,
       days: days.map(weekday => {
         const date = addDays(weekStart, weekday - 1);
-        const question = byDate.get(date) || null;
+        const list = byDate.get(date) || [];
+        const question = list[0] || null;
         const past = date < now.date;
         return {
           date,
           question,
           stage: question ? lightningQuizStage(question, now) : null,
+          questions: list.map(item => ({ question: item, stage: lightningQuizStage(item, now) })),
           past,
-          missing: !question && !past
+          missing: !list.length && !past,
+          full: list.length >= LIGHTNING_QUIZ_DAY_LIMIT
         };
       })
     };
@@ -107,11 +123,13 @@ export function resolveImportDate(text, today) {
 }
 
 // 解析貼上的文字：每題之間空一行；題目前面可以加「日期：10/9」「時段：12:00-13:00」。
-// 題目本身的格式跟小測驗的文字匯入一樣（quiz-import.mjs）。
+// 只有日期／時段、沒有題目的段落是標題（#718）：套用到下面每一題，直到下一個標題；
+// 題目自己寫的日期／時段優先。題目本身的格式跟小測驗的文字匯入一樣（quiz-import.mjs）。
 export function parseLightningImportText(text, { today }) {
   const blocks = String(text || "").replace(/\r\n/g, "\n").split(/\n\s*\n+/).map(block => block.trim()).filter(Boolean);
   const items = [];
   const errors = [];
+  let heading = { date: null, timeStart: null, timeEnd: null };
   blocks.forEach((block, blockIndex) => {
     const number = blockIndex + 1;
     const lines = block.split("\n").map(line => line.trim()).filter(Boolean);
@@ -137,6 +155,15 @@ export function parseLightningImportText(text, { today }) {
         return;
       }
     }
+    if (!lines.length) {
+      // 標題段落：新的日期會換掉上一個標題的時段，除非這個標題自己也寫了時段
+      heading = date
+        ? { date, timeStart, timeEnd }
+        : { ...heading, timeStart, timeEnd };
+      return;
+    }
+    if (!date) date = heading.date;
+    if (!timeStart) { timeStart = heading.timeStart; timeEnd = heading.timeEnd; }
     // 雲柱配對題可以多對一（#588）：右邊文字相同的列共用同一個點；選單題（#612）只有雲柱才有
     const parsed = parseQuizImportText(lines.join("\n"), { mergeMatchingRight: true, allowMenu: true });
     if (parsed.errors.length) {
@@ -153,24 +180,27 @@ export function parseLightningImportText(text, { today }) {
   return { items, errors };
 }
 
-// 排日期：有寫日期的照寫的；沒寫的依序填進接下來還空著、而且還沒開始的規則日。
-// 已經有題目（準備中或已排程）的日子不能再排。
+// 排日期：有寫日期的照寫的（同一天可以多題，連同已經有的最多 LIGHTNING_QUIZ_DAY_LIMIT 題，#718）；
+// 沒寫的依序填進接下來還空著（一題都沒有）、而且還沒開始的規則日。
+// existingDates：已經有的題目（準備中或已排程）的日期，同一天有幾題就出現幾次。
 export function planLightningImport(items, { existingDates, settings, now }) {
   const rule = settings || DEFAULT_LIGHTNING_QUIZ_SETTINGS;
   const weekdays = new Set((rule.weekdays || []).map(Number));
-  const occupied = new Set(existingDates || []);
+  const counts = new Map();
+  (existingDates || []).forEach(date => counts.set(date, (counts.get(date) || 0) + 1));
+  const countOf = date => counts.get(date) || 0;
   const plan = [];
   const errors = [];
   const timesOf = item => ({ timeStart: item.timeStart || rule.timeStart, timeEnd: item.timeEnd || rule.timeEnd });
 
   (items || []).filter(item => item.date).forEach(item => {
     const times = timesOf(item);
-    if (occupied.has(item.date)) {
-      errors.push({ number: item.number, message: `${item.date} 已經有題目了` });
+    if (countOf(item.date) >= LIGHTNING_QUIZ_DAY_LIMIT) {
+      errors.push({ number: item.number, message: `${item.date} 已經排滿 ${LIGHTNING_QUIZ_DAY_LIMIT} 題了` });
     } else if (!slotStillAhead(item.date, times.timeStart, now)) {
       errors.push({ number: item.number, message: `${item.date} ${times.timeStart} 已經過了` });
     } else {
-      occupied.add(item.date);
+      counts.set(item.date, countOf(item.date) + 1);
       plan.push({ ...item, ...times, pinned: true, date: item.date });
     }
   });
@@ -180,18 +210,18 @@ export function planLightningImport(items, { existingDates, settings, now }) {
     const times = timesOf(item);
     let date = cursor;
     for (let guard = 0; guard < 400; guard += 1, date = addDays(date, 1)) {
-      if (weekdays.has(isoWeekday(date)) && !occupied.has(date) && slotStillAhead(date, times.timeStart, now)) break;
+      if (weekdays.has(isoWeekday(date)) && !countOf(date) && slotStillAhead(date, times.timeStart, now)) break;
     }
-    if (!weekdays.has(isoWeekday(date)) || occupied.has(date)) {
+    if (!weekdays.has(isoWeekday(date)) || countOf(date)) {
       errors.push({ number: item.number, message: "找不到可以排的日子，請確認排程規則" });
       return;
     }
-    occupied.add(date);
+    counts.set(date, 1);
     cursor = date;
     plan.push({ ...item, ...times, pinned: false, date });
   });
 
-  plan.sort((a, b) => a.date.localeCompare(b.date) || a.number - b.number);
+  plan.sort((a, b) => a.date.localeCompare(b.date) || a.timeStart.localeCompare(b.timeStart) || a.number - b.number);
   return { plan, errors };
 }
 

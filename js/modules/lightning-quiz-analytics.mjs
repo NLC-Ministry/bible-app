@@ -454,15 +454,23 @@ export function pickDayWinners(candidates, excludedIds, limit = 3) {
     .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
 }
 
-// 排除名單只留這週真的有的日期與答對的人，送給伺服器前整理成
-// { "YYYY-MM-DD": [userId, …] }。
+// 排除名單只留這週真的有的題目與答對的人，送給伺服器前整理成
+// { "<題目 id>": [userId, …] }（#718 以題目為單位；很舊的資料沒有題目 id 就用日期）。
+// 那天只有一題時另外帶 { "YYYY-MM-DD": [...] }：伺服器還是舊版（只認日期）時照樣排除；
+// 新版伺服器題目 id 優先，日期 key 不影響結果。
 export function normalizeRankingExcluded(days, excluded) {
+  const list = Array.isArray(days) ? days : [];
+  const perDate = new Map();
+  list.forEach(day => perDate.set(day.riseDate, (perDate.get(day.riseDate) || 0) + 1));
   const result = {};
-  (Array.isArray(days) ? days : []).forEach(day => {
-    const ids = new Set(((excluded || {})[day.riseDate] || []).map(String));
-    result[day.riseDate] = (Array.isArray(day.candidates) ? day.candidates : [])
+  list.forEach(day => {
+    const key = String(day.questionId || day.riseDate);
+    const ids = new Set(((excluded || {})[key] || []).map(String));
+    const picked = (Array.isArray(day.candidates) ? day.candidates : [])
       .map(candidate => String(candidate.userId))
       .filter(id => ids.has(id));
+    result[key] = picked;
+    if (key !== day.riseDate && perDate.get(day.riseDate) === 1) result[day.riseDate] = picked;
   });
   return result;
 }

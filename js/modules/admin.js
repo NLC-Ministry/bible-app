@@ -2323,7 +2323,7 @@ function openAdminLightningQuizImport() {
   if (!body) return;
   if (!body.querySelector('[data-lq-import-text]')) {
     body.innerHTML = `
-      <p class="admin-daily-quiz-note">格式跟小測驗的文字匯入一樣，每題之間空一行；另外可以用 [選單]，每行寫「項目｜正確數量」，干擾項寫 0。沒寫日期的題目會依序排進接下來還空著的規則日；想指定日期或時段，就在那一題上方加一行「日期：10/9」或「時段：12:00-13:00」。</p>
+      <p class="admin-daily-quiz-note">格式跟小測驗的文字匯入一樣，每題之間空一行；另外可以用 [選單]，每行寫「項目｜正確數量」，干擾項寫 0。沒寫日期的題目會依序排進接下來還空著的規則日；想指定日期或時段，就在那一題上方加一行「日期：10/9」或「時段：12:00-13:00」。同一天要出好幾題（一天最多 5 題），可以單獨寫一段「日期：10/9」當標題，下面的題目都排在那天，直到下一個標題。</p>
       <textarea class="form-control" rows="10" data-lq-import-text placeholder="[單選] 亞伯拉罕原本住在哪座城市？&#10;A. 哈蘭&#10;B. 吾珥&#10;答案：B&#10;&#10;日期：10/9&#10;[是非] 摩西在米甸住了四十年。&#10;答案：對"></textarea>
       <div><button type="button" class="secondary-btn" data-lq-import-parse>解析</button></div>
       <div data-lq-import-preview aria-live="polite"></div>`;
@@ -2387,12 +2387,20 @@ function renderAdminLightningQuizCalendarHtml(questions, settings, now) {
       <div class="admin-lightning-quiz-calendar__days">
         ${week.days.map(day => {
           const label = `<span class="admin-lightning-quiz-calendar__date">${escapeHTML(formatWeekday(day.date))}</span>`;
-          if (day.question) {
-            return `<button type="button" class="admin-lightning-quiz-calendar__day" data-lq-calendar-open="${escapeHTML(String(day.question.id))}">
+          if (day.questions.length) {
+            // #718：一格列出那天每一題（最多 5 題），還沒滿、還沒過的日子可以再「＋ 新增」
+            const canAdd = !day.past && !day.full;
+            return `<div class="admin-lightning-quiz-calendar__day is-multi">
               ${label}
-              ${adminLightningQuizStageBadge(day.stage)}
-              <span class="admin-lightning-quiz-calendar__stem">${escapeHTML(day.question.payload?.stem || '')}</span>
-            </button>`;
+              ${day.questions.map(entry => `<button type="button" class="admin-lightning-quiz-calendar__item" data-lq-calendar-open="${escapeHTML(String(entry.question.id))}">
+                <span class="admin-lightning-quiz-calendar__item-head">
+                  ${adminLightningQuizStageBadge(entry.stage)}
+                  <span class="admin-lightning-quiz-calendar__time">${escapeHTML(String(entry.question.riseTimeStart || '').slice(0, 5))}</span>
+                </span>
+                <span class="admin-lightning-quiz-calendar__stem">${escapeHTML(entry.question.payload?.stem || '')}</span>
+              </button>`).join('')}
+              ${canAdd ? `<button type="button" class="pill-btn admin-lightning-quiz-calendar__add" data-lq-calendar-add="${escapeHTML(day.date)}" aria-label="${escapeHTML(formatWeekday(day.date))} 再新增一題">＋ 新增</button>` : ''}
+            </div>`;
           }
           if (day.missing) {
             return `<button type="button" class="admin-lightning-quiz-calendar__day is-missing" data-lq-calendar-add="${escapeHTML(day.date)}" aria-label="${escapeHTML(formatWeekday(day.date))} 缺題，新增題目">
@@ -2887,6 +2895,18 @@ function formatAdminLightningQuizRankingStatus(publication) {
   return `公布期間已結束（顯示到 ${until}）。`;
 }
 
+// 排除名單、展開狀態以題目為單位（#718）；很舊的資料沒有題目 id 就退回日期。
+function rankingDayKey(day) {
+  return String(day.questionId || day.riseDate);
+}
+
+// 同一天有好幾題（#718）時標出第幾題與時段，一天一題就只寫日期。
+function adminLightningQuizRankingDayLabel(day) {
+  const weekday = formatWeekday(day.riseDate);
+  if (!(Number(day.questionCount) > 1)) return weekday;
+  return `${weekday}・第 ${day.questionNumber} 題（${day.riseTimeStart || ''}–${day.riseTimeEnd || ''}）`;
+}
+
 function adminLightningQuizRankingDayHtml(day, dayExcluded, expanded) {
   const candidates = Array.isArray(day.candidates) ? day.candidates : [];
   const winners = pickDayWinners(candidates, [...dayExcluded]);
@@ -2909,13 +2929,13 @@ function adminLightningQuizRankingDayHtml(day, dayExcluded, expanded) {
       <span class="admin-lq-ranking__name">${escapeHTML(candidate.name || '（未命名）')}${priorWins > 0 ? `<span class="admin-lq-ranking__prior">之前得過 ${escapeHTML(String(priorWins))} 次</span>` : ''}</span>
       <span class="admin-lq-ranking__zone">${escapeHTML(candidate.pastoralZone || UNASSIGNED_ZONE_LABEL)}</span>
       <span class="admin-lq-ranking__time">${escapeHTML(formatElapsedSeconds(candidate.elapsedMs))} 秒</span>
-      <button type="button" class="pill-btn" data-lq-ranking-toggle data-date="${escapeHTML(day.riseDate)}" data-user="${escapeHTML(id)}">${isExcluded ? '取消排除' : '排除'}</button>
+      <button type="button" class="pill-btn" data-lq-ranking-toggle data-question="${escapeHTML(rankingDayKey(day))}" data-user="${escapeHTML(id)}">${isExcluded ? '取消排除' : '排除'}</button>
     </li>`;
   }).join('');
   return `<div class="admin-lq-ranking__day">
-    <h6>${escapeHTML(formatWeekday(day.riseDate))}${day.ended ? '' : '（還沒結束）'}</h6>
+    <h6>${escapeHTML(adminLightningQuizRankingDayLabel(day))}${day.ended ? '' : '（還沒結束）'}</h6>
     ${candidates.length ? `<ol class="admin-lq-ranking__list">${rows}</ol>` : '<div class="admin-user-directory__empty">這天沒有人答對。</div>'}
-    ${candidates.length > shownCount ? `<button type="button" class="pill-btn" data-lq-ranking-more="${escapeHTML(day.riseDate)}">顯示全部（${escapeHTML(String(candidates.length))} 人）</button>` : ''}
+    ${candidates.length > shownCount ? `<button type="button" class="pill-btn" data-lq-ranking-more="${escapeHTML(rankingDayKey(day))}">顯示全部（${escapeHTML(String(candidates.length))} 人）</button>` : ''}
   </div>`;
 }
 
@@ -2940,8 +2960,9 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, o
   // 重新公布時從上次的排除名單接著調。
   const excluded = {};
   days.forEach(day => {
-    const saved = publication?.excluded?.[day.riseDate];
-    excluded[day.riseDate] = new Set(Array.isArray(saved) ? saved.map(String) : []);
+    // #718 以後存的是題目 id；更早公布的週存的是日期
+    const saved = publication?.excluded?.[rankingDayKey(day)] ?? publication?.excluded?.[day.riseDate];
+    excluded[rankingDayKey(day)] = new Set(Array.isArray(saved) ? saved.map(String) : []);
   });
   const expanded = new Set();
 
@@ -2952,7 +2973,7 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, o
       <p class="admin-lq-ranking__status">${escapeHTML(formatAdminLightningQuizRankingStatus(publication))}</p>
       <p class="admin-daily-quiz-note">依作答秒數由快到慢列出答對的人。按「排除」把人移出名單，下面的人會遞補。名字照會員資料顯示；首頁不顯示個人名次。「之前得過 N 次」只算這週以前、沒有作廢的兌換券。</p>
       <div class="admin-lq-ranking__days">
-        ${days.map(day => adminLightningQuizRankingDayHtml(day, excluded[day.riseDate], expanded.has(day.riseDate))).join('')}
+        ${days.map(day => adminLightningQuizRankingDayHtml(day, excluded[rankingDayKey(day)], expanded.has(rankingDayKey(day)))).join('')}
       </div>
       <div class="admin-lq-ranking__publish">
         <label>公布天數
@@ -2982,7 +3003,7 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, o
     if (!confirmed) return;
     button.disabled = true;
     const excludedPayload = normalizeRankingExcluded(days, Object.fromEntries(
-      Object.entries(excluded).map(([date, set]) => [date, [...set]])
+      Object.entries(excluded).map(([key, set]) => [key, [...set]])
     ));
     const published = await db.adminPublishLightningQuizWeekRanking(data.weekStart, excludedPayload, displayDays);
     if (!published.success) {
@@ -3017,7 +3038,7 @@ async function renderAdminLightningQuizWeekRanking(host, weekStart, isCurrent, o
   host.onclick = event => {
     const toggle = event.target.closest('[data-lq-ranking-toggle]');
     if (toggle) {
-      const set = excluded[toggle.dataset.date];
+      const set = excluded[toggle.dataset.question];
       if (!set) return;
       if (set.has(toggle.dataset.user)) set.delete(toggle.dataset.user);
       else set.add(toggle.dataset.user);

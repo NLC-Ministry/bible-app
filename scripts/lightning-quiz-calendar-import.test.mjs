@@ -60,6 +60,32 @@ describe("parseLightningImportText", () => {
     expect(errors[0].message).toContain("看不懂日期");
   });
 
+  // #718：只有「日期：」「時段：」的段落是標題，套用到下面的每一題，直到下一個標題；題目自己寫的優先
+  it("applies a 日期／時段 heading to the questions below it", () => {
+    const { items, errors } = parseLightningImportText([
+      "日期：10/9",
+      "時段：19:00-20:00",
+      "",
+      "[是非] 第一題",
+      "答案：對",
+      "",
+      "時段：21:00-22:00",
+      "[是非] 第二題自己的時段",
+      "答案：對",
+      "",
+      "日期：10/12",
+      "",
+      "[是非] 第三題",
+      "答案：錯"
+    ].join("\n"), { today: "2026-09-28" });
+    expect(errors).toEqual([]);
+    expect(items.map(i => [i.number, i.date, i.timeStart, i.timeEnd])).toEqual([
+      [2, "2026-10-09", "19:00", "20:00"],
+      [3, "2026-10-09", "21:00", "22:00"],
+      [5, "2026-10-12", null, null]
+    ]);
+  });
+
   it("rejects a time range that ends before it starts", () => {
     const { errors } = parseLightningImportText("時段：13:00-12:00\n[是非] x\n答案：對", { today: "2026-09-28" });
     expect(errors[0].message).toContain("結束時間要晚於開始時間");
@@ -114,13 +140,25 @@ describe("planLightningImport", () => {
     expect(plan.map(p => [p.number, p.date, p.pinned, p.timeStart])).toEqual([[2, "2026-09-30", true, "12:00"], [1, "2026-10-02", false, "07:00"]]);
   });
 
-  it("reports pinned dates that are taken or already past", () => {
+  it("reports pinned dates that are full (5 a day) or already past", () => {
     const { errors } = planLightningImport([item(1, { date: "2026-10-02" }), item(2, { date: "2026-09-28" })], {
-      existingDates: ["2026-10-02"], settings, now
+      existingDates: Array(5).fill("2026-10-02"), settings, now
     });
     expect(errors.map(e => e.number)).toEqual([1, 2]);
-    expect(errors[0].message).toContain("已經有題目");
+    expect(errors[0].message).toContain("排滿 5 題");
     expect(errors[1].message).toContain("已經過了");
+  });
+
+  // #718：同一天可以指定多題，連同已經有的最多 5 題；沒寫日期的仍只排進還空著的規則日
+  it("lets several pinned questions share a day up to the daily limit", () => {
+    const pinned = n => item(n, { date: "2026-09-30" });
+    const { plan, errors } = planLightningImport([pinned(1), pinned(2), pinned(3), pinned(4), item(5)], {
+      existingDates: ["2026-09-30", "2026-09-30"], settings, now
+    });
+    expect(plan.map(p => [p.number, p.date])).toEqual([
+      [1, "2026-09-30"], [2, "2026-09-30"], [3, "2026-09-30"], [5, "2026-10-02"]
+    ]);
+    expect(errors.map(e => [e.number, e.message])).toEqual([[4, "2026-09-30 已經排滿 5 題了"]]);
   });
 });
 
@@ -142,6 +180,29 @@ describe("buildLightningQuizCalendar", () => {
     expect(weeks[0].days[2].question.id).toBe("p");
     expect(weeks[3].weekStart).toBe("2026-10-19");
   });
+
+  // #718：一格列出那天每一題（已排程在前、再依時段），滿 5 題就不能再新增
+  it("lists every question of a day and marks full days", () => {
+    const q = (id, status, start) => ({ id, riseDate: "2026-10-05", status, riseTimeStart: start, riseTimeEnd: "23:00:00" });
+    const weeks = buildLightningQuizCalendar({
+      weekdays: [1],
+      questions: [q("late", "published", "19:00:00"), q("draft", "draft", "07:00:00"), q("early", "published", "11:00:00")],
+      now: { date: "2026-10-01", time: "12:00:00" }
+    });
+    const day = weeks[1].days[0];
+    expect(day.date).toBe("2026-10-05");
+    expect(day.questions.map(entry => [entry.question.id, entry.stage])).toEqual([
+      ["early", "scheduled"], ["late", "scheduled"], ["draft", "draft"]
+    ]);
+    expect(day.question.id).toBe("early");
+    expect(day).toMatchObject({ missing: false, full: false });
+    const full = buildLightningQuizCalendar({
+      weekdays: [1],
+      questions: [1, 2, 3, 4, 5].map(n => q(`q${n}`, "draft", `0${n}:00:00`)),
+      now: { date: "2026-10-01", time: "12:00:00" }
+    });
+    expect(full[1].days[0].full).toBe(true);
+  });
 });
 
 describe("wiring", () => {
@@ -149,9 +210,11 @@ describe("wiring", () => {
   const migration = currentMigrationSql("20260927123111_lightning_quiz_calendar_import.sql");
   const nlcData = readFileSync("supabase/functions/nlc-data/index.ts", "utf8");
 
-  it("import is all-or-nothing and checks dates again on the server", () => {
-    expect(migration).toContain("lightning_quiz_import_duplicate_date");
-    expect(migration).toContain("RAISE EXCEPTION 'lightning_quiz_date_taken:%', d;");
+  it("import is all-or-nothing and checks the day limit again on the server (#718)", () => {
+    // #718：同一批、同一天可以多題，只擋一天超過 5 題（含同一批前面寫入的）
+    expect(migration).not.toContain("lightning_quiz_import_duplicate_date");
+    expect(migration).not.toContain("lightning_quiz_date_taken");
+    expect(migration).toContain("PERFORM public._lightning_quiz_assert_day_capacity(d, NULL);");
     expect(migration).toContain("IF p_schedule AND public._lightning_quiz_window_started(d, t_start) THEN");
   });
 
