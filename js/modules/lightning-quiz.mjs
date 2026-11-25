@@ -196,6 +196,19 @@ function homeApi(question) {
   };
 }
 
+const HOME_VISIBLE_STATUSES = new Set(["available", "in_progress", "answered"]);
+let homeItemSessions = [];
+
+function paintHomeQuestion(session, data) {
+  if (data.status === "answered") {
+    paint(session, renderResultView(data.isCorrect === true, data.elapsedMs));
+  } else if (data.status === "in_progress") {
+    showAnswering(session, data, homeApi(data), data.startedAt);
+  } else {
+    showTeaser(session, data, homeApi(data));
+  }
+}
+
 export async function refreshLightningQuizHomeCard() {
   const card = document.getElementById("lightning-quiz-card");
   const host = document.getElementById("lightning-quiz-host");
@@ -205,6 +218,8 @@ export async function refreshLightningQuizHomeCard() {
   refreshInFlight = (async () => {
     if (!homeSession || homeSession.host !== host) homeSession = createSession(host);
     stopSession(homeSession);
+    homeItemSessions.forEach(stopSession);
+    homeItemSessions = [];
 
     const result = typeof db !== "undefined" && typeof db.getTodaysLightningQuiz === "function"
       ? await db.getTodaysLightningQuiz()
@@ -212,22 +227,38 @@ export async function refreshLightningQuizHomeCard() {
     const data = result.success ? (result.data || {}) : { status: "hidden" };
     const status = data.status || "hidden";
 
-    if (status !== "available" && status !== "in_progress" && status !== "answered") {
+    if (!HOME_VISIBLE_STATUSES.has(status)) {
       scheduleHomeEndRefresh(null);
       card.classList.add("hidden");
       host.innerHTML = "";
       return;
     }
     card.classList.remove("hidden");
-    scheduleHomeEndRefresh(data.secondsUntilEnd);
 
-    if (status === "answered") {
-      paint(homeSession, renderResultView(data.isCorrect === true, data.elapsedMs));
-    } else if (status === "in_progress") {
-      showAnswering(homeSession, data, homeApi(data), data.startedAt);
-    } else {
-      showTeaser(homeSession, data, homeApi(data));
+    // #718：同一天有好幾題已開始的題目，就全部並列，每題各自作答
+    const items = Array.isArray(data.items)
+      ? data.items.filter(item => item && HOME_VISIBLE_STATUSES.has(item.status))
+      : [];
+    if (items.length > 1) {
+      const ends = items.map(item => Number(item.secondsUntilEnd)).filter(Number.isFinite);
+      scheduleHomeEndRefresh(ends.length ? Math.min(...ends) : data.secondsUntilEnd);
+      host.innerHTML = `<div class="lightning-quiz-multi">
+        <p class="lightning-quiz-multi__note">今天有 ${items.length} 題雲柱測驗，每題各自計時。</p>
+        ${items.map((_, index) => `<section class="lightning-quiz-multi__item" aria-label="第 ${index + 1} 題">
+          <p class="lightning-quiz-multi__label">第 ${index + 1} 題</p>
+          <div data-lq-slot="${index}"></div>
+        </section>`).join("")}
+      </div>`;
+      items.forEach((item, index) => {
+        const session = createSession(host.querySelector(`[data-lq-slot="${index}"]`));
+        homeItemSessions.push(session);
+        paintHomeQuestion(session, item);
+      });
+      return;
     }
+
+    scheduleHomeEndRefresh(data.secondsUntilEnd);
+    paintHomeQuestion(homeSession, data);
   })();
 
   try {
