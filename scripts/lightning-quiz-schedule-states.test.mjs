@@ -47,13 +47,14 @@ describe("migration 20260927121803", () => {
     expect(upsert).toContain("RAISE EXCEPTION 'lightning_quiz_locked'");
     expect(upsert).not.toContain("forked");
     expect(upsert).not.toContain("source_question_id");
-    expect(upsert).toContain("lightning_quiz_date_taken");
+    // #718 hotfix：同一天可以排好幾題，不再擋 date_taken
+    expect(upsert).not.toContain("lightning_quiz_date_taken");
   });
 
-  it("scheduling checks the window and the one-per-day rule; there is no archive", () => {
+  it("scheduling checks the window (several per day allowed since #718); there is no archive", () => {
     const status = fnBlock("admin_set_lightning_quiz_status");
     expect(status).toContain("lightning_quiz_window_passed");
-    expect(status).toContain("lightning_quiz_date_taken");
+    expect(status).not.toContain("lightning_quiz_date_taken");
     expect(status).not.toContain("'archived'");
     expect(status).toContain("IF public._lightning_quiz_is_locked(q.id) THEN");
   });
