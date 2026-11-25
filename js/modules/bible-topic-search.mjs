@@ -94,7 +94,8 @@ export function pickTopicRefText(chapterVerses, parsed) {
   return chapterVerses
     .filter(item => Number(item?.verse) >= parsed.verse && Number(item?.verse) <= parsed.endVerse)
     .sort((left, right) => Number(left.verse) - Number(right.verse))
-    .map(item => String(item.text || "").replace(/<[^>]*>/g, "").trim())
+    // 剝完標籤再拿掉殘留的 < >：巢狀或沒閉合的標籤剝一次會留下半個（CodeQL js/incomplete-multi-character-sanitization）
+    .map(item => String(item.text || "").replace(/<[^>]*>/g, "").replace(/[<>]/g, "").trim())
     .filter(Boolean)
     .join(" ");
 }
