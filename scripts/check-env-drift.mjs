@@ -184,10 +184,17 @@ function readGitTree(gitRef) {
 function fetchEnvironment(env) {
   const applied = runSql(env.ref, "select version from supabase_migrations.schema_migrations order by version;")
     .map(row => String(row.version));
-  // Windows 的 npx 是 .cmd，必須透過 shell；remoteFlag 驗證過 ref
-  const output = run(supabaseCommand(["functions", "list", remoteFlag(env.ref), "-o", "json"]), [], { shell: true });
+  // Windows 的 npx 是 .cmd，必須透過 shell；remoteFlag 驗證過 ref。
+  // CLI 的輸出帶 ref，錯誤訊息可能被貼到公開的 issue，先遮掉（#717）
+  const mask = text => String(text).split(env.ref).join("<ref>");
+  let output;
+  try {
+    output = run(supabaseCommand(["functions", "list", remoteFlag(env.ref), "-o", "json"]), [], { shell: true });
+  } catch (error) {
+    throw new Error(mask(error.message));
+  }
   const start = output.indexOf("[");
-  if (start === -1) throw new Error(`讀不到 ${env.label} 的函式清單：${output.slice(0, 500)}`);
+  if (start === -1) throw new Error(`讀不到 ${env.label} 的函式清單：${mask(output.slice(0, 500))}`);
   return { applied, remote: JSON.parse(output.slice(start)) };
 }
 
