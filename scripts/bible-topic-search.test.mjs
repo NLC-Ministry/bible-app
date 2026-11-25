@@ -132,7 +132,7 @@ describe("章節位置", () => {
     // 巢狀或不完整的標籤剝一次後不可留下 < 或 >（CodeQL 不完整清除）
     const nested = pickTopicRefText([{ verse: 6, text: "a<<script>script>b<i" }], parsed);
     expect(nested).not.toMatch(/[<>]/);
-    expect(nested).toBe("ascriptbi");
+    expect(nested).toBe("ab");
   });
 
   it("多個主題的經文依序攤平並去重", () => {
