@@ -20,6 +20,8 @@ import {
   getBibleSearchErrorMessage,
   getBibleSearchPlan
 } from "./bible-search-sources.mjs";
+import { BIBLE_TOPICS } from "../data/bible-topic-index.mjs";
+import { formatTopicRefLabel, matchBibleTopics, parseTopicRef, pickTopicRefText } from "./bible-topic-search.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import { isPlanCheckInClosed, isPlanCheckInClosedError } from "../data/plan-checkin-window.mjs";
 import { getPlanEndedNotice } from "../data/plan-ended-copy.mjs";
@@ -166,6 +168,8 @@ let selectionBottomBarBindTimer = null;
 // 刻意不進 state.js（Map 不能序列化）；生命週期＝此模組載入期間。
 const verseSelection = new Map();
 const ENGLISH_BIBLE_VERSIONS = new Set(["ESV", "NIV", "NLT", "WEB"]);
+// 注音符號與聲調（ˇˊˋ˙）：框裡還有這些表示會友還在選字（#714）。
+const ZHUYIN_COMPOSING_PATTERN = /[㄀-ㄯㆠ-ㆿˇˊˋ˙]/;
 
 function usesEnglishReaderLabels(version = state.readerState?.version) {
   return ENGLISH_BIBLE_VERSIONS.has(String(version || "").toUpperCase());
@@ -720,9 +724,112 @@ export function initReaderControls() {
     searchReferenceHintEl.classList.toggle("hidden", !show);
   }
 
+  // #714 相關主題：放在找字結果上方（結果可能上百筆，放下面會看不到），點標籤才列出經文。
+  // 牧者審核主題索引前，用 TOPIC_SEARCH_ENABLED（config.js）關著。
+  const searchTopicsEl = document.getElementById("global-search-topics");
+  let searchTopicRequestId = 0;
+
+  function isTopicSearchEnabled() {
+    return window.APP_CONFIG?.topicSearchEnabled === true;
+  }
+
+  function hideSearchTopics() {
+    searchTopicRequestId += 1;
+    if (!searchTopicsEl) return;
+    searchTopicsEl.innerHTML = "";
+    searchTopicsEl.classList.add("hidden");
+  }
+
+  function renderSearchTopics(query) {
+    if (!searchTopicsEl) return;
+    const matches = isTopicSearchEnabled() ? matchBibleTopics(query, BIBLE_TOPICS, { limit: 4 }) : [];
+    if (!matches.length) {
+      hideSearchTopics();
+      return;
+    }
+    searchTopicRequestId += 1;
+    const english = usesEnglishReaderLabels();
+    searchTopicsEl.innerHTML = `
+      <div class="search-topics__label">${english ? "Related topics" : "相關主題"}</div>
+      <div class="search-topics__chips" role="group">
+        ${matches.map(({ topic }) => `
+          <button type="button" class="search-topic-chip" data-topic-id="${escapeHTML(topic.id)}" aria-expanded="false">#${escapeHTML(english ? topic.en : topic.name)}</button>
+        `).join("")}
+      </div>
+      <div class="search-topics__panel hidden"></div>
+    `;
+    searchTopicsEl.classList.remove("hidden");
+  }
+
+  function renderSearchTopicVerses(topic, panel) {
+    const requestId = ++searchTopicRequestId;
+    const english = usesEnglishReaderLabels();
+    const version = state.readerState.version || "CUNP";
+    panel.innerHTML = "";
+    panel.classList.remove("hidden");
+
+    topic.refs.forEach(ref => {
+      const parsed = parseTopicRef(ref);
+      const book = parsed ? BIBLE_BOOKS.find(item => item.eng === parsed.bookEng) : null;
+      if (!parsed || !book) return;
+
+      const item = document.createElement("div");
+      item.className = "search-result-item";
+      item.innerHTML = `
+        <div class="search-result-ref">${escapeHTML(formatTopicRefLabel(parsed, readerBookLabel(book, english), english))}</div>
+        <div class="search-result-text search-result-text--loading">${english ? "Loading…" : "載入經文中…"}</div>
+      `;
+      // 點了跳到該章、標出這幾節，就是「看上下文」。
+      item.addEventListener("click", () => {
+        if (searchOverlay) closeReaderLayer(searchOverlay);
+        const highlightVerses = [];
+        for (let verse = parsed.verse; verse <= parsed.endVerse; verse += 1) highlightVerses.push(verse);
+        goToReaderVerse({ bookId: book.id, chapter: parsed.chapter, verse: parsed.verse, highlightVerses });
+      });
+      panel.appendChild(item);
+
+      const textEl = item.querySelector(".search-result-text");
+      Promise.resolve(typeof window.fetchBibleChapter === "function"
+        ? window.fetchBibleChapter(book.eng, parsed.chapter, version)
+        : null)
+        .catch(() => null)
+        .then(data => {
+          if (requestId !== searchTopicRequestId || !textEl) return;
+          const text = data && !data.isPlaceholder ? pickTopicRefText(data.verses, parsed) : "";
+          textEl.classList.remove("search-result-text--loading");
+          textEl.textContent = text || (english ? "Tap to read this passage" : "經文暫時載入不了，點了可到該章閱讀");
+        });
+    });
+  }
+
+  if (searchTopicsEl) {
+    searchTopicsEl.addEventListener("click", event => {
+      const chip = event.target.closest(".search-topic-chip");
+      if (!chip) return;
+      const panel = searchTopicsEl.querySelector(".search-topics__panel");
+      const topic = BIBLE_TOPICS.find(item => item.id === chip.dataset.topicId);
+      if (!panel || !topic) return;
+      const wasOpen = chip.getAttribute("aria-expanded") === "true";
+      searchTopicsEl.querySelectorAll(".search-topic-chip").forEach(button => {
+        button.setAttribute("aria-expanded", "false");
+        button.classList.remove("is-active");
+      });
+      if (wasOpen) {
+        searchTopicRequestId += 1;
+        panel.innerHTML = "";
+        panel.classList.add("hidden");
+        return;
+      }
+      chip.setAttribute("aria-expanded", "true");
+      chip.classList.add("is-active");
+      renderSearchTopicVerses(topic, panel);
+    });
+  }
+
   function resetSearchResults() {
     searchRequestId += 1;
     if (searchResultsContainer) searchResultsContainer.innerHTML = "";
+    hideSearchTopics();
     updateSearchReferenceHint("");
     if (searchResultsCountEl) searchResultsCountEl.textContent = "請輸入關鍵字進行搜尋";
   }
@@ -756,7 +863,14 @@ export function initReaderControls() {
 
   let searchTimeout = null;
   if (searchInput) {
+    // #714：注音還在選字（框裡還有ㄅㄆㄇ、聲調符號）時不送出搜尋，選完字由 compositionend 補一次。
+    // 只擋注音：Android 的 Gboard 打英文時每個字都算 composing，全擋會讓英文要按空白才搜得到。
+    // 重複觸發（Safari 在 compositionend 後還會送 input）由 debounce 與 requestId 蓋掉。
+    searchInput.addEventListener("compositionend", () => {
+      searchInput.dispatchEvent(new Event("input"));
+    });
     searchInput.addEventListener("input", (e) => {
+      if (e.isComposing && ZHUYIN_COMPOSING_PATTERN.test(e.target.value)) return;
       const query = e.target.value.trim();
       if (searchClearBtn) {
         searchClearBtn.classList.toggle("hidden", !query);
@@ -774,6 +888,7 @@ export function initReaderControls() {
       const searchVersion = state.readerState.version || "CUNP";
       if (getBibleSearchPlan(searchVersion).source === "bolls" && isShortBibleQuery(query)) {
         if (searchResultsContainer) searchResultsContainer.innerHTML = "";
+        hideSearchTopics();
         if (searchResultsCountEl) {
           searchResultsCountEl.textContent = getBibleSearchErrorMessage(createBibleSearchError(BIBLE_SEARCH_ERROR.QUERY_TOO_SHORT));
         }
@@ -783,6 +898,8 @@ export function initReaderControls() {
       if (searchResultsCountEl) searchResultsCountEl.textContent = "正在搜尋中...";
       
       searchTimeout = setTimeout(async () => {
+        // 主題比對在本機、不用等網路；找字失敗或找不到時，相關主題照樣留著。
+        if (requestId === searchRequestId) renderSearchTopics(query);
         try {
           const results = await window.searchBibleText(query, searchVersion);
           if (requestId !== searchRequestId) return;

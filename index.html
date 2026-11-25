@@ -1883,7 +1883,11 @@
     <div class="search-reference-hint hidden" id="global-search-reference-hint" role="note" aria-live="polite"></div>
     <div class="search-results-info" id="search-results-count">
       &#x8F38;&#x5165;&#x95DC;&#x9375;&#x5B57;&#x958B;&#x59CB;&#x641C;&#x5C0B;</div>
-    <div class="overlay-scroll-content" id="global-search-results"></div>
+    <div class="overlay-scroll-content" id="global-search-scroll">
+      <!-- 相關主題（#714）：由 TOPIC_SEARCH_ENABLED 開關控制，關閉時一直隱藏 -->
+      <section class="search-topics hidden" id="global-search-topics" aria-label="&#x76F8;&#x95DC;&#x4E3B;&#x984C;"></section>
+      <div id="global-search-results"></div>
+    </div>
   </div>
 
   <!-- 雲柱測驗後台的彈出面板（#313、#317）：題目、試作（排程規則 #620 起是規則設定分頁）。一開始就放在 body 底下，

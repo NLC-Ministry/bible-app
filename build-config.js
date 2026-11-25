@@ -12,6 +12,8 @@ let nlcScopes = process.env.NLC_SCOPES || "openid profile email phone offline_ac
 let nlcPlatformResource = process.env.NLC_PLATFORM_RESOURCE || "https://platform.newlife.org.tw";
 const appVersion = process.env.APP_VERSION || "0.1.1";
 const onboardingVersion = process.env.ONBOARDING_VERSION || appVersion;
+// 經文搜尋的「相關主題」（#714）：主題索引經牧者審核前只在 staging 打開。
+let topicSearchEnabled = process.env.TOPIC_SEARCH_ENABLED;
 
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
@@ -30,16 +32,20 @@ if (fs.existsSync(envPath)) {
       else if (key === 'NLC_MEMBER_HUB_URL') nlcMemberHubUrl = val;
       else if (key === 'NLC_SCOPES') nlcScopes = val;
       else if (key === 'NLC_PLATFORM_RESOURCE') nlcPlatformResource = val;
+      else if (key === 'TOPIC_SEARCH_ENABLED' && topicSearchEnabled === undefined) topicSearchEnabled = val;
     }
   }
 }
+
+const topicSearchOn = String(topicSearchEnabled || '').trim().toLowerCase() === 'true';
 
 // 產生前端可載入的 config.js
 const configContent = `// 連線設定 (由 build-config.js 自動從 .env 產生，請勿直接手動編輯此檔案)
 // Release defaults: appVersion: "0.1.1", onboardingVersion: "0.1.1"
 const APP_CONFIG = {
   appVersion: "${appVersion}",
-  onboardingVersion: "${onboardingVersion}"
+  onboardingVersion: "${onboardingVersion}",
+  topicSearchEnabled: ${topicSearchOn}
 };
 
 const SUPABASE_CONFIG = {
@@ -74,4 +80,5 @@ console.log(`NLC Scopes: ${nlcScopes}`);
 console.log(`NLC Platform Resource: ${nlcPlatformResource}`);
 console.log(`App Version: ${appVersion}`);
 console.log(`Onboarding Version: ${onboardingVersion}`);
+console.log(`Topic Search (#714): ${topicSearchOn ? '開啟' : '關閉'}`);
 console.log('---');
