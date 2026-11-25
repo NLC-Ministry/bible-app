@@ -109,7 +109,7 @@ describe("前端與 nlc-data 接線", () => {
 });
 
 describe("我的測驗檢討與首頁撤掉（0213）", () => {
-  const sql0213 = read("supabase/migrations/0213_my_quiz_review.sql");
+  const sql0213 = currentMigrationSql("0213_my_quiz_review.sql");
   const body = name => {
     const start = sql0213.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
     expect(start, name).toBeGreaterThanOrEqual(0);
@@ -125,8 +125,10 @@ describe("我的測驗檢討與首頁撤掉（0213）", () => {
   });
 
   it("活動一結束首頁就撤掉，並告訴前端還剩幾秒", () => {
-    const todays = body("get_todays_lightning_quiz");
-    expect(todays).toMatch(/IF now_time > q\.rise_time_end THEN\s+RETURN jsonb_build_object\('status', 'hidden'\);/);
+    // #718 hotfix 改寫了這支（同一天多題）：驗現在的定義，只挑還沒結束的題，全結束就 hidden
+    const todays = latestFunctionDefinition("get_todays_lightning_quiz").text;
+    expect(todays).toContain("q0.rise_time_end >= now_time");
+    expect(todays).toMatch(/IF NOT FOUND THEN\s+RETURN jsonb_build_object\('status', 'hidden'\);/);
     expect(todays).not.toContain("canSubmit");
     expect(todays.match(/'secondsUntilEnd', seconds_left/g)).toHaveLength(3);
   });
