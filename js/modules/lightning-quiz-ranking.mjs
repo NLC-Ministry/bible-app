@@ -15,9 +15,15 @@ import {
 // （公布期間可能已經超過「最近一週」）。profile.js 開「我的測驗」時讀一次就清掉。
 export const PROFILE_EXAMS_HINT_KEY = "profileExamsHint";
 
-function winnersHtml(winners) {
+// 同一天有好幾題（#718）時，每題一個區塊並標出第幾題；一天一題就只寫日期。
+function dayLabel(day) {
+  const weekday = formatWeekday(day.riseDate);
+  return Number(day.questionCount) > 1 ? `${weekday}第 ${day.questionNumber} 題` : weekday;
+}
+
+function winnersHtml(winners, multi) {
   if (!Array.isArray(winners) || !winners.length) {
-    return '<p class="lq-ranking__empty">這天沒有人答對。</p>';
+    return `<p class="lq-ranking__empty">${multi ? "這題" : "這天"}沒有人答對。</p>`;
   }
   return `<ol class="lq-ranking__list">
     ${winners.map(winner => `<li class="lq-ranking__row">
@@ -38,9 +44,9 @@ export function renderRankingCardHtml(data) {
       <span class="lq-ranking__range">${escapeHTML(formatWeekRange(data?.weekStart))}</span>
     </div>
     <div class="lq-ranking__days">
-      ${days.map(day => `<section class="lq-ranking__day" aria-label="${escapeHTML(formatWeekday(day.riseDate))}">
-        <h4 class="lq-ranking__date">${escapeHTML(formatWeekday(day.riseDate))}</h4>
-        ${winnersHtml(day.winners)}
+      ${days.map(day => `<section class="lq-ranking__day" aria-label="${escapeHTML(dayLabel(day))}">
+        <h4 class="lq-ranking__date">${escapeHTML(dayLabel(day))}</h4>
+        ${winnersHtml(day.winners, Number(day.questionCount) > 1)}
       </section>`).join("")}
     </div>
     <div class="lq-ranking__footer">

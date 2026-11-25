@@ -403,6 +403,25 @@ describe("雲柱測驗後台：分頁＋彈出面板（#309、#310、#313）", (
     expect(document.getElementById("admin-lightning-quiz-form-title").textContent).toBe("新增題目");
   });
 
+  // #718：一格列出那天每一題，各自點開；還沒滿 5 題可以再新增
+  it("calendar lists every question of a day and still offers ＋ 新增 until the day is full", async () => {
+    dbStub.adminGetLightningQuizSettings.mockResolvedValue({ success: true, data: { weekdays: [1, 2, 3, 4, 5, 6, 7], timeStart: "07:00", timeEnd: "10:00" } });
+    dbStub.adminListLightningQuizQuestions.mockResolvedValue({ success: true, data: [
+      ...questions,
+      { ...base, id: "sched-2", riseDate: shift(1), riseTimeStart: "19:00:00", riseTimeEnd: "21:00:00", status: "published", locked: false }
+    ] });
+    await render();
+    const planner = document.getElementById("admin-lightning-quiz-planner");
+    const cell = planner.querySelector('[data-lq-calendar-open="sched-1"]').closest(".admin-lightning-quiz-calendar__day");
+    expect([...cell.querySelectorAll("[data-lq-calendar-open]")].map(el => el.dataset.lqCalendarOpen)).toEqual(["sched-1", "sched-2"]);
+    expect(cell.textContent).toContain("19:00");
+    const add = cell.querySelector("[data-lq-calendar-add]");
+    expect(add.dataset.lqCalendarAdd).toBe(shift(1));
+    add.click();
+    expect(isOpen("admin-lightning-quiz-editor")).toBe(true);
+    expect(document.getElementById("admin-lightning-quiz-rise-date").value).toBe(shift(1));
+  });
+
   it("匯入題目 opens a sheet that previews the dates first, then imports everything in one call", async () => {
     await render();
     document.getElementById("admin-lightning-quiz-import-open").click();

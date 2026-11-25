@@ -197,10 +197,43 @@ function homeApi(question) {
 }
 
 const HOME_VISIBLE_STATUSES = new Set(["available", "in_progress", "answered"]);
+// #718：並列時也列還沒開始（upcoming，只有時段）與已結束（ended，只有自己的結果）的題目
+const HOME_ITEM_STATUSES = new Set([...HOME_VISIBLE_STATUSES, "upcoming", "ended"]);
 let homeItemSessions = [];
 
+const ENDED_RESULT_TEXT = {
+  correct: item => `答對了・${formatElapsed(item.elapsedMs)}`,
+  wrong: item => `答錯了・${formatElapsed(item.elapsedMs)}`,
+  incomplete: () => "沒有送出答案",
+  not_participated: () => "沒有作答"
+};
+
+function renderPendingView(item) {
+  if (item.status === "upcoming") {
+    return `<p class="lightning-quiz-pending">${escapeHTML(item.riseTimeStart || "")} 開放作答</p>`;
+  }
+  const text = (ENDED_RESULT_TEXT[item.result] || ENDED_RESULT_TEXT.not_participated)(item);
+  return `<p class="lightning-quiz-pending is-ended">已結束・${escapeHTML(text)}</p>`;
+}
+
+function homeItemLabel(item, index) {
+  const times = item.riseTimeStart && item.riseTimeEnd ? `・${item.riseTimeStart}–${item.riseTimeEnd}` : "";
+  return `第 ${index + 1} 題${times}`;
+}
+
+// 並列時最早會變化的那一刻：某題時段結束，或還沒開始的那題開始。
+function nextHomeChangeSeconds(items, fallback) {
+  const seconds = items.flatMap(item => [
+    HOME_VISIBLE_STATUSES.has(item.status) ? item.secondsUntilEnd : null,
+    item.status === "upcoming" ? item.secondsUntilStart : null
+  ]).filter(value => value !== null && value !== undefined && value !== "").map(Number).filter(Number.isFinite);
+  return seconds.length ? Math.min(...seconds) : fallback;
+}
+
 function paintHomeQuestion(session, data) {
-  if (data.status === "answered") {
+  if (data.status === "upcoming" || data.status === "ended") {
+    paint(session, renderPendingView(data));
+  } else if (data.status === "answered") {
     paint(session, renderResultView(data.isCorrect === true, data.elapsedMs));
   } else if (data.status === "in_progress") {
     showAnswering(session, data, homeApi(data), data.startedAt);
@@ -235,17 +268,16 @@ export async function refreshLightningQuizHomeCard() {
     }
     card.classList.remove("hidden");
 
-    // #718：同一天有好幾題已開始的題目，就全部並列，每題各自作答
+    // #718：同一天有好幾題，就全部並列（含還沒開始、已結束），每題各自作答、各自計時
     const items = Array.isArray(data.items)
-      ? data.items.filter(item => item && HOME_VISIBLE_STATUSES.has(item.status))
+      ? data.items.filter(item => item && HOME_ITEM_STATUSES.has(item.status))
       : [];
     if (items.length > 1) {
-      const ends = items.map(item => Number(item.secondsUntilEnd)).filter(Number.isFinite);
-      scheduleHomeEndRefresh(ends.length ? Math.min(...ends) : data.secondsUntilEnd);
+      scheduleHomeEndRefresh(nextHomeChangeSeconds(items, data.secondsUntilEnd));
       host.innerHTML = `<div class="lightning-quiz-multi">
         <p class="lightning-quiz-multi__note">今天有 ${items.length} 題雲柱測驗，每題各自計時。</p>
-        ${items.map((_, index) => `<section class="lightning-quiz-multi__item" aria-label="第 ${index + 1} 題">
-          <p class="lightning-quiz-multi__label">第 ${index + 1} 題</p>
+        ${items.map((item, index) => `<section class="lightning-quiz-multi__item" aria-label="第 ${index + 1} 題">
+          <p class="lightning-quiz-multi__label">${escapeHTML(homeItemLabel(item, index))}</p>
           <div data-lq-slot="${index}"></div>
         </section>`).join("")}
       </div>`;

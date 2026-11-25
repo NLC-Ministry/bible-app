@@ -599,7 +599,7 @@ describe("雲柱同一天多題（#718 hotfix）", () => {
     expect(outcome.allEnded).toEqual({ status: "hidden" });
   });
 
-  it("items 列出今天每一題已開始、還沒結束的狀態，依開始時間排序；還沒開始的不列", async () => {
+  it("items 列出今天每一題的狀態，依開始時間排序；還沒開始的只給時段、不給題目（#718）", async () => {
     const outcome = await asService(async tx => {
       const { rows: [clock] } = await tx.query(
         `SELECT (NOW() AT TIME ZONE 'Asia/Taipei')::date::text AS today,
@@ -617,16 +617,186 @@ describe("雲柱同一天多題（#718 hotfix）", () => {
         `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
          VALUES ($1, $2, now(), 3000, '0'::jsonb, TRUE)`, [first, ids.member]
       );
-      return { first, second, result: await today() };
+      return { first, second, notYet, result: await today() };
     });
     if (!outcome) return;
     expect(outcome.result).toMatchObject({ status: "available", questionId: outcome.second });
     expect(outcome.result.items.map(item => [item.questionId, item.status])).toEqual([
       [outcome.first, "answered"],
-      [outcome.second, "available"]
+      [outcome.second, "available"],
+      [outcome.notYet, "upcoming"]
     ]);
-    // 答案不會出現在 items 裡
+    const upcoming = outcome.result.items[2];
+    expect(upcoming.secondsUntilStart).toBeGreaterThan(0);
+    expect(upcoming.riseTimeStart).toBeTruthy();
+    // 還沒開始的不給題目；答案不會出現在 items 裡
+    expect(upcoming).not.toHaveProperty("payload");
     expect(JSON.stringify(outcome.result.items)).not.toContain("answerKey");
+  });
+});
+
+describe("雲柱一天多題：上限、前三名與兌換券以題目為單位（#718）", () => {
+  const payload = stem => JSON.stringify({ stem, options: ["甲", "乙"] });
+  const insertQuestion = async (tx, riseDate, start, end, status = "published", createdOffsetSec = 0) => (await tx.query(
+    `INSERT INTO public.lightning_quiz_questions (rise_date, rise_time_start, rise_time_end, question_type, payload, answer_key, status, created_at)
+     VALUES ($1, $2::time, $3::time, 'single', $4::jsonb, '0'::jsonb, $5, now() + make_interval(secs => $6))
+     RETURNING id`,
+    [riseDate, start, end, payload(`${riseDate} ${start}`), status, createdOffsetSec]
+  )).rows[0].id;
+  const upsert = (tx, id, riseDate) => tx.query(
+    `SELECT public.admin_upsert_lightning_quiz_question($1, $2::date, '11:00', '14:00', 'single', $3::jsonb, '0'::jsonb, NULL, $4) AS r`,
+    [id, riseDate, payload(`upsert ${riseDate}`), ids.admin]
+  );
+  const importItems = (tx, items) => tx.query(
+    `SELECT public.admin_import_lightning_quiz_questions($1::jsonb, FALSE, $2) AS r`,
+    [JSON.stringify(items.map(([riseDate, start]) => ({
+      riseDate, riseTimeStart: start, riseTimeEnd: "23:00", questionType: "single",
+      payload: { stem: `匯入 ${riseDate} ${start}`, options: ["甲", "乙"] }, answerKey: 0
+    }))), ids.admin]
+  );
+
+  it("一天最多 5 題：第 6 題新增、改日期、匯入都擋下", async () => {
+    const outcome = await asService(async tx => {
+      for (let i = 0; i < 4; i += 1) await upsert(tx, null, "2099-02-02");
+      // 匯入同一天第 5 題可以（同一批可以有同一天）
+      await importItems(tx, [["2099-02-02", "15:00"], ["2099-02-03", "15:00"], ["2099-02-03", "16:00"]]);
+      const counts = (await tx.query(
+        `SELECT rise_date::text AS d, count(*)::int AS n FROM public.lightning_quiz_questions
+         WHERE rise_date IN ('2099-02-02', '2099-02-03') GROUP BY rise_date ORDER BY rise_date`
+      )).rows;
+      // 同一天的題目原地改內容不受上限影響
+      const sameDay = (await tx.query(`SELECT id FROM public.lightning_quiz_questions WHERE rise_date = '2099-02-02' LIMIT 1`)).rows[0].id;
+      await upsert(tx, sameDay, "2099-02-02");
+      return counts;
+    });
+    expect(outcome).toEqual([{ d: "2099-02-02", n: 5 }, { d: "2099-02-03", n: 2 }]);
+
+    const full = async tx => { for (let i = 0; i < 5; i += 1) await upsert(tx, null, "2099-02-02"); };
+    await expect(asService(async tx => { await full(tx); await upsert(tx, null, "2099-02-02"); }))
+      .rejects.toThrow(/lightning_quiz_day_full/);
+    await expect(asService(async tx => {
+      await full(tx);
+      const { rows: [{ r }] } = await upsert(tx, null, "2099-02-04");
+      await upsert(tx, r.id, "2099-02-02");
+    })).rejects.toThrow(/lightning_quiz_day_full/);
+    await expect(asService(async tx => {
+      await importItems(tx, [1, 2, 3, 4, 5, 6].map(n => ["2099-02-05", `1${n}:00`]));
+    })).rejects.toThrow(/lightning_quiz_day_full:2099-02-05/);
+  });
+
+  it("首頁 items：已結束的題目標 ended，帶自己的結果，不給題目", async () => {
+    const outcome = await asService(async tx => {
+      const { rows: [clock] } = await tx.query(
+        `SELECT (NOW() AT TIME ZONE 'Asia/Taipei')::date::text AS today,
+                ((NOW() AT TIME ZONE 'Asia/Taipei')::time - interval '2 minutes')::time::text AS ended_at,
+                (NOW() AT TIME ZONE 'Asia/Taipei')::time < '00:05' AS too_early,
+                (NOW() AT TIME ZONE 'Asia/Taipei')::time > '23:55' AS too_late`
+      );
+      if (clock.too_early || clock.too_late) return null;
+      const ended = await insertQuestion(tx, clock.today, "00:00", clock.ended_at);
+      const live = await insertQuestion(tx, clock.today, "00:01", "23:59:59");
+      await tx.query(
+        `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+         VALUES ($1, $2, now(), 4200, '1'::jsonb, FALSE)`, [ended, ids.member]
+      );
+      const { rows: [{ r }] } = await tx.query(`SELECT public.get_todays_lightning_quiz($1) AS r`, [ids.member]);
+      return { ended, live, r };
+    });
+    if (!outcome) return;
+    expect(outcome.r).toMatchObject({ status: "available", questionId: outcome.live });
+    expect(outcome.r.items.map(item => [item.questionId, item.status])).toEqual([
+      [outcome.ended, "ended"],
+      [outcome.live, "available"]
+    ]);
+    expect(outcome.r.items[0]).toMatchObject({ result: "wrong", elapsedMs: 4200 });
+    expect(outcome.r.items[0]).not.toHaveProperty("payload");
+  });
+
+  // 2026-08-31（週一）那週：週三兩題（11:00 先、19:00 後；晚上那題先建立），member 兩題都最快答對。
+  const WEEK = "2026-08-31";
+  const seedWeek = async tx => {
+    const evening = await insertQuestion(tx, "2026-09-02", "19:00", "22:00");
+    const morning = await insertQuestion(tx, "2026-09-02", "11:00", "14:00", "published", 1);
+    const correct = (questionId, userId, ms) => tx.query(
+      `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+       VALUES ($1, $2, now(), $3, '0'::jsonb, TRUE)`, [questionId, userId, ms]
+    );
+    for (const q of [morning, evening]) {
+      await correct(q, ids.member, 3000);
+      await correct(q, ids.other, 4000);
+    }
+    return { morning, evening };
+  };
+  const publishWeek = async (tx, excluded) => (await tx.query(
+    `SELECT public.admin_publish_lightning_quiz_week_ranking($1::date, $2::jsonb, 3, $3) AS r`,
+    [WEEK, JSON.stringify(excluded), ids.admin]
+  )).rows[0].r;
+  const vouchersOf = async tx => (await tx.query(
+    `SELECT question_id, user_id, rank, voided_at IS NOT NULL AS voided FROM public.lightning_quiz_vouchers
+     WHERE week_start = $1::date ORDER BY question_id, rank`, [WEEK]
+  )).rows;
+
+  it("候選名單同一天依開始時間排，帶第幾題；排除名單以題目為單位", async () => {
+    const outcome = await asService(async tx => {
+      const { morning, evening } = await seedWeek(tx);
+      const { rows: [{ r: admin }] } = await tx.query(
+        `SELECT public.admin_get_lightning_quiz_week_ranking($1::date, $2) AS r`, [WEEK, ids.admin]
+      );
+      const published = await publishWeek(tx, { [morning]: [ids.member] });
+      const { rows: [{ r: home }] } = await tx.query(`SELECT public.get_lightning_quiz_week_ranking($1) AS r`, [ids.other]);
+      return { morning, evening, admin, published, home, vouchers: await vouchersOf(tx) };
+    });
+    expect(outcome.admin.days.map(d => [d.questionId, d.questionNumber, d.questionCount])).toEqual([
+      [outcome.morning, 1, 2],
+      [outcome.evening, 2, 2]
+    ]);
+    // 排除只影響早上那題：早上 other 遞補第一名，晚上 member 照樣第一名
+    const winners = Object.fromEntries(outcome.published.entries.map(e => [e.questionId, e.winners.map(w => w.userId)]));
+    expect(winners[outcome.morning]).toEqual([ids.other]);
+    expect(winners[outcome.evening]).toEqual([ids.member, ids.other]);
+    expect(outcome.published.excluded).toEqual({ [outcome.morning]: [ids.member], [outcome.evening]: [] });
+    expect(outcome.home.days.map(d => [d.questionId, d.questionNumber, d.questionCount, d.winners.length])).toEqual([
+      [outcome.morning, 1, 2, 1],
+      [outcome.evening, 2, 2, 2]
+    ]);
+    // 每題前三名各自發券：member 只有晚上那張，other 兩張
+    const byUser = user => outcome.vouchers.filter(v => v.user_id === user && !v.voided).map(v => v.question_id).sort();
+    expect(byUser(ids.member)).toEqual([outcome.evening]);
+    expect(byUser(ids.other)).toEqual([outcome.morning, outcome.evening].sort());
+  });
+
+  it("舊版後台送以日期為 key 的排除名單：套用到那天每一題", async () => {
+    const outcome = await asService(async tx => {
+      const { morning, evening } = await seedWeek(tx);
+      const published = await publishWeek(tx, { "2026-09-02": [ids.member] });
+      return { morning, evening, published };
+    });
+    expect(outcome.published.excluded).toEqual({ [outcome.morning]: [ids.member], [outcome.evening]: [ids.member] });
+    expect(outcome.published.entries.every(e => e.winners.length === 1)).toBe(true);
+  });
+
+  it("同一人同一天兩題都得獎拿兩張券；重新公布排除其中一題只作廢那一張", async () => {
+    const outcome = await asService(async tx => {
+      const { morning, evening } = await seedWeek(tx);
+      await publishWeek(tx, {});
+      const first = await vouchersOf(tx);
+      await publishWeek(tx, { [evening]: [ids.member] });
+      const second = await vouchersOf(tx);
+      return { morning, evening, first, second };
+    });
+    const memberVouchers = list => Object.fromEntries(list.filter(v => v.user_id === ids.member).map(v => [v.question_id, v.voided]));
+    expect(memberVouchers(outcome.first)).toEqual({ [outcome.morning]: false, [outcome.evening]: false });
+    expect(memberVouchers(outcome.second)).toEqual({ [outcome.morning]: false, [outcome.evening]: true });
+  });
+
+  it("兌換券帶題目，同一天多題時帶第幾題", async () => {
+    const vouchers = await asService(async tx => {
+      await seedWeek(tx);
+      await publishWeek(tx, {});
+      return (await tx.query(`SELECT public.get_my_lightning_quiz_vouchers($1) AS r`, [ids.member])).rows[0].r.vouchers;
+    });
+    expect(vouchers.map(v => [v.questionNumber, v.questionCount]).sort()).toEqual([[1, 2], [2, 2]]);
+    expect(vouchers.every(v => v.questionId)).toBe(true);
   });
 });
 
