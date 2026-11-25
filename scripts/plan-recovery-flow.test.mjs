@@ -11,7 +11,9 @@ import {
 import { LAST_LOGIN_METHOD_KEY, readLastLoginMethod, rememberLoginMethod } from "../js/login-method-memory.mjs";
 import {
   abandonPlanRecovery,
+  checkPlanRecoveryEligibility,
   finishPlanRecoveryAfterCallback,
+  forgetPlanRecoveryEligibility,
   planRecoveryConfirmBody,
   planRecoveryOffer,
   startPlanRecovery
@@ -110,6 +112,8 @@ beforeEach(() => {
   vi.spyOn(auth, "_navigateToAuthorization").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
+  forgetPlanRecoveryEligibility();
+  globalThis.state.currentProfileId = "new-profile";
   signInAsSource();
 });
 
@@ -148,6 +152,14 @@ describe("planRecoveryOffer：什麼時候改顯示「找回」", () => {
     expect(planRecoveryOffer(appState)).toBeNull();
     localStorage.setItem(LAST_LOGIN_METHOD_KEY, "{oops");
     expect(planRecoveryOffer(appState)).toBeNull();
+  });
+
+  it("這個帳號已知不能自動找回（#715）：卡片直接顯示留言版", async () => {
+    record({ method: "email", masked: "ab***@gmail.com" });
+    stubNetwork({ recoverPlan: () => json({ ok: true, eligible: false }) });
+    await checkPlanRecoveryEligibility({ auth, config: CONFIG, profileId: "new-profile" });
+    expect(planRecoveryOffer(appState)).toEqual({ method: "email", masked: "ab***@gmail.com", eligible: false });
+    expect(planRecoveryOffer({ ...appState, currentProfileId: "another-profile" })).toEqual({ method: "email", masked: "ab***@gmail.com" });
   });
 
   it("rememberLoginMethod 記下帳號 ID，讀回來還在；沒給就和以前一樣", () => {
@@ -234,6 +246,44 @@ describe("提示卡", () => {
     expect(status.classList.contains("hidden")).toBe(false);
   });
 
+  // #715：先問能不能找回，不能就不給「找回」按鈕，改請他留言
+  const expectIneligible = card => {
+    expect(card.querySelector("[data-account-recover-plan]")).toBeNull();
+    const body = card.querySelector(".account-switch-hint__body").textContent;
+    expect(body).toContain("是用 ab***@gmail.com 登入的");
+    expect(body).toContain("右下角的對話按鈕留言");
+    expect(body).not.toMatch(/帳號|合併|確認一次身分/);
+    expect(card.querySelector("[data-account-recover-status]").classList.contains("hidden")).toBe(true);
+    expect(card.querySelector("[data-account-switch-dismiss]").textContent).toBe("不是我／我是第一次參加");
+  };
+
+  it("已知不能找回：一開始就是留言版，不再去問", () => {
+    const checkEligibility = vi.fn();
+    expectIneligible(render({ ...offer, eligible: false }, { checkEligibility }));
+    expect(checkEligibility).not.toHaveBeenCalled();
+  });
+
+  it("問了不能找回：換成留言版", async () => {
+    const card = render(offer, { checkEligibility: async () => false });
+    await vi.waitFor(() => expect(card.querySelector("[data-account-recover-plan]")).toBeNull());
+    expectIneligible(card);
+  });
+
+  it.each([[true], [null]])("問的結果是 %s（可以，或問不到）：照舊顯示「找回」按鈕", async (answer) => {
+    const checkEligibility = vi.fn(async () => answer);
+    const card = render(offer, { checkEligibility });
+    await vi.waitFor(() => expect(checkEligibility).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(card.querySelector("[data-account-recover-plan]")).not.toBeNull();
+  });
+
+  it("按下去才被拒（not_eligible）：換成留言版，不讓他一直重試", async () => {
+    const card = render(offer, { onRecover: async () => ({ ok: false, code: "not_eligible", message: "這次沒有辦法自動找回計畫" }) });
+    card.querySelector("[data-account-recover-plan]").click();
+    await vi.waitFor(() => expect(card.querySelector("[data-account-recover-plan]")).toBeNull());
+    expectIneligible(card);
+  });
+
   it("主按鈕成功：正在跳轉，按鈕維持停用；從 Logto 按返回還原頁面時恢復", async () => {
     const onRecover = vi.fn(async () => ({ ok: true }));
     const card = render(offer, { onRecover });
@@ -247,6 +297,40 @@ describe("提示卡", () => {
     pageshow.persisted = true;
     window.dispatchEvent(pageshow);
     expect(button.disabled).toBe(false);
+  });
+});
+
+describe("事先問能不能找回（checkPlanRecoveryEligibility，#715）", () => {
+  it.each([true, false])("送出現在的 token，回 eligible=%s；同一個帳號只問一次", async (eligible) => {
+    const calls = stubNetwork({ recoverPlan: () => json({ ok: true, eligible }) });
+    expect(await checkPlanRecoveryEligibility({ auth, config: CONFIG })).toBe(eligible);
+    expect(await checkPlanRecoveryEligibility({ auth, config: CONFIG })).toBe(eligible);
+    expect(calls).toEqual([{ action: "check", source_token: SOURCE.access }]);
+  });
+
+  it("首頁和計畫頁同時問：只送一次", async () => {
+    const calls = stubNetwork({ recoverPlan: () => json({ ok: true, eligible: true }) });
+    await Promise.all([checkPlanRecoveryEligibility({ auth, config: CONFIG }), checkPlanRecoveryEligibility({ auth, config: CONFIG })]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each([
+    ["函式還沒部署這個動作（舊版回 400）", () => json({ error: "unknown_action" }, 400)],
+    ["函式還沒部署（404）", () => new Response("not found", { status: 404 })],
+    ["連線失敗", () => { throw new TypeError("Failed to fetch"); }],
+    ["回應格式不對", () => json({ ok: true })]
+  ])("%s：回 null（照舊顯示按鈕），下次還會再問", async (_label, recoverPlan) => {
+    const calls = stubNetwork({ recoverPlan });
+    expect(await checkPlanRecoveryEligibility({ auth, config: CONFIG })).toBeNull();
+    expect(await checkPlanRecoveryEligibility({ auth, config: CONFIG })).toBeNull();
+    expect(calls).toHaveLength(2);
+  });
+
+  it("按下去被拒（not_eligible）：記住這個帳號不能找回，不用再問", async () => {
+    const calls = stubNetwork({ recoverPlan: () => json({ error: "not_eligible" }, 403) });
+    expect((await pressRecover()).code).toBe("not_eligible");
+    expect(await checkPlanRecoveryEligibility({ auth, config: CONFIG })).toBe(false);
+    expect(calls.map(call => call.action)).toEqual(["start"]);
   });
 });
 

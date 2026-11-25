@@ -4,6 +4,8 @@
 // 裝置紀錄只用來決定要不要顯示提示（共用裝置、localStorage 可偽造），這裡完全不看。
 // 合併不可逆，條件全部由 account_recovery_* 在同一個交易重查；這支函式只負責驗 token、把 sub 傳過去。
 //
+//   POST { action: "check", source_token }（#715）
+//     → { ok: true, eligible }：顯示「找回」按鈕前先問。不留 challenge、不算頻率、不回原因。
 //   POST { action: "start", source_token }
 //     → { ok: true, nonce }：前端拿 nonce 當 OIDC nonce，用 prompt=login 讓會友登入舊的方式。
 //   POST { action: "complete", source_token, target_access_token, target_id_token }
@@ -258,7 +260,7 @@ Deno.serve(async (req: Request) => {
       return respond(400, { error: "invalid_body" });
     }
     const action = String(body.action || "");
-    if (action !== "start" && action !== "complete") return respond(400, { error: "unknown_action" });
+    if (action !== "check" && action !== "start" && action !== "complete") return respond(400, { error: "unknown_action" });
 
     const sourceToken = nonEmptyString(body.source_token);
     if (!sourceToken) return finish(400, { error: "missing_token" }, action);
@@ -269,6 +271,13 @@ Deno.serve(async (req: Request) => {
 
     const source = await verifyAccessToken(sourceToken, issuer, allowedClients, "recover-plan:source");
     if (!source.ok) return finish(source.status, { error: source.error }, action);
+
+    // #715：顯示「找回」按鈕前先問。不留 challenge、不算頻率，也不回原因（不能拿來探測帳號）。
+    if (action === "check") {
+      const { data, error } = await supabaseAdmin.rpc("account_recovery_check", { p_source_sub: source.sub });
+      if (error) throw new Error(`account_recovery_check: ${error.code || "unknown"}`);
+      return finish(200, { ok: true, eligible: data?.eligible === true }, action);
+    }
 
     if (action === "start") {
       const nonce = randomNonce();

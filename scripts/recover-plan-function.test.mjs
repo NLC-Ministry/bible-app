@@ -131,6 +131,29 @@ describe("recover-plan：start", () => {
   });
 });
 
+// #715：顯示「找回」按鈕前先問能不能找回
+describe("recover-plan：check", () => {
+  it.each([true, false])("驗過 token 後只把 sub 交給 SQL，回 eligible=%s，不發 nonce、不帶原因", async (eligible) => {
+    globalThis.__recoverPlan.rpcResult = { data: { ok: true, eligible }, error: null };
+    const res = await post({ action: "check", source_token: await access("sub-new") });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, eligible, request_id: expect.any(String) });
+    expect(globalThis.__recoverPlan.rpc).toEqual([{ name: "account_recovery_check", args: { p_source_sub: "sub-new" } }]);
+  });
+
+  it("SQL 回的不是 true 一律當不能找回", async () => {
+    globalThis.__recoverPlan.rpcResult = { data: { ok: true, eligible: "yes", reason: "source_has_data" }, error: null };
+    const res = await post({ action: "check", source_token: await access("sub-new") });
+    expect(res.body).toEqual({ ok: true, eligible: false, request_id: expect.any(String) });
+  });
+
+  it("偽造的 token：401，不碰資料庫", async () => {
+    const res = await post({ action: "check", source_token: forge({ sub: "victim" }) });
+    expect(res.status).toBe(401);
+    expect(globalThis.__recoverPlan.rpc).toEqual([]);
+  });
+});
+
 describe("recover-plan：complete", () => {
   it("通過：sub 只取自驗過的 token，nonce 取自舊帳號的 id_token，呼叫一次合併", async () => {
     const res = await complete({ source_sub: "attacker-a", target_sub: "attacker-b", nonce: "attacker-nonce" });
