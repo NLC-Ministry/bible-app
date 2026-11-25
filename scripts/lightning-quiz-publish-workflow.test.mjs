@@ -125,12 +125,15 @@ describe("我的測驗檢討與首頁撤掉（0213）", () => {
   });
 
   it("活動一結束首頁就撤掉，並告訴前端還剩幾秒", () => {
-    // #718 hotfix 改寫了這支（同一天多題）：驗現在的定義，只挑還沒結束的題，全結束就 hidden
+    // #718 hotfix 改寫了這支（同一天多題）：驗現在的定義，只挑還沒結束的題，全結束就 hidden；
+    // 單題狀態抽到 _lightning_quiz_today_entry，結束的題也回 hidden
     const todays = latestFunctionDefinition("get_todays_lightning_quiz").text;
     expect(todays).toContain("q0.rise_time_end >= now_time");
-    expect(todays).toMatch(/IF NOT FOUND THEN\s+RETURN jsonb_build_object\('status', 'hidden'\);/);
-    expect(todays).not.toContain("canSubmit");
-    expect(todays.match(/'secondsUntilEnd', seconds_left/g)).toHaveLength(3);
+    expect(todays).toMatch(/IF chosen_id IS NULL THEN\s+RETURN jsonb_build_object\('status', 'hidden'\);/);
+    const entry = latestFunctionDefinition("_lightning_quiz_today_entry").text;
+    expect(entry).toMatch(/now_time > q\.rise_time_end THEN\s+RETURN jsonb_build_object\('status', 'hidden'\);/);
+    expect(todays + entry).not.toContain("canSubmit");
+    expect(entry.match(/'secondsUntilEnd', seconds_left/g)).toHaveLength(3);
   });
 
   it("小測驗逐題檢討只回自己已送出的作答", () => {
