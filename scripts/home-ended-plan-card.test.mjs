@@ -1,5 +1,20 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+// updateDashboardView 會排首頁延後工作（requestAnimationFrame → setTimeout(0)）。
+// 每個測試結束前等它跑完，否則 CI 負載重時會在 jsdom 拆掉後才觸發，
+// 報 document is not defined（#722）。這裡的 rAF／setTimeout 排在 home.js 的後面，
+// 所以會在它之後才 resolve；最後再等一輪讓 async 函式收尾。
+const nextFrame = () => new Promise(resolve =>
+  typeof window.requestAnimationFrame === "function"
+    ? window.requestAnimationFrame(() => resolve())
+    : setTimeout(resolve, 0));
+const nextTask = () => new Promise(resolve => setTimeout(resolve, 0));
+async function flushDashboardSecondaryWork() {
+  await nextFrame();
+  await nextTask();
+  await nextTask();
+}
 
 // #372：實際跑 updateDashboardView 畫首頁計畫卡（不是只比對原始碼字串）。
 const basePlan = {
@@ -38,6 +53,7 @@ describe("home plan card (#372)", () => {
     setup("2026-10-01");
     ({ updateDashboardView } = await import("../js/modules/home.js"));
   });
+  afterEach(flushDashboardSecondaryWork);
 
   it("shows an ended state with the final chapters and next-step buttons", () => {
     updateDashboardView();
