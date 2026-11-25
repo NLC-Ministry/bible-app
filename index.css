@@ -12905,6 +12905,28 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   font-size: 0.9375rem;
   color: var(--text-secondary);
 }
+/* 同一天好幾題並列（#718）：一題一段，中間細線分隔 */
+.lightning-quiz-multi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.lightning-quiz-multi__note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+.lightning-quiz-multi__item + .lightning-quiz-multi__item {
+  border-top: 1px solid var(--border-card);
+  padding-top: 0.75rem;
+}
+.lightning-quiz-multi__label {
+  margin: 0 0 0.25rem;
+  text-align: center;
+  font-weight: 500;
+  color: var(--text-primary);
+}
 
 /* 後台「雲柱測驗」管理：題目編輯器的日期/時段列 + 統計表格 + 排行榜。 */
 .admin-lightning-quiz-schedule-row {

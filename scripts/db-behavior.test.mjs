@@ -598,6 +598,36 @@ describe("雲柱同一天多題（#718 hotfix）", () => {
     expect(outcome.afterBoth).toMatchObject({ status: "answered" });
     expect(outcome.allEnded).toEqual({ status: "hidden" });
   });
+
+  it("items 列出今天每一題已開始、還沒結束的狀態，依開始時間排序；還沒開始的不列", async () => {
+    const outcome = await asService(async tx => {
+      const { rows: [clock] } = await tx.query(
+        `SELECT (NOW() AT TIME ZONE 'Asia/Taipei')::date::text AS today,
+                ((NOW() AT TIME ZONE 'Asia/Taipei')::time + interval '1 minute')::time::text AS later,
+                (NOW() AT TIME ZONE 'Asia/Taipei')::time < '00:05' AS too_early,
+                (NOW() AT TIME ZONE 'Asia/Taipei')::time > '23:55' AS too_late`
+      );
+      if (clock.too_early || clock.too_late) return null;
+      const today = async () => (await tx.query(`SELECT public.get_todays_lightning_quiz($1) AS r`, [ids.member])).rows[0].r;
+      const first = await draft(tx, clock.today, "00:00", "23:59:59");
+      const second = await draft(tx, clock.today, "00:01", "23:59:59");
+      const notYet = await draft(tx, clock.today, clock.later, "23:59:59");
+      await tx.query(`UPDATE public.lightning_quiz_questions SET status = 'published' WHERE id IN ($1, $2, $3)`, [first, second, notYet]);
+      await tx.query(
+        `INSERT INTO public.lightning_quiz_attempts (question_id, user_id, completed_at, elapsed_ms, response, is_correct)
+         VALUES ($1, $2, now(), 3000, '0'::jsonb, TRUE)`, [first, ids.member]
+      );
+      return { first, second, result: await today() };
+    });
+    if (!outcome) return;
+    expect(outcome.result).toMatchObject({ status: "available", questionId: outcome.second });
+    expect(outcome.result.items.map(item => [item.questionId, item.status])).toEqual([
+      [outcome.first, "answered"],
+      [outcome.second, "available"]
+    ]);
+    // 答案不會出現在 items 裡
+    expect(JSON.stringify(outcome.result.items)).not.toContain("answerKey");
+  });
 });
 
 describe("雲柱更正正解（admin_set_lightning_quiz_answer_key，#616）", () => {

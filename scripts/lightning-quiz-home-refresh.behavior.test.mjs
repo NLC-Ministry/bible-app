@@ -75,4 +75,51 @@ describe("首頁雲柱測驗卡片的自動更新", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(rpc).toHaveBeenCalledTimes(2);
   });
+
+  it("同一天好幾題（items）時全部並列：還沒答的有開始鈕、答過的顯示結果，時段最早結束時再查", async () => {
+    const payload = { stem: "題目", options: ["甲", "乙"] };
+    const rpc = vi.fn(async () => ({
+      success: true,
+      data: {
+        status: "available", questionId: "q2", questionType: "single", payload, secondsUntilEnd: 100,
+        items: [
+          { status: "answered", questionId: "q1", isCorrect: true, elapsedMs: 3200, secondsUntilEnd: 100 },
+          { status: "available", questionId: "q2", questionType: "single", payload, secondsUntilEnd: 50 }
+        ]
+      }
+    }));
+    setupGlobals(rpc);
+    const { refreshLightningQuizHomeCard } = await import("../js/modules/lightning-quiz.mjs");
+
+    await refreshLightningQuizHomeCard();
+    const host = document.getElementById("lightning-quiz-host");
+    const items = host.querySelectorAll(".lightning-quiz-multi__item");
+    expect(items).toHaveLength(2);
+    expect(items[0].textContent).toContain("第 1 題");
+    expect(items[0].querySelector(".lightning-quiz-result.is-correct")).not.toBeNull();
+    expect(items[1].textContent).toContain("第 2 題");
+    expect(items[1].querySelector("[data-lq-start]")).not.toBeNull();
+
+    await vi.advanceTimersByTimeAsync(50_999);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it("items 只有一題時照舊顯示單題畫面", async () => {
+    const rpc = vi.fn(async () => ({
+      success: true,
+      data: {
+        status: "answered", questionId: "q1", isCorrect: false, elapsedMs: 1000, secondsUntilEnd: 30,
+        items: [{ status: "answered", questionId: "q1", isCorrect: false, elapsedMs: 1000, secondsUntilEnd: 30 }]
+      }
+    }));
+    setupGlobals(rpc);
+    const { refreshLightningQuizHomeCard } = await import("../js/modules/lightning-quiz.mjs");
+
+    await refreshLightningQuizHomeCard();
+    const host = document.getElementById("lightning-quiz-host");
+    expect(host.querySelector(".lightning-quiz-multi")).toBeNull();
+    expect(host.querySelector(".lightning-quiz-result.is-wrong")).not.toBeNull();
+  });
 });
