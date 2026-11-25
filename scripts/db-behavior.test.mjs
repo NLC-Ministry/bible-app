@@ -1572,6 +1572,140 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
     });
   });
 
+  // #715：新帳號順手畫線、寫筆記、按讚，或會員中心把他標成小組長，都不該讓自助找回永遠失敗
+  const highlight = (tx, userId, verse = 1, color = "#ffeb3b") => tx.query(
+    `INSERT INTO public.highlights (user_id, book, chapter, verse, color) VALUES ($1, '創世記', 1, $2, $3)`, [userId, verse, color]
+  );
+  const verseNote = (tx, userId, verse = 1, content = "筆記") => tx.query(
+    `INSERT INTO public.verse_notes (user_id, book, chapter, verse, content) VALUES ($1, '創世記', 1, $2, $3)`, [userId, verse, content]
+  );
+  const likeNote = async (tx, userId) => {
+    const noteId = (await one(tx,
+      `INSERT INTO public.devotional_notes (user_id, note_date, content) VALUES ($1, '2026-11-20', '靈修') RETURNING id`, [ids.other]
+    )).id;
+    await tx.query(`INSERT INTO public.devotional_likes (note_id, user_id) VALUES ($1, $2)`, [noteId, userId]);
+    return noteId;
+  };
+  const countOf = async (tx, table, userId) =>
+    (await one(tx, `SELECT count(*)::int AS n FROM public.${table} WHERE user_id = $1`, [userId])).n;
+
+  it("空帳號畫過線、寫過經文筆記、按過讚也能找回，全部搬到舊帳號", async () => {
+    const outcome = await withRecovery({
+      prepare: async tx => {
+        await highlight(tx, R.source, 1);
+        await highlight(tx, R.target, 2);
+        await verseNote(tx, R.source, 3, "新帳號的筆記");
+        await verseNote(tx, R.target, 4, "舊帳號的筆記");
+        await likeNote(tx, R.source);
+      },
+      fn: async ({ tx, start, merge, challenge }) => {
+        expect(await start()).toEqual({ ok: true });
+        return {
+          result: await merge(),
+          outcome: (await challenge()).outcome,
+          highlights: await countOf(tx, "highlights", R.target),
+          notes: await countOf(tx, "verse_notes", R.target),
+          likes: await countOf(tx, "devotional_likes", R.target),
+          leftOnSource: (await countOf(tx, "highlights", R.source)) + (await countOf(tx, "verse_notes", R.source))
+            + (await countOf(tx, "devotional_likes", R.source))
+        };
+      }
+    });
+    expect(outcome).toEqual({ result: { ok: true }, outcome: "merged", highlights: 2, notes: 2, likes: 1, leftOnSource: 0 });
+  });
+
+  it("同一節兩邊都畫過線：照舊帳號的顏色，合併照常", async () => {
+    const outcome = await withRecovery({
+      prepare: async tx => {
+        await highlight(tx, R.source, 1, "#000001");
+        await highlight(tx, R.target, 1, "#000002");
+      },
+      fn: async ({ tx, start, merge }) => {
+        await start();
+        return {
+          result: await merge(),
+          colors: (await tx.query(`SELECT color FROM public.highlights WHERE user_id = $1`, [R.target])).rows.map(row => row.color)
+        };
+      }
+    });
+    expect(outcome).toEqual({ result: { ok: true }, colors: ["#000002"] });
+  });
+
+  it("同一節兩邊都寫過經文筆記：不自動丟掉任何一份，擋下轉人工", async () => {
+    await withRecovery({
+      prepare: async tx => {
+        await verseNote(tx, R.source, 1, "新帳號的筆記");
+        await verseNote(tx, R.target, 1, "舊帳號的筆記");
+      },
+      fn: async ({ tx, start, merge, challenge, unmerged }) => {
+        expect(await start()).toEqual({ ok: true });
+        expect(await merge()).toEqual({ ok: false, code: "not_eligible" });
+        expect(await challenge()).toMatchObject({ outcome: "verse_note_conflict", target_profile_id: R.target });
+        expect(await countOf(tx, "verse_notes", R.source)).toBe(1);
+        expect(await unmerged()).toBe(true);
+      }
+    });
+  });
+
+  it("新帳號被會員中心標成小組長也能找回，舊帳號的角色不動", async () => {
+    const outcome = await withRecovery({
+      prepare: async tx => setRole(R.source, "group_leader")(tx),
+      fn: async ({ tx, start, merge }) => {
+        expect(await start()).toEqual({ ok: true });
+        return {
+          result: await merge(),
+          role: (await one(tx,
+            `SELECT r.code FROM public.profiles p JOIN public.role_definitions r ON r.id = p.role_id WHERE p.id = $1`, [R.target]
+          )).code
+        };
+      }
+    });
+    expect(outcome).toEqual({ result: { ok: true }, role: "member" });
+  });
+
+  describe("事先檢查能不能找回（account_recovery_check）", () => {
+    const check = (tx, sub = R.sourceSub) => (async () => {
+      await tx.exec(`SET LOCAL ROLE service_role`);
+      try {
+        return (await tx.query(`SELECT public.account_recovery_check($1) AS r`, [sub])).rows[0].r;
+      } finally {
+        await tx.exec(`RESET ROLE`);
+      }
+    })();
+    const challenges = async tx =>
+      (await one(tx, `SELECT count(*)::int AS n FROM public.account_recovery_challenges WHERE source_profile_id = $1`, [R.source])).n;
+
+    it("可以找回：eligible，不留 challenge、不算進頻率", async () => {
+      await withRecovery({
+        fn: async ({ tx, start }) => {
+          for (let i = 0; i < 6; i++) expect(await check(tx)).toEqual({ ok: true, eligible: true });
+          expect(await challenges(tx)).toBe(0);
+          expect(await start()).toEqual({ ok: true });
+        }
+      });
+    });
+
+    it.each([
+      ["來源有不屬於計畫的打卡", tx => tx.query(`INSERT INTO public.reading_logs (user_id, plan_id, book, chapter) VALUES ($1, NULL, '創世記', 1)`, [R.source])],
+      ["來源是牧區長", tx => setRole(R.source, "zone_leader")(tx)],
+      ["來源有委任範圍", setProfile(R.source, `managed_zones = '牧區 A-1'`)]
+    ])("不能找回：%s → eligible false，回應不帶原因、不留 challenge", async (_label, prepare) => {
+      await withRecovery({
+        prepare,
+        fn: async ({ tx }) => {
+          expect(await check(tx)).toEqual({ ok: true, eligible: false });
+          expect(await challenges(tx)).toBe(0);
+        }
+      });
+    });
+
+    it("sub 查無帳號：eligible false", async () => {
+      await withRecovery({
+        fn: async ({ tx }) => expect(await check(tx, "never-seen-sub")).toEqual({ ok: true, eligible: false })
+      });
+    });
+  });
+
   const setRole =(id, code) => async tx => tx.query(`UPDATE public.profiles SET role_id = $2 WHERE id = $1`, [id, await roleId(tx, code)]);
   const addOrphanLog = tx => tx.query(`INSERT INTO public.reading_logs (user_id, plan_id, book, chapter) VALUES ($1, NULL, '創世記', 1)`, [R.source]);
 
@@ -1583,7 +1717,7 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
     ["來源建立超過 30 天", setProfile(R.source, `created_at = now() - INTERVAL '31 days'`)],
     ["來源已停用", setProfile(R.source, `is_active = FALSE`)],
     ["來源是管理者", setRole(R.source, "admin")],
-    ["來源是小組長", setRole(R.source, "group_leader")],
+    ["來源是牧區長（能管理計畫）", setRole(R.source, "zone_leader")],
     ["來源有委任範圍", setProfile(R.source, `managed_zones = '牧區 A-1'`)],
     ["來源有兩個登入身分", tx => tx.query(`INSERT INTO public.user_identities (profile_id, provider, provider_user_id, is_primary) VALUES ($1, 'logto', 'recovery-sub-third', FALSE)`, [R.source])],
     ["來源在雲柱週排名的排除名單裡", async tx => {
@@ -1840,7 +1974,7 @@ describe("驗證舊的登入方式後找回計畫（account_recovery_*，#664）
        FROM pg_proc p WHERE p.proname LIKE 'account_recovery_%' OR p.proname IN ('keep_identity_on_merge_target', 'keep_merged_profile_inactive')`
     )).rows;
     expect(rows.map(row => row.proname).sort()).toEqual([
-      "account_recovery_merge", "account_recovery_source_refusal", "account_recovery_start", "account_recovery_target_refusal",
+      "account_recovery_check", "account_recovery_merge", "account_recovery_source_refusal", "account_recovery_start", "account_recovery_target_refusal",
       "keep_identity_on_merge_target", "keep_merged_profile_inactive"
     ]);
     rows.forEach(row => expect(row, row.proname).toMatchObject({ anon: false, authenticated: false, service: true }));

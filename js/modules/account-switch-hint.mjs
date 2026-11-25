@@ -96,16 +96,32 @@ export function currentLoginMethod(user) {
   return { method: "", masked: "" };
 }
 
+const RECOVER_INELIGIBLE_BODY = "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡，但這次沒有辦法自動找回。請按畫面右下角的對話按鈕留言給我們，我們會幫你把計畫找回來。";
+
+function accountMarkup(masked) {
+  return `<span class="account-switch-hint__account">${escapeText(masked)}</span>`;
+}
+
+function ineligibleBody(masked, copy) {
+  return (copy.recoverIneligibleBody || RECOVER_INELIGIBLE_BODY).replace("{account}", () => accountMarkup(masked));
+}
+
 // #664：裝置記得上次是哪個帳號：改成驗證當時的方式就能找回。文案不提帳號、合併。
+// #715：伺服器說這個帳號不能自動找回（offer.eligible === false）就不給「找回」按鈕，請他留言。
 function recoverPlanMarkup(offer, copy) {
+  const ineligible = offer.eligible === false;
   const template = isGmailAccount(offer.masked)
     ? (copy.recoverBodyGmail || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。按 Google 確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。")
     : (copy.recoverBody || "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡。用上次登入的方式確認一次身分，就能把它們找回來，之後用之前或現在的方式登入都看得到。");
-  const body = template
-    .replace("{account}", () => `<span class="account-switch-hint__account">${escapeText(offer.masked)}</span>`);
+  const body = ineligible
+    ? ineligibleBody(offer.masked, copy)
+    : template.replace("{account}", () => accountMarkup(offer.masked));
   const cta = copy.recoverCta || "確認身分，找回我的計畫";
+  const recoverButton = ineligible
+    ? ""
+    : `<button type="button" class="primary-btn account-switch-hint__switch" data-account-recover-plan>${cta}</button>`;
   return `
-    <section class="account-switch-hint" data-account-switch-hint role="note" aria-labelledby="account-switch-hint-title">
+    <section class="account-switch-hint" data-account-switch-hint data-recover-account="${escapeText(offer.masked)}" role="note" aria-labelledby="account-switch-hint-title">
       <h3 class="account-switch-hint__title" id="account-switch-hint-title">
         <span class="nlc-icon nlc-icon--sm" data-icon="info" aria-hidden="true"></span>
         <span>${copy.title || "找不到你的讀經計畫嗎？"}</span>
@@ -113,7 +129,7 @@ function recoverPlanMarkup(offer, copy) {
       <p class="account-switch-hint__body">${body}</p>
       <p class="account-switch-hint__status hidden" data-account-recover-status role="status"></p>
       <div class="account-switch-hint__actions">
-        <button type="button" class="primary-btn account-switch-hint__switch" data-account-recover-plan>${cta}</button>
+        ${recoverButton}
         <button type="button" class="secondary-btn" data-account-switch-dismiss>${copy.recoverDismissCta || "不是我／我是第一次參加"}</button>
       </div>
     </section>
@@ -146,7 +162,25 @@ export function accountSwitchHintMarkup(currentUser, recoveryOffer = null) {
   `;
 }
 
-export function bindAccountSwitchHint(container, { profileId, onSwitch, onRecover } = {}) {
+function hintCopy() {
+  return (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.accountSwitchHint) || {};
+}
+
+// #715：卡片換成留言版：拿掉「找回」按鈕，說明改成請他留言，狀態訊息收起來（說明已經講了）。
+function showRecoverIneligible(card) {
+  const button = card.querySelector("[data-account-recover-plan]");
+  if (!button) return;
+  button.remove();
+  const body = card.querySelector(".account-switch-hint__body");
+  if (body) body.innerHTML = ineligibleBody(card.getAttribute("data-recover-account") || "", hintCopy());
+  const status = card.querySelector("[data-account-recover-status]");
+  if (status) {
+    status.textContent = "";
+    status.classList.add("hidden");
+  }
+}
+
+export function bindAccountSwitchHint(container, { profileId, onSwitch, onRecover, checkEligibility } = {}) {
   const card = container && container.querySelector("[data-account-switch-hint]");
   if (!card) return;
   if (typeof window !== "undefined" && typeof window.hydrateIcons === "function") window.hydrateIcons(card);
@@ -169,10 +203,23 @@ export function bindAccountSwitchHint(container, { profileId, onSwitch, onRecove
       }, { once: true });
       const result = typeof onRecover === "function" ? await onRecover() : null;
       if (result && result.ok) return; // 正在跳轉
+      if (result && result.code === "not_eligible") {
+        showRecoverIneligible(card);
+        return;
+      }
       recoverBtn.disabled = false;
       statusEl.textContent = (result && result.message) || "";
       statusEl.classList.toggle("hidden", !statusEl.textContent);
     };
+  }
+  // 先照舊顯示「找回」按鈕，問到不能找回才換成留言版：問不到（舊版函式、離線）時不擋會友。
+  if (recoverBtn && typeof checkEligibility === "function") {
+    Promise.resolve()
+      .then(() => checkEligibility())
+      .then(eligible => {
+        if (eligible === false && card.isConnected) showRecoverIneligible(card);
+      })
+      .catch(() => {});
   }
   const dismissBtn = card.querySelector("[data-account-switch-dismiss]");
   if (dismissBtn) {

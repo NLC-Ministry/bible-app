@@ -16,7 +16,7 @@ import {
   shouldShowAccountSwitchHintForState,
   switchToOriginalAccount
 } from "./account-switch-hint.mjs";
-import { planRecoveryOffer, startPlanRecovery } from "../plan-recovery.mjs";
+import { checkPlanRecoveryEligibility, planRecoveryOffer, startPlanRecovery } from "../plan-recovery.mjs";
 
 const sharingController = new DevotionalSharingController();
 let pastoralSharingWallEnabled = false;
@@ -414,7 +414,7 @@ export function updateDashboardView() {
       </div>
     `;
     if (showAccountSwitchHint) {
-      bindAccountSwitchHint(planSummaryDiv, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount, onRecover: startPlanRecovery });
+      bindAccountSwitchHint(planSummaryDiv, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount, onRecover: startPlanRecovery, checkEligibility: checkPlanRecoveryEligibility });
     }
   }
 

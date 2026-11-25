@@ -24,18 +24,39 @@ function defaultConfig() {
   return (typeof state !== "undefined" && state.supabaseConfig) || null;
 }
 
+function currentProfileKey() {
+  return (typeof state !== "undefined" && state && state.currentProfileId) || "";
+}
+
+// #715：這個帳號能不能自助找回（伺服器說的）。只在記憶體裡，換帳號或重新整理就重問。
+// 只決定卡片顯示「找回」按鈕還是請他留言；真正能不能合併一樣由伺服器在 start／complete 重查。
+const eligibilityByProfile = new Map();
+const eligibilityInFlight = new Map();
+
+function rememberEligibility(profileId, eligible) {
+  if (profileId) eligibilityByProfile.set(profileId, eligible);
+}
+
+/** 測試用：清掉記住的結果。 */
+export function forgetPlanRecoveryEligibility() {
+  eligibilityByProfile.clear();
+  eligibilityInFlight.clear();
+}
+
 function planRecoveryCopy() {
   return (typeof window !== "undefined" && window.APP_COPY && window.APP_COPY.planRecovery) || {};
 }
 
 /** 要不要改顯示「找回」版的提示卡。只看裝置紀錄，不是合併的依據。回傳 { method, masked } 或 null。 */
+// #715：已經知道這個帳號不能自動找回時帶 eligible: false，卡片直接顯示留言版。
 export function planRecoveryOffer(appState, { storage, now = Date.now() } = {}) {
   const record = readLastLoginMethod({ ...(storage ? { storage } : {}), now });
   if (!record || !record.method || !record.masked) return null;
   if (record.profileId && record.profileId === appState?.currentProfileId) return null;
   const current = currentLoginMethod(appState?.currentUser);
   if (current.method === record.method && current.masked === record.masked) return null;
-  return { method: record.method, masked: record.masked };
+  const known = eligibilityByProfile.get(appState?.currentProfileId || "");
+  return { method: record.method, masked: record.masked, ...(known === false ? { eligible: false } : {}) };
 }
 
 async function postRecoverPlan(config, body, { fetchImpl = fetchWithTimeout } = {}) {
@@ -47,6 +68,37 @@ async function postRecoverPlan(config, body, { fetchImpl = fetchWithTimeout } = 
   }, REQUEST_TIMEOUT_MS);
   const payload = await response.json().catch(() => null);
   return { status: response.status, payload: payload && typeof payload === "object" ? payload : {} };
+}
+
+/**
+ * #715：顯示「找回」按鈕前先問伺服器。回傳 true／false；問不到（舊版函式、離線、出錯）回 null，
+ * 卡片照舊顯示按鈕，不擋會友。同一個帳號問到答案就不再問，同時問只送一次。
+ */
+export function checkPlanRecoveryEligibility({
+  auth = defaultAuth(),
+  config = defaultConfig(),
+  fetchImpl,
+  profileId = currentProfileKey()
+} = {}) {
+  if (eligibilityByProfile.has(profileId)) return Promise.resolve(eligibilityByProfile.get(profileId));
+  if (eligibilityInFlight.has(profileId)) return eligibilityInFlight.get(profileId);
+  const request = (async () => {
+    try {
+      if (!auth?.getValidAccessToken || !config?.url) return null;
+      const sourceToken = await auth.getValidAccessToken(false);
+      if (!sourceToken) return null;
+      const { status, payload } = await postRecoverPlan(config, { action: "check", source_token: sourceToken }, { fetchImpl });
+      if (status !== 200 || payload.ok !== true || typeof payload.eligible !== "boolean") return null;
+      rememberEligibility(profileId, payload.eligible);
+      return payload.eligible;
+    } catch (_) {
+      return null;
+    } finally {
+      eligibilityInFlight.delete(profileId);
+    }
+  })();
+  eligibilityInFlight.set(profileId, request);
+  return request;
 }
 
 export function planRecoveryMessage(code) {
@@ -98,6 +150,7 @@ export async function startPlanRecovery({
     const sourceToken = await auth.getValidAccessToken(false);
     const { status, payload } = await postRecoverPlan(config, { action: "start", source_token: sourceToken }, { fetchImpl });
     if (status !== 200 || !payload.ok || !payload.nonce) {
+      if (payload.error === "not_eligible") rememberEligibility(currentProfileKey(), false);
       return fail(payload.error === "rate_limited" || payload.error === "not_eligible" ? payload.error : "unavailable");
     }
     // 從 Logto 按返回、瀏覽器還原這一頁（bfcache）：頁面不會重跑開機流程，登入流程要在這裡清
