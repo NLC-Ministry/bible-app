@@ -19,7 +19,7 @@ import {
   shouldShowAccountSwitchHintForState,
   switchToOriginalAccount
 } from "./account-switch-hint.mjs";
-import { planRecoveryOffer, startPlanRecovery } from "../plan-recovery.mjs";
+import { checkPlanRecoveryEligibility, planRecoveryOffer, startPlanRecovery } from "../plan-recovery.mjs";
 import { createReaderBottomDwellController, observeReaderEndSentinel } from "./reader-bottom-dwell.mjs";
 import { isPlanProgressLocked } from "../data/plan-progress-availability.mjs";
 import { canCreatePersonalPlan, isPersonalPlan, personalPlanErrorMessage } from "../data/personal-plans.mjs";
@@ -1891,7 +1891,7 @@ function renderJoinedPlansList() {
           </div>
         `;
         if (showAccountSwitchHint) {
-          bindAccountSwitchHint(container, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount, onRecover: startPlanRecovery });
+          bindAccountSwitchHint(container, { profileId: state.currentProfileId, onSwitch: switchToOriginalAccount, onRecover: startPlanRecovery, checkEligibility: checkPlanRecoveryEligibility });
         }
       } else {
         container.innerHTML = `
