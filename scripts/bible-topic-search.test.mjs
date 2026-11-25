@@ -129,6 +129,10 @@ describe("章節位置", () => {
     ];
     expect(pickTopicRefText(chapter, parsed)).toBe("應當一無掛慮 神所賜出人意外的平安");
     expect(pickTopicRefText(null, parsed)).toBe("");
+    // 巢狀或不完整的標籤剝一次後不可留下 < 或 >（CodeQL 不完整清除）
+    const nested = pickTopicRefText([{ verse: 6, text: "a<<script>script>b<i" }], parsed);
+    expect(nested).not.toMatch(/[<>]/);
+    expect(nested).toBe("ascriptbi");
   });
 
   it("多個主題的經文依序攤平並去重", () => {
