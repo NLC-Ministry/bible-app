@@ -1,7 +1,7 @@
 // 後台「報表」區（#568）：讀經使用率（含每日趨勢）與報名註冊統計。
 //
 // · reading_usage：SQL（admin_api_reading_usage）回舊頁三支函式的原始數字＋每天章數，這裡整理成畫面直接用的形狀
-//   （黏著度、L7 佔比、各時段平均），前端不再算。整理規則照舊頁 js/modules/admin-reading-activity.mjs
+//   （黏著度、L7 佔比、各時段平均、#726 星期分布），前端不再算。整理規則照舊頁 js/modules/admin-reading-activity.mjs
 //   （部署只打包函式自己的資料夾，所以搬過來；scripts/admin-api-stats.test.mjs 比對兩邊結果一致）。只有數字，不記稽核。
 // · registration_stats：數字與排序都在 SQL；只有數字與牧區長姓名，不記稽核（同舊頁）。順便帶計畫選單
 //   （admin_api_plan_options，同計畫區：不含隱藏的與總表），沒指定計畫就用預設計畫——打開分頁只要 1 個請求。
@@ -109,15 +109,60 @@ export function buildHourProfile(data: unknown, days: HourDays) {
   return { dayCount, users: users.map(average), chapters: chapters.map(average) };
 }
 
+// ── #726 星期分布（週一～週日）──────────────────────────────────────────────────
+// 用每天一列的 days（DAU＝當天不重複人數）分組；不用 hours.cells：那是每小時不重複人數的加總，跨小時會重複算人。
+// 今天還在累積，不算進平均（表格仍顯示，標 today）。週以週一開頭，同 L7。
+export type WeekdayCell = { date: string; users: number; chapters: number; today: boolean };
+
+/** ISO 星期：1＝週一 … 7＝週日 */
+function isoDow(iso: string): number {
+  const day = new Date(parseIsoDate(iso)).getUTCDay();
+  return day === 0 ? 7 : day;
+}
+
+function shiftDate(iso: string, days: number): string {
+  return new Date(parseIsoDate(iso) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+export function buildWeekdays(days: readonly { date: string; dau: number; chapters: number }[], today: string) {
+  const sums = [1, 2, 3, 4, 5, 6, 7].map((dow) => ({ dow, dayCount: 0, users: 0, chapters: 0 }));
+  const weeks = new Map<string, (WeekdayCell | null)[]>();
+  for (const day of days) {
+    if (!isIsoDate(day.date)) continue;
+    const dow = isoDow(day.date);
+    const isToday = day.date === today;
+    if (!isToday) {
+      const sum = sums[dow - 1];
+      sum.dayCount += 1;
+      sum.users += num(day.dau);
+      sum.chapters += num(day.chapters);
+    }
+    const weekStart = shiftDate(day.date, 1 - dow);
+    if (!weeks.has(weekStart)) weeks.set(weekStart, new Array(7).fill(null));
+    weeks.get(weekStart)![dow - 1] = { date: day.date, users: num(day.dau), chapters: num(day.chapters), today: isToday };
+  }
+  return {
+    averages: sums.map(({ dow, dayCount, users, chapters }) => ({
+      dow,
+      dayCount,
+      users: dayCount > 0 ? round1(users / dayCount) : null,
+      chapters: dayCount > 0 ? round1(chapters / dayCount) : null
+    })),
+    weeks: [...weeks.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([weekStart, cells]) => ({ weekStart, cells }))
+  };
+}
+
 export function buildUsage(data: unknown) {
   const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
   const days = buildUsageDays(record.days);
+  const today = String(record.today || "");
   return {
     from: String(record.from || ""),
     to: String(record.to || ""),
-    today: String(record.today || ""),
+    today,
     summary: summarizeUsage(days),
     days,
+    weekdays: buildWeekdays(days, today),
     l7: buildL7(record.l7),
     hours: {
       all: buildHourProfile(record.hours, "all"),
