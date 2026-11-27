@@ -384,6 +384,18 @@ function WeekdayCard({ weekdays, ui, setUi, chart, color }: {
     : "這段期間沒有讀經紀錄（不含今天）。";
   const counts = averages.map((row, index) => `${WEEKDAY_LABELS[index]} ${row.dayCount} 天`).join("、");
   const cellValue = (cell: { users: number; chapters: number } | null) => (cell ? formatNumber(chapters ? cell.chapters : cell.users) : "—");
+  // 每週一列（新的在上）＋最後一列平均；週一～週日 7 格
+  const rows: { key: string; label: string; total: boolean; cells: ReactNode[] }[] = [
+    ...[...weeks].reverse().map((week) => ({
+      key: week.weekStart,
+      label: `${shortDate(week.weekStart)}～${shortDate(addDays(week.weekStart, 6))}`,
+      total: false,
+      cells: week.cells.map((cell) => (cell?.today
+        ? <span className="adm-muted" title="今天，還在累積">{cellValue(cell)}（今天）</span>
+        : cellValue(cell)))
+    })),
+    { key: "average", label: "平均（不含今天）", total: true, cells: values.map((value) => formatNumber(value)) }
+  ];
 
   return (
     <section className="adm-card">
@@ -406,26 +418,16 @@ function WeekdayCard({ weekdays, ui, setUi, chart, color }: {
           <div className="adm-table-wrap">
             <table className="adm-table">
               <thead>
-                <tr><th scope="col">週</th>{WEEKDAY_LABELS.map((label) => <th key={label} scope="col" className="adm-num">{label}</th>)}</tr>
+                <tr><th scope="col">週</th>{WEEKDAY_LABELS.map((label) => <th scope="col" className="adm-num" key={label}>{label}</th>)}</tr>
               </thead>
               <tbody>
-                {[...weeks].reverse().map((week) => (
-                  <tr key={week.weekStart}>
-                    <th scope="row">{shortDate(week.weekStart)}～{shortDate(addDays(week.weekStart, 6))}</th>
-                    {week.cells.map((cell, index) => (
-                      <td key={index} className={`adm-num${cell?.today ? " adm-muted" : ""}`} title={cell?.today ? "今天，還在累積" : undefined}>
-                        {cellValue(cell)}{cell?.today ? "（今天）" : ""}
-                      </td>
-                    ))}
+                {rows.map((row) => (
+                  <tr key={row.key} className={row.total ? "adm-table__total" : undefined}>
+                    <th scope="row">{row.label}</th>
+                    {row.cells.map((content, index) => <td className="adm-num" key={index}>{content}</td>)}
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row">平均（不含今天）</th>
-                  {values.map((value, index) => <td key={index} className="adm-num">{formatNumber(value)}</td>)}
-                </tr>
-              </tfoot>
             </table>
           </div>
         </details>
