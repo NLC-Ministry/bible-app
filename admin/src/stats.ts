@@ -16,6 +16,11 @@ export type L7Week = {
 export type HourProfile = { dayCount: number; users: number[]; chapters: number[] };
 export type HourDays = "all" | "weekday" | "weekend";
 export type HourMetric = "users" | "chapters";
+/** #726 星期分布：dow 1＝週一 … 7＝週日；平均不含今天，沒有日子時是 null */
+export type WeekdayAverage = { dow: number; dayCount: number; users: number | null; chapters: number | null };
+export type WeekdayCell = { date: string; users: number; chapters: number; today: boolean };
+export type Weekdays = { averages: WeekdayAverage[]; weeks: { weekStart: string; cells: (WeekdayCell | null)[] }[] };
+export const WEEKDAY_LABELS = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"] as const;
 
 export type Usage = {
   from: string;
@@ -31,7 +36,9 @@ export type Usage = {
     totalChapters: number;
   };
   days: UsageDay[];
-  l7: { current: L7Week; previous: L7Week };
+  /** #726；部署前的舊版 admin-api 沒有這欄 */
+  weekdays?: Weekdays;
+  l7:{ current: L7Week; previous: L7Week };
   hours: Record<HourDays, HourProfile>;
 };
 

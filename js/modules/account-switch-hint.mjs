@@ -96,7 +96,11 @@ export function currentLoginMethod(user) {
   return { method: "", masked: "" };
 }
 
-const RECOVER_INELIGIBLE_BODY = "你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡，但這次沒有辦法自動找回。請按畫面右下角的對話按鈕留言給我們，我們會幫你把計畫找回來。";
+// #724：上次是只有手機的帳號＝沒有 Email。Logto 註冊只收 Email，登入舊帳號時會先要求綁定郵箱；
+// 會友的信箱多半已被現在的帳號用掉，這一步一定過不去，也不會導回 App。先告訴他卡在那裡就留言。
+const RECOVER_EMAIL_TAKEN_NOTE = "登入時如果要你「綁定郵箱」，又說信箱已被使用，就不用再試了，請按畫面右下角的對話按鈕留言給我們，我們會幫你把計畫找回來。";
+
+const RECOVER_INELIGIBLE_BODY ="你之前在這台裝置上是用 {account} 登入的，你的計畫和閱讀紀錄都在那裡，但這次沒有辦法自動找回。請按畫面右下角的對話按鈕留言給我們，我們會幫你把計畫找回來。";
 
 function accountMarkup(masked) {
   return `<span class="account-switch-hint__account">${escapeText(masked)}</span>`;
@@ -116,6 +120,9 @@ function recoverPlanMarkup(offer, copy) {
   const body = ineligible
     ? ineligibleBody(offer.masked, copy)
     : template.replace("{account}", () => accountMarkup(offer.masked));
+  const emailTakenNote = !ineligible && offer.method === "phone"
+    ? `<p class="account-switch-hint__body" data-account-recover-email-taken>${copy.recoverEmailTakenNote || RECOVER_EMAIL_TAKEN_NOTE}</p>`
+    : "";
   const cta = copy.recoverCta || "確認身分，找回我的計畫";
   const recoverButton = ineligible
     ? ""
@@ -127,6 +134,7 @@ function recoverPlanMarkup(offer, copy) {
         <span>${copy.title || "找不到你的讀經計畫嗎？"}</span>
       </h3>
       <p class="account-switch-hint__body">${body}</p>
+      ${emailTakenNote}
       <p class="account-switch-hint__status hidden" data-account-recover-status role="status"></p>
       <div class="account-switch-hint__actions">
         ${recoverButton}
