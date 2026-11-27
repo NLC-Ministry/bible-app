@@ -199,6 +199,22 @@ describe("提示卡", () => {
     expect(body).not.toMatch(/手機|Email|密碼/);
   });
 
+  // #724：舊帳號沒有 Email，Logto 會先要求綁定郵箱；信箱已被現在的帳號用掉就過不去，請他留言、不要一直重按。
+  it("上次是手機帳號：多一句被要求綁定郵箱、信箱已被使用時請留言（#724）", () => {
+    const card = render({ method: "phone", masked: "0912-***-678" });
+    const note = card.querySelector("[data-account-recover-email-taken]");
+    expect(note.textContent).toBe(
+      "登入時如果要你「綁定郵箱」，又說信箱已被使用，就不用再試了，請按畫面右下角的對話按鈕留言給我們，我們會幫你把計畫找回來。"
+    );
+    expect(card.querySelector("[data-account-recover-plan]")).not.toBeNull();
+  });
+
+  it("上次是 Email 帳號、或已知不能自動找回：不顯示綁定郵箱那句（#724）", () => {
+    expect(render().querySelector("[data-account-recover-email-taken]")).toBeNull();
+    expect(render({ method: "email", masked: "ab***@church.org" }).querySelector("[data-account-recover-email-taken]")).toBeNull();
+    expect(render({ method: "phone", masked: "0912-***-678", eligible: false }).querySelector("[data-account-recover-email-taken]")).toBeNull();
+  });
+
   it("其他 Email 列出所有方式，不只叫他按 Google（#682）", () => {
     const body = render({ method: "email", masked: "ab***@church.org" }).querySelector(".account-switch-hint__body").textContent;
     expect(body).toContain("用上次登入的方式確認一次身分");
@@ -213,7 +229,7 @@ describe("提示卡", () => {
     const hintSource = readFileSync("js/modules/account-switch-hint.mjs", "utf8");
     expect(hintSource).toContain("你之前在這台裝置上是用 {account} 登入的");
     expect(texts).toContain("你之前在這台裝置上是用 {account} 登入的");
-    for (const line of ["按 Google 確認一次身分", "用上次登入的方式確認一次身分"]) {
+    for (const line of ["按 Google 確認一次身分", "用上次登入的方式確認一次身分", "登入時如果要你「綁定郵箱」，又說信箱已被使用，就不用再試了"]) {
       expect(hintSource).toContain(line);
       expect(copy).toContain(line);
     }
