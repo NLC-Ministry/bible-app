@@ -17,15 +17,29 @@ const REFS = loadProjectRefs();
 export const PROD_REF = REFS.production;
 export const STAGING_REF = REFS.staging;
 
-/** 解析 `supabase db query` 的輸出：前面可能有 "Initialising login role..." 之類的訊息。 */
-export function parseCliRows(output) {
-  const start = output.indexOf("{");
-  if (start === -1 || !/"rows"\s*:/.test(output)) {
-    throw new Error(`查詢失敗：${output.slice(0, 1500)}`);
+/** CLI 的輸出常帶 ref（例如 "Target: project <ref>"），錯誤訊息可能被貼到公開的 issue，先遮掉。 */
+function maskRef(text, ref) {
+  return ref ? String(text).split(ref).join("<ref>") : String(text);
+}
+
+/**
+ * 解析 `supabase db query --output-format json` 的輸出，前面可能有 "Initialising login role..." 之類的訊息。
+ * CLI 3.0.0 在人手動跑時輸出純陣列 `[...]`，在 AI agent 裡輸出 `{ "rows": [...] }`（#717），兩種都收。
+ */
+export function parseCliRows(output, { ref } = {}) {
+  const text = String(output || "");
+  const start = text.search(/^[[{]/m);
+  let parsed;
+  if (start !== -1) {
+    try { parsed = JSON.parse(text.slice(start)); } catch { parsed = undefined; }
   }
-  const parsed = JSON.parse(output.slice(start));
-  if (!Array.isArray(parsed.rows)) throw new Error(`查詢失敗：${output.slice(0, 1500)}`);
-  return parsed.rows;
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && Array.isArray(parsed.rows)) return parsed.rows;
+  throw new Error(
+    "查詢失敗：Supabase CLI 的輸出不是預期的 JSON，可能是輸出格式不對（例如表格），"
+    + "請確認指令有帶 --output-format json。輸出開頭：\n"
+    + maskRef(text, ref).slice(0, 300)
+  );
 }
 
 function assertRef(ref) {
@@ -46,21 +60,22 @@ export function supabaseCommand(args) {
 /**
  * `db query` 的指令。預設 --read-only：只接受 SELECT 這類語句，代理程式模式下也不用使用者同意。
  * write 才帶 --yes，代表使用者已經同意這次寫入（CLI 的要求，見 runSqlWrite）。
+ * 一律帶 --output-format json：不帶的話 CLI 只在偵測到 AI agent 時輸出 JSON，人手動跑會輸出表格（#717）。
+ * 不要改用 --agent 來切換格式：那會改變 CLI 的安全行為判斷。
  */
 export function buildQueryCommand(ref, sqlPath, { write = false } = {}) {
   if (/["\r\n]/.test(sqlPath)) throw new Error(`不支援的路徑：${sqlPath}`);
-  return supabaseCommand(["db", "query", remoteFlag(ref), write ? "--yes" : "--read-only", "-f", `"${sqlPath}"`]);
+  return supabaseCommand(["db", "query", remoteFlag(ref), write ? "--yes" : "--read-only", "--output-format", "json", "-f", `"${sqlPath}"`]);
 }
 
 function execSqlFile(ref, sqlPath, options) {
   const command = buildQueryCommand(ref, sqlPath, options);
   const result = spawnSync(command, { encoding: "utf8", shell: true, maxBuffer: 256 * 1024 * 1024 });
   if (result.status !== 0) {
-    // CLI 的輸出現在一定帶 ref，錯誤訊息常被貼到公開的 issue，先遮掉
-    const output = `${result.stderr || ""}${result.stdout || ""}`.split(ref).join("<ref>");
+    const output = maskRef(`${result.stderr || ""}${result.stdout || ""}`, ref);
     throw new Error(`查詢失敗：\n${output.slice(0, 1500)}`);
   }
-  return parseCliRows(result.stdout || "");
+  return parseCliRows(result.stdout || "", { ref });
 }
 
 function withTempSqlFile(sql, callback) {

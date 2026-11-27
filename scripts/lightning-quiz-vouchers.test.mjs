@@ -73,6 +73,15 @@ describe("我的兌換券", () => {
     expect(groups[1].querySelector("[data-voucher-redeem]")).toBeNull();
   });
 
+  // #718：同一天多題時，券上寫是第幾題
+  it("names the question when the day had several", async () => {
+    setup({});
+    const { voucherAwardLabel } = await import("../js/modules/lightning-quiz-vouchers.mjs");
+    expect(voucherAwardLabel({ ...vouchers[1], questionNumber: 2, questionCount: 2 })).toBe("9/30（三）第 2 題第二名");
+    expect(voucherAwardLabel({ ...vouchers[1], questionNumber: 1, questionCount: 1 })).toBe("9/30（三）第二名");
+    expect(voucherAwardLabel(vouchers[1])).toBe("9/30（三）第二名");
+  });
+
   it("escapes names and shows an empty state when there are no vouchers", async () => {
     const { voucherCardHtml, renderVoucherListHtml } = await (async () => {
       setup({});
@@ -290,6 +299,14 @@ describe("wiring", () => {
     expect(fnBody("_lightning_quiz_sync_week_vouchers")).toMatch(/SET voided_at = NOW\(\)[\s\S]*AND v\.redeemed_at IS NULL/);
     // 已經公布的週補發一次
     expect(migration).toContain("WHERE revoked_at IS NULL LOOP\n    PERFORM public._lightning_quiz_sync_week_vouchers(wk);");
+  });
+
+  // #718：每題前三名都發券，唯一鍵改成（週、題目、會友）
+  it("vouchers are unique per week, question and member (#718)", () => {
+    const perQuestion = readFileSync("supabase/migrations/20261125092107_lightning_quiz_per_question.sql", "utf8");
+    expect(perQuestion).toContain("ON public.lightning_quiz_vouchers (week_start, question_id, user_id)");
+    expect(perQuestion).toContain("pg_get_constraintdef(c.oid) = 'UNIQUE (week_start, rise_date, user_id)'");
+    expect(fnBody("_lightning_quiz_sync_week_vouchers")).toContain("question_id = w.question_id");
   });
 
   it("member functions only touch the caller's own vouchers; admin functions are admin-gated", () => {

@@ -47,6 +47,17 @@ describe("normalizeRankingExcluded", () => {
     });
     expect(result).toEqual({ "2026-09-28": ["u2"], "2026-09-30": [] });
   });
+
+  // #718：以題目 id 為 key；一天只有一題的日子另外帶日期 key，伺服器還沒更新時照樣排除
+  it("keys by question, adding the date key only for single-question days", () => {
+    const days = [
+      { questionId: "qa", riseDate: "2026-09-30", candidates },
+      { questionId: "qb", riseDate: "2026-09-30", candidates },
+      { questionId: "qc", riseDate: "2026-10-02", candidates }
+    ];
+    const result = normalizeRankingExcluded(days, { qa: ["u1"], qb: ["u2"], qc: ["u3"], "2026-09-30": ["u4"] });
+    expect(result).toEqual({ qa: ["u1"], qb: ["u2"], qc: ["u3"], "2026-10-02": ["u3"] });
+  });
 });
 
 describe("labels", () => {
@@ -138,6 +149,26 @@ describe("首頁「雲柱測驗前三名」卡片", () => {
     expect(card.querySelector(".lq-ranking__mine")).toBeNull();
     expect(card.textContent).not.toMatch(/我的結果|這週你答對|70\.3|12\.0|你的名次|你是第|我的名次/);
     expect(card.querySelector("[data-lq-ranking-history]").textContent).toBe("我的作答結果請到「我的測驗」查看");
+  });
+
+  // #718：同一天多題時每題一個區塊，標出第幾題
+  it("labels each question when a day has several", async () => {
+    setupGlobals(vi.fn(async () => ({
+      success: true,
+      data: {
+        ...published,
+        days: [
+          { questionId: "qa", riseDate: "2026-09-30", questionNumber: 1, questionCount: 2, winners: [] },
+          { questionId: "qb", riseDate: "2026-09-30", questionNumber: 2, questionCount: 2, winners: [] },
+          { questionId: "qc", riseDate: "2026-10-02", questionNumber: 1, questionCount: 1, winners: [] }
+        ]
+      }
+    })));
+    const { refreshLightningQuizRankingCard } = await import("../js/modules/lightning-quiz-ranking.mjs");
+    await refreshLightningQuizRankingCard();
+    const labels = [...document.querySelectorAll(".lq-ranking__date")].map(el => el.textContent);
+    expect(labels).toEqual(["9/30（三）第 1 題", "9/30（三）第 2 題", "10/2（五）"]);
+    expect([...document.querySelectorAll(".lq-ranking__empty")].map(el => el.textContent)[0]).toBe("這題沒有人答對。");
   });
 
   it("the history link opens 我的測驗 on the lightning tab, reaching back to the published week", async () => {

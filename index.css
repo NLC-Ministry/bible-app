@@ -12972,6 +12972,16 @@ body.dark-theme .plan-calendar .plan-day-cell.active .day-number, body.dark-them
   font-weight: 500;
   color: var(--text-primary);
 }
+/* 還沒開始／已結束的題目：只有一行說明（#718） */
+.lightning-quiz-pending {
+  margin: 0;
+  text-align: center;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+.lightning-quiz-pending.is-ended {
+  color: var(--text-muted);
+}
 
 /* 後台「雲柱測驗」管理：題目編輯器的日期/時段列 + 統計表格 + 排行榜。 */
 .admin-lightning-quiz-schedule-row {
@@ -13266,6 +13276,38 @@ button.admin-lightning-quiz-calendar__day {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* #718：一格多題，每題一顆按鈕，格子本身不是按鈕 */
+.admin-lightning-quiz-calendar__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--border-default);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-lightning-quiz-calendar__item:first-of-type {
+  border-top: 0;
+}
+.admin-lightning-quiz-calendar__item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.admin-lightning-quiz-calendar__time {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+.admin-lightning-quiz-calendar__add {
+  align-self: flex-start;
 }
 .admin-lightning-quiz-rule {
   display: flex;

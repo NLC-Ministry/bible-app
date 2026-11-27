@@ -267,23 +267,23 @@ describe("雲柱測驗 首頁公布前三名（#429）", () => {
     expect(section.textContent).toContain("尚未公布。");
     expect(winnersOf(section, 0)).toEqual(["第一名|甲", "第二名|乙", "第三名|丙", "|丁", "|戊"]);
 
-    section.querySelector('[data-lq-ranking-toggle][data-date="2026-09-21"][data-user="u1"]').click();
+    section.querySelector('[data-lq-ranking-toggle][data-question="q1"][data-user="u1"]').click();
     expect(winnersOf(section, 0)).toEqual(["已排除|甲", "第一名|乙", "第二名|丙", "第三名|丁", "|戊"]);
-    // 以天為單位：9/23 的甲不受影響
+    // 以題目為單位（#718）：9/23 那題的甲不受影響
     expect(winnersOf(section, 1)).toEqual(["第一名|甲"]);
 
     // 取消排除就回到原本的名次
-    section.querySelector('[data-lq-ranking-toggle][data-date="2026-09-21"][data-user="u1"]').click();
+    section.querySelector('[data-lq-ranking-toggle][data-question="q1"][data-user="u1"]').click();
     expect(winnersOf(section, 0)[0]).toBe("第一名|甲");
   });
 
-  it("publishes the exclusions per day with the chosen number of days (default 1, limited to 1–7)", async () => {
+  it("publishes the exclusions per question with the chosen number of days (default 1, limited to 1–7)", async () => {
     await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
     await flush();
     const section = document.querySelector("[data-lq-week-ranking]");
     expect(section.querySelector("[data-lq-ranking-days]").value).toBe("1");
 
-    section.querySelector('[data-lq-ranking-toggle][data-date="2026-09-21"][data-user="u2"]').click();
+    section.querySelector('[data-lq-ranking-toggle][data-question="q1"][data-user="u2"]').click();
     section.querySelector("[data-lq-ranking-days]").value = "8";
     section.querySelector("[data-lq-ranking-publish]").click();
     await flush();
@@ -297,9 +297,37 @@ describe("雲柱測驗 首頁公布前三名（#429）", () => {
     expect(window.showConfirmDialog).toHaveBeenCalled();
     expect(db.adminPublishLightningQuizWeekRanking).toHaveBeenCalledWith(
       "2026-09-21",
-      { "2026-09-21": ["u2"], "2026-09-23": [] },
+      // #718：以題目 id 為 key；一天一題的日子另外帶日期 key（伺服器還沒更新時也排得掉）
+      { q1: ["u2"], "2026-09-21": ["u2"], q2: [], "2026-09-23": [] },
       3
     );
+  });
+
+  // #718：同一天兩題各自排除，標題寫第幾題與時段
+  it("lists two questions on the same day separately, each with its own exclusions", async () => {
+    const twoOnMonday = {
+      ...rankingData,
+      days: [
+        { ...rankingData.days[0], questionNumber: 1, questionCount: 2, riseTimeStart: "11:00", riseTimeEnd: "14:00" },
+        { ...rankingData.days[0], questionId: "q3", questionNumber: 2, questionCount: 2, riseTimeStart: "19:00", riseTimeEnd: "22:00" }
+      ]
+    };
+    db.adminGetLightningQuizWeekRanking.mockResolvedValueOnce({ success: true, data: twoOnMonday });
+    await renderAdminLightningQuizAwards({ weekStart: "2026-09-21" });
+    await flush();
+    const section = document.querySelector("[data-lq-week-ranking]");
+    expect([...section.querySelectorAll(".admin-lq-ranking__day h6")].map(h => h.textContent)).toEqual([
+      "9/21（一）・第 1 題（11:00–14:00）",
+      "9/21（一）・第 2 題（19:00–22:00）"
+    ]);
+    section.querySelector('[data-lq-ranking-toggle][data-question="q3"][data-user="u1"]').click();
+    expect(winnersOf(section, 0)[0]).toBe("第一名|甲");
+    expect(winnersOf(section, 1)[0]).toBe("已排除|甲");
+    section.querySelector("[data-lq-ranking-publish]").click();
+    await flush();
+    await flush();
+    // 同一天兩題：不帶日期 key
+    expect(db.adminPublishLightningQuizWeekRanking).toHaveBeenCalledWith("2026-09-21", { q1: [], q3: ["u1"] }, 1);
   });
 
   it("can't publish while a question this week hasn't ended", async () => {
@@ -311,6 +339,7 @@ describe("雲柱測驗 首頁公布前三名（#429）", () => {
     expect(section.textContent).toContain("這週還有題目沒結束，全部結束後才能公布。");
   });
 
+  // 更早公布的週存的是日期 key（#718 以前），照樣帶回來
   it("re-publishing starts from the saved exclusions and can be revoked", async () => {
     db.adminGetLightningQuizWeekRanking.mockResolvedValueOnce({ success: true, data: {
       ...rankingData,
