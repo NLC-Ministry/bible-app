@@ -10,6 +10,7 @@ import {
   buildHourProfile,
   buildL7,
   buildUsage,
+  buildWeekdays,
   registrationCsv,
   runReadingUsage,
   runRegistrationExport,
@@ -105,6 +106,44 @@ describe("讀經使用率：整理規則和舊頁相同", () => {
     expect(usage.l7.current.rows).toHaveLength(7);
     expect(usage.hours.all).toEqual({ dayCount: 0, users: new Array(24).fill(0), chapters: new Array(24).fill(0) });
     expect(buildL7({ current: { total: 0, buckets: "nope" } }).current.rows.every((row) => row.pct === null)).toBe(true);
+    expect(usage.weekdays.averages.map((row) => row.dow)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(usage.weekdays.averages.every((row) => row.dayCount === 0 && row.users === null && row.chapters === null)).toBe(true);
+    expect(usage.weekdays.weeks).toEqual([]);
+  });
+});
+
+describe("星期分布（#726）", () => {
+  // 2026-11-16、11-23 是週一；11-27（週五）是今天；11-17～20、11-25 沒有資料
+  const DAYS = [
+    { date: "2026-11-16", dau: 40, wau: 0, mau: 0, chapters: 70 },
+    { date: "2026-11-21", dau: 10, wau: 0, mau: 0, chapters: 20 },
+    { date: "2026-11-22", dau: 6, wau: 0, mau: 0, chapters: 8 },
+    { date: "2026-11-23", dau: 30, wau: 0, mau: 0, chapters: 60 },
+    { date: "2026-11-24", dau: 0, wau: 0, mau: 0, chapters: 0 },
+    { date: "2026-11-26", dau: 25, wau: 0, mau: 0, chapters: 51 },
+    { date: "2026-11-27", dau: 4, wau: 0, mau: 0, chapters: 5 }
+  ];
+  const usage = buildUsage({ from: "2026-11-16", to: "2026-11-27", today: "2026-11-27", days: DAYS });
+
+  it("averages each weekday over the days it appears, leaving today out", () => {
+    const byDow = Object.fromEntries(usage.weekdays.averages.map((row) => [row.dow, row]));
+    expect(byDow[1]).toEqual({ dow: 1, dayCount: 2, users: 35, chapters: 65 });
+    expect(byDow[2]).toEqual({ dow: 2, dayCount: 1, users: 0, chapters: 0 }); // 0 人的日子也算一天
+    expect(byDow[3]).toEqual({ dow: 3, dayCount: 0, users: null, chapters: null });
+    expect(byDow[4]).toEqual({ dow: 4, dayCount: 1, users: 25, chapters: 51 });
+    expect(byDow[5]).toEqual({ dow: 5, dayCount: 0, users: null, chapters: null }); // 只有今天
+    expect(byDow[6]).toMatchObject({ dayCount: 1, users: 10 });
+    expect(byDow[7]).toMatchObject({ dayCount: 1, users: 6 });
+    expect(buildWeekdays([{ date: "2026-11-16", dau: 1, chapters: 1 }, { date: "2026-11-23", dau: 2, chapters: 2 }], "").averages[0].users).toBe(1.5);
+  });
+
+  it("lays the weeks out Monday first, with today marked and missing days empty", () => {
+    expect(usage.weekdays.weeks.map((week) => week.weekStart)).toEqual(["2026-11-16", "2026-11-23"]);
+    const [first, second] = usage.weekdays.weeks;
+    expect(first.cells.map((cell) => cell && cell.date)).toEqual(["2026-11-16", null, null, null, null, "2026-11-21", "2026-11-22"]);
+    expect(second.cells.map((cell) => cell && cell.users)).toEqual([30, 0, null, 25, 4, null, null]);
+    expect(second.cells[4]).toEqual({ date: "2026-11-27", users: 4, chapters: 5, today: true });
+    expect(second.cells[0].today).toBe(false);
   });
 });
 

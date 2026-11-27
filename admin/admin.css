@@ -577,6 +577,7 @@ summary.adm-org-tree__row:hover { background: var(--color-brand-subtle); }
 .adm-table th, .adm-table td { padding: 6px 8px; border-bottom: 1px solid var(--border-default); text-align: left; vertical-align: middle; }
 .adm-table thead th { color: var(--text-muted); font-size: 13px; font-weight: var(--type-weight-regular); white-space: nowrap; }
 .adm-table tbody th { font-weight: var(--type-weight-strong); white-space: nowrap; }
+.adm-table tfoot th, .adm-table tfoot td { font-weight: var(--type-weight-strong); white-space: nowrap; border-bottom: 0; }
 .adm-table .adm-num { text-align: right; }
 .adm-table td.adm-num .adm-bar { width: 4.5rem; margin: 2px 0 0 auto; height: 4px; }
 .adm-table__child th { padding-left: 30px; font-weight: var(--type-weight-regular); color: var(--text-secondary); }

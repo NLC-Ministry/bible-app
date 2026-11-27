@@ -1,4 +1,4 @@
-// 後台「報表」區（#568）：分兩頁——讀經使用率（含每日趨勢，跨計畫）、報名註冊（依大區／牧區）。
+// 後台「報表」區（#568）：分兩頁——讀經使用率（含每日趨勢、#726 星期分布，跨計畫）、報名註冊（依大區／牧區）。
 // 測驗作答（#581）#619 起是「測驗」區的總覽（QuizArea.tsx），仍和報名註冊共用選的計畫（ui.planId）。
 //
 // 請求預算：讀經使用率打開＝1 個 reading_usage（DAU／WAU／MAU、每天章數、一週讀幾天、讀經時段一次拿齊，伺服器彙總成
@@ -25,6 +25,7 @@ import {
   shortDate,
   taipeiToday,
   topHours,
+  WEEKDAY_LABELS,
   weekLabel,
   type HourDays,
   type HourMetric,
@@ -44,9 +45,11 @@ export type StatsUiState = {
   to: string | null;
   hourDays: HourDays;
   hourMetric: HourMetric;
+  /** #726 星期分布看人數還是章數 */
+  weekdayMetric: HourMetric;
 };
 
-export const INITIAL_STATS_UI: StatsUiState = { from: null, to: null, hourDays: "all", hourMetric: "users" };
+export const INITIAL_STATS_UI: StatsUiState = { from: null, to: null, hourDays: "all", hourMetric: "users", weekdayMetric: "users" };
 
 type Props = {
   api: AdminApi;
@@ -345,6 +348,8 @@ function UsageBody({ usage, ui, setUi, doc, loadChart }: {
         </div>
       </section>
 
+      <WeekdayCard usage={usage} ui={ui} setUi={setUi} chart={chart} color={colors.brand} />
+
       <HoursCard usage={usage} ui={ui} setUi={setUi} chart={chart} color={colors.brand} />
 
       <p className="adm-muted adm-small">
@@ -355,7 +360,79 @@ function UsageBody({ usage, ui, setUi, doc, loadChart }: {
   );
 }
 
-const HOUR_DAY_OPTIONS = [{ value: "all", label: "全部" }, { value: "weekday", label: "平日" }, { value: "weekend", label: "週末" }] as const;
+// #726：週一～週日平均每天讀經的人數（或章數），加每週一列的對照表。數字由伺服器整理（stats.ts buildWeekdays）。
+function WeekdayCard({ usage, ui, setUi, chart, color }: {
+  usage: Usage;
+  ui: StatsUiState;
+  setUi: Dispatch<SetStateAction<StatsUiState>>;
+  chart: (props: { caption?: string; label: string; config: unknown }) => ReactNode;
+  color: string;
+}) {
+  const { averages, weeks } = usage.weekdays;
+  const chapters = ui.weekdayMetric === "chapters";
+  const unit = chapters ? "章" : "人";
+  const metricText = chapters ? "章數" : "人數";
+  const values = averages.map((row) => (chapters ? row.chapters : row.users));
+  const best = averages.reduce<{ index: number; value: number } | null>((top, _row, index) => {
+    const value = values[index];
+    return value !== null && value > 0 && (!top || value > top.value) ? { index, value } : top;
+  }, null);
+  const topText = best
+    ? `平均${chapters ? "讀最多章" : "最多人讀"}的是${WEEKDAY_LABELS[best.index]}（平均每天 ${formatNumber(best.value)} ${unit}）`
+    : "這段期間沒有讀經紀錄（不含今天）。";
+  const counts = averages.map((row, index) => `${WEEKDAY_LABELS[index]} ${row.dayCount} 天`).join("、");
+  const cellValue = (cell: { users: number; chapters: number } | null) => (cell ? formatNumber(chapters ? cell.chapters : cell.users) : "—");
+
+  return (
+    <section className="adm-card">
+      <header className="adm-card__header"><h3>星期分布（週一～週日）</h3></header>
+      <div className="adm-card__body">
+        <div className="adm-stats__toolbar">
+          <Segmented label="數值" options={HOUR_METRIC_OPTIONS} value={ui.weekdayMetric} onChange={(weekdayMetric) => setUi((prev) => ({ ...prev, weekdayMetric }))} />
+        </div>
+        <p>{topText}</p>
+        <p className="adm-muted adm-small">
+          長條＝區間內該星期幾平均每天讀經的{metricText}。各星期幾出現的天數不一定一樣（{counts}），所以看平均。
+          今天的數字還在累積，不算進平均。週以週一開頭。
+        </p>
+        {best && chart({
+          label: topText,
+          config: barConfig([...WEEKDAY_LABELS], [{ label: `平均每天${metricText}`, data: values.map((value) => value ?? 0), color }], unit)
+        })}
+        <details className="adm-stats__details">
+          <summary>每週對照</summary>
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr><th scope="col">週</th>{WEEKDAY_LABELS.map((label) => <th key={label} scope="col" className="adm-num">{label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {[...weeks].reverse().map((week) => (
+                  <tr key={week.weekStart}>
+                    <th scope="row">{shortDate(week.weekStart)}～{shortDate(addDays(week.weekStart, 6))}</th>
+                    {week.cells.map((cell, index) => (
+                      <td key={index} className={`adm-num${cell?.today ? " adm-muted" : ""}`} title={cell?.today ? "今天，還在累積" : undefined}>
+                        {cellValue(cell)}{cell?.today ? "（今天）" : ""}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row">平均（不含今天）</th>
+                  {values.map((value, index) => <td key={index} className="adm-num">{formatNumber(value)}</td>)}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </details>
+      </div>
+    </section>
+  );
+}
+
+const HOUR_DAY_OPTIONS =[{ value: "all", label: "全部" }, { value: "weekday", label: "平日" }, { value: "weekend", label: "週末" }] as const;
 const HOUR_METRIC_OPTIONS = [{ value: "users", label: "人數" }, { value: "chapters", label: "章數" }] as const;
 
 function HoursCard({ usage, ui, setUi, chart, color }: {

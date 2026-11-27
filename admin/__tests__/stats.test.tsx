@@ -146,9 +146,9 @@ describe("讀經使用率", () => {
     expect(requests[1].params).toEqual(defaultUsageRange(today));
     expect(el.querySelector(".adm-nav__link[aria-current='page']")?.textContent).toContain("報表");
     expect(el.textContent).toMatch(/有讀＝[^。]*任何一章，不限計畫書卷/);
-    // 每天讀經人數 2 張、每日趨勢 1 張、L7 1 張、時段 1 張
-    expect(FakeChart.made).toHaveLength(5);
-    expect(el.querySelectorAll("canvas[role='img']")).toHaveLength(5);
+    // 每天讀經人數 2 張、每日趨勢 1 張、L7 1 張、星期分布 1 張、時段 1 張
+    expect(FakeChart.made).toHaveLength(6);
+    expect(el.querySelectorAll("canvas[role='img']")).toHaveLength(6);
     // 每日趨勢的表格：伺服器每天一列，不是原始紀錄
     expect(el.textContent).toContain("245");
   });
@@ -168,6 +168,23 @@ describe("讀經使用率", () => {
     // 回到 30 天走快取，不重抓
     await click(button(el, "近 30 天"));
     expect(requests).toHaveLength(before + 1);
+  });
+
+  it("the weekday card (#726) draws Mon–Sun averages without today and switches metric without a request", async () => {
+    const { requests, el } = await mount("#/stats");
+    const card = [...el.querySelectorAll("section.adm-card")].find((section) => section.querySelector("h3")?.textContent?.includes("星期分布"));
+    expect(card).toBeTruthy();
+    const chart = () => FakeChart.made.find((config) => (config.data as { labels: string[] }).labels[0] === "週一") as { data: { labels: string[]; datasets: { data: (number | null)[] }[] } };
+    expect(chart().data.labels).toEqual(["週一", "週二", "週三", "週四", "週五", "週六", "週日"]);
+    // 假資料：30 天前那天 40 人 95 章、今天 60 人（今天不算進平均）
+    const dowOf = (iso: string) => ((new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7);
+    expect(chart().data.datasets[0].data[dowOf(addDays(today, -29))]).toBe(40);
+    expect(card!.textContent).toContain("今天");
+    const before = requests.length;
+    await click([...card!.querySelectorAll("button")].find((b) => b.textContent === "章數"));
+    expect(requests).toHaveLength(before);
+    expect(chart().data.datasets[0].data[dowOf(addDays(today, -29))]).toBe(40);
+    expect((FakeChart.made.at(-1) as { data: { datasets: { data: (number | null)[] }[] } }).data.datasets[0].data[dowOf(addDays(today, -29))]).toBe(95);
   });
 
   it("an invalid range shows why and sends nothing", async () => {
