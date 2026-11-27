@@ -36,7 +36,8 @@ export type Usage = {
     totalChapters: number;
   };
   days: UsageDay[];
-  weekdays: Weekdays;
+  /** #726；部署前的舊版 admin-api 沒有這欄 */
+  weekdays?: Weekdays;
   l7:{ current: L7Week; previous: L7Week };
   hours: Record<HourDays, HourProfile>;
 };

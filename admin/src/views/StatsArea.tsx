@@ -32,7 +32,8 @@ import {
   type RegistrationData,
   type RegistrationRow,
   type Usage,
-  type UsageDay
+  type UsageDay,
+  type Weekdays
 } from "../stats.ts";
 import type { CsvExport } from "../types.ts";
 import { ErrorNotice, Segmented, Spinner } from "../ui.tsx";
@@ -348,7 +349,8 @@ function UsageBody({ usage, ui, setUi, doc, loadChart }: {
         </div>
       </section>
 
-      <WeekdayCard usage={usage} ui={ui} setUi={setUi} chart={chart} color={colors.brand} />
+      {/* 舊版 admin-api 沒有 weekdays：不顯示這張，其他卡片照常 */}
+      {usage.weekdays && <WeekdayCard weekdays={usage.weekdays} ui={ui} setUi={setUi} chart={chart} color={colors.brand} />}
 
       <HoursCard usage={usage} ui={ui} setUi={setUi} chart={chart} color={colors.brand} />
 
@@ -361,14 +363,14 @@ function UsageBody({ usage, ui, setUi, doc, loadChart }: {
 }
 
 // #726：週一～週日平均每天讀經的人數（或章數），加每週一列的對照表。數字由伺服器整理（stats.ts buildWeekdays）。
-function WeekdayCard({ usage, ui, setUi, chart, color }: {
-  usage: Usage;
+function WeekdayCard({ weekdays, ui, setUi, chart, color }: {
+  weekdays: Weekdays;
   ui: StatsUiState;
   setUi: Dispatch<SetStateAction<StatsUiState>>;
   chart: (props: { caption?: string; label: string; config: unknown }) => ReactNode;
   color: string;
 }) {
-  const { averages, weeks } = usage.weekdays;
+  const { averages, weeks } = weekdays;
   const chapters = ui.weekdayMetric === "chapters";
   const unit = chapters ? "章" : "人";
   const metricText = chapters ? "章數" : "人數";

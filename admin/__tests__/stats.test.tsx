@@ -69,8 +69,8 @@ async function go(hash: string) {
   await flush();
 }
 
-type MountOptions = { caps?: string[]; failures?: Record<string, [number, string]> };
-async function mount(initialHash: string, { caps = CAPS, failures = {} }: MountOptions = {}) {
+type MountOptions = { caps?: string[]; failures?: Record<string, [number, string]>; oldUsage?: boolean };
+async function mount(initialHash: string, { caps = CAPS, failures = {}, oldUsage = false }: MountOptions = {}) {
   window.location.hash = initialHash;
   (window as any).Chart = FakeChart;
   const requests: { action: string; params: any }[] = [];
@@ -85,6 +85,8 @@ async function mount(initialHash: string, { caps = CAPS, failures = {} }: MountO
         break;
       case "reading_usage":
         data = usageFor(params.from, params.to);
+        // 部署 #726 前的 admin-api 不回 weekdays
+        if (oldUsage) delete (data as { weekdays?: unknown }).weekdays;
         break;
       case "registration_stats": {
         const planId = params.global_plan_id || PLAN;
@@ -185,6 +187,13 @@ describe("讀經使用率", () => {
     expect(requests).toHaveLength(before);
     expect(chart().data.datasets[0].data[dowOf(addDays(today, -29))]).toBe(40);
     expect((FakeChart.made.at(-1) as { data: { datasets: { data: (number | null)[] }[] } }).data.datasets[0].data[dowOf(addDays(today, -29))]).toBe(95);
+  });
+
+  it("an older admin-api without weekdays still shows the other cards (#726)", async () => {
+    const { el } = await mount("#/stats", { oldUsage: true });
+    expect([...el.querySelectorAll("h3")].some((h) => h.textContent?.includes("星期分布"))).toBe(false);
+    expect([...el.querySelectorAll("h3")].some((h) => h.textContent?.includes("讀經時段"))).toBe(true);
+    expect(FakeChart.made).toHaveLength(5);
   });
 
   it("an invalid range shows why and sends nothing", async () => {
